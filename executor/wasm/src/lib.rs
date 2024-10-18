@@ -184,7 +184,7 @@ impl ExecutorV2 {
 
         // 2. Store wasm
 
-        let bytecode = ByteCode::new(ByteCodeKind::V1CasperWasm, wasm_bytes.clone().into());
+        let bytecode = ByteCode::new(ByteCodeKind::V2CasperWasm, wasm_bytes.clone().into());
         let bytecode_addr = ByteCodeAddr::V2CasperWasm(bytecode_hash);
 
         tracking_copy.write(

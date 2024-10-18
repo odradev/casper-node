@@ -1,9 +1,13 @@
 use casper_macros::casper;
 
+/// Deposit interface for contracts to receive tokens.
+///
+/// Useful for contracts that need to receive tokens.
 #[casper]
-pub trait Fallback {
-    #[casper(fallback)]
-    fn fallback(&mut self);
+pub trait Deposit {
+    /// Deposit tokens into the contract.
+    #[casper(payable)]
+    fn deposit(&mut self);
 }
 
 #[casper]

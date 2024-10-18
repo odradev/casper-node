@@ -8,7 +8,7 @@ use casper_sdk::{
     ContractHandle,
 };
 
-use crate::traits::{Fallback, FallbackExt};
+use crate::traits::{Deposit, DepositExt};
 
 use super::harness::HarnessRef;
 
@@ -72,7 +72,7 @@ impl TokenOwnerContract {
         let res = ContractHandle::<HarnessRef>::from_address(contract_address)
             .build_call()
             .with_transferred_value(amount)
-            .call(|harness| harness.deposit(self_balance))?;
+            .call(|harness| harness.perform_token_deposit(self_balance))?;
         match &res {
             Ok(()) => log!("Token owner deposited {amount} to {contract_address:?}"),
             Err(e) => log!("Token owner failed to deposit {amount} to {contract_address:?}: {e:?}"),
@@ -136,8 +136,9 @@ impl TokenOwnerContract {
 }
 
 #[casper(path = crate::traits)]
-impl Fallback for TokenOwnerContract {
-    fn fallback(&mut self) {
+impl Deposit for TokenOwnerContract {
+    fn deposit(&mut self) {
+        log!("Received deposit with value = {} current handler is {:?}", host::get_value(), self.fallback_handler);
         match std::mem::replace(&mut self.fallback_handler, FallbackHandler::AcceptTokens) {
             FallbackHandler::AcceptTokens => {
                 let value = host::get_value();
@@ -149,6 +150,7 @@ impl Fallback for TokenOwnerContract {
             }
             FallbackHandler::RejectWithRevert => {
                 // This will cause a revert.
+                log!("TokenOwnerContract rejected with revert");
                 revert!();
             }
             FallbackHandler::RejectWithTrap => {

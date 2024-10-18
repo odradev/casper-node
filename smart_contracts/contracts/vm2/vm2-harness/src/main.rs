@@ -269,7 +269,7 @@ fn perform_test(flipper_address: Address) {
             contract_handle
                 .build_call()
                 .with_transferred_value(100)
-                .call(|harness| harness.deposit(account_balance_1))
+                .call(|harness| harness.perform_token_deposit(account_balance_1))
                 .expect("Should call")
                 .expect("Should succeed");
             let account_balance_2 = host::get_balance_of(&caller);
@@ -278,7 +278,7 @@ fn perform_test(flipper_address: Address) {
             contract_handle
                 .build_call()
                 .with_transferred_value(25)
-                .call(|harness| harness.deposit(account_balance_2))
+                .call(|harness| harness.perform_token_deposit(account_balance_2))
                 .expect("Should call")
                 .expect("Should succeed");
 

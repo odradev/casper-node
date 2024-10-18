@@ -726,7 +726,7 @@ pub fn casper_call<S: GlobalStateReader + 'static, E: Executor + 'static>(
         }
     }
 
-    Ok(host_result)
+    Ok(dbg!(host_result))
 }
 
 pub fn casper_env_caller<S: GlobalStateReader, E: Executor>(

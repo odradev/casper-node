@@ -12,11 +12,10 @@ use casper_sdk::{
         },
         error::Error,
         keyspace::Keyspace,
-    },
-    collections::Map,
-    host::{self, Entity},
-    log, revert,
+    }, collections::Map, host::{self, Entity}, log, revert, types::CallError, ContractHandle
 };
+
+use crate::traits::{DepositExt, DepositRef};
 
 pub(crate) const INITIAL_GREETING: &str = "This is initial data set from a constructor";
 pub(crate) const BALANCES_PREFIX: &str = "b";
@@ -64,6 +63,8 @@ pub enum CustomError {
     Named { name: String, age: u64 },
     #[error("transfer error {0}")]
     Transfer(String),
+    #[error("custom")]
+    Deposit(CallError),
 }
 
 impl Default for Harness {
@@ -313,7 +314,7 @@ impl Harness {
     }
 
     #[casper(payable, revert_on_error)]
-    pub fn deposit(&mut self, balance_before: u128) -> Result<(), CustomError> {
+    pub fn perform_token_deposit(&mut self, balance_before: u128) -> Result<(), CustomError> {
         let caller = host::get_caller();
         let value = host::get_value();
 
@@ -358,7 +359,18 @@ impl Harness {
                 }
             }
             Entity::Contract(contract) => {
-                todo!("call contract to transfer tokens");
+                let result = ContractHandle::<DepositRef>::from_address(contract)
+                    .build_call()
+                    .with_transferred_value(amount)
+                    .try_call(|harness| harness.deposit());
+
+                // dbg!(&result);
+                if let Err(call_error) = result.unwrap().result {
+                    log!("Unable to perform a transfer: {call_error:?}");
+                    return Err(CustomError::Deposit(call_error));
+                }
+                // log!("Result of invoking deposit interface on contract {result:?}");
+                // result?;
             }
         }
 
