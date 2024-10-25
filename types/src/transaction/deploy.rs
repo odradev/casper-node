@@ -1051,7 +1051,7 @@ impl Deploy {
     ) -> Self {
         let payment = ExecutableDeployItem::ModuleBytes {
             module_bytes: Bytes::new(),
-            args: runtime_args! { ARG_AMOUNT => U512::from(3_000_000_000_u64) },
+            args: runtime_args! { ARG_AMOUNT => U512::from(6_000_000_000_000u64) },
         };
         let args = runtime_args! {
             ARG_AUCTION_AMOUNT => amount,

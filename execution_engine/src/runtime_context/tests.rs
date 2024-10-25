@@ -1,6 +1,5 @@
 use std::{cell::RefCell, collections::BTreeSet, convert::TryInto, iter::FromIterator, rc::Rc};
 
-use once_cell::sync::Lazy;
 use rand::RngCore;
 
 use casper_storage::{
@@ -158,7 +157,7 @@ fn new_runtime_context<'a>(
     );
 
     let engine_config = {
-        let mut config_builder = EngineConfigBuilder::new();
+        let config_builder = EngineConfigBuilder::new();
         config_builder.with_enable_entity(true).build()
     };
 
