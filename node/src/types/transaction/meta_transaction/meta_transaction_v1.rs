@@ -328,8 +328,8 @@ impl MetaTransactionV1 {
                     });
                 }
             }
-            PricingMode::Reserved { .. } => {
-                if !chainspec.core_config.allow_reservations {
+            PricingMode::Prepaid { .. } => {
+                if !chainspec.core_config.allow_prepaid {
                     // Currently Reserved isn't implemented and we should
                     // not be accepting transactions with this mode.
                     return Err(InvalidTransactionV1::InvalidPricingMode {
@@ -568,8 +568,8 @@ impl MetaTransactionV1 {
                 gas_price_tolerance,
                 ..
             } => gas_price_tolerance,
-            PricingMode::Reserved { .. } => {
-                // TODO: Change this when reserve gets implemented.
+            PricingMode::Prepaid { .. } => {
+                // TODO: Change this when prepaid gets implemented.
                 0u8
             }
         }

@@ -388,7 +388,6 @@ fn regression_20220217_() {
 #[ignore]
 #[test]
 fn mint_by_hash_transfer_should_fail_because_lack_of_target_uref_access() {
-    // TODO create two named purses and verify we can pass source and target known non-main purses
     let mut builder = LmdbWasmTestBuilder::default();
 
     builder.run_genesis(LOCAL_GENESIS_REQUEST.clone());

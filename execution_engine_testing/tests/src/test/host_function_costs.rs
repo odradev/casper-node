@@ -59,7 +59,7 @@ fn should_measure_gas_cost() {
 
     builder.exec(exec_request_2).expect_success().commit();
 
-    let do_nothing_cost = builder.last_exec_gas_cost().value();
+    let do_nothing_cost = builder.last_exec_gas_consumed().value();
 
     //
     // Measure opcodes (doing something)
@@ -74,7 +74,7 @@ fn should_measure_gas_cost() {
 
     builder.exec(exec_request_2).expect_success().commit();
 
-    let do_something_cost = builder.last_exec_gas_cost().value();
+    let do_something_cost = builder.last_exec_gas_consumed().value();
     assert!(
         !do_something_cost.is_zero(),
         "executing nothing should cost zero"
@@ -126,7 +126,7 @@ fn should_measure_nested_host_function_call_cost() {
     .build();
 
     builder.exec(exec_request_2).expect_success().commit();
-    let level_1_cost = builder.last_exec_gas_cost().value();
+    let level_1_cost = builder.last_exec_gas_consumed().value();
 
     assert!(
         !level_1_cost.is_zero(),
@@ -146,7 +146,7 @@ fn should_measure_nested_host_function_call_cost() {
     .build();
 
     builder.exec(exec_request_3).expect_success().commit();
-    let level_2_cost = builder.last_exec_gas_cost().value();
+    let level_2_cost = builder.last_exec_gas_consumed().value();
 
     assert!(
         !level_2_cost.is_zero(),
@@ -205,7 +205,7 @@ fn should_measure_argument_size_in_host_function_call() {
     .build();
 
     builder.exec(exec_request_2).expect_success().commit();
-    let call_1_cost = builder.last_exec_gas_cost().value();
+    let call_1_cost = builder.last_exec_gas_consumed().value();
 
     assert!(
         !call_1_cost.is_zero(),
@@ -225,7 +225,7 @@ fn should_measure_argument_size_in_host_function_call() {
     .build();
 
     builder.exec(exec_request_3).expect_success().commit();
-    let call_2_cost = builder.last_exec_gas_cost().value();
+    let call_2_cost = builder.last_exec_gas_consumed().value();
 
     assert!(
         call_2_cost > call_1_cost,

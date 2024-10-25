@@ -873,7 +873,7 @@ pub fn stored_value_arb() -> impl Strategy<Value = StoredValue> {
                 StoredValue::MessageTopic(_) => stored_value,
                 StoredValue::Message(_) => stored_value,
                 StoredValue::NamedKey(_) => stored_value,
-                StoredValue::Reservation(_) => stored_value,
+                StoredValue::Prepaid(_) => stored_value,
                 StoredValue::EntryPoint(_) => stored_value,
             })
 }
@@ -1081,7 +1081,7 @@ pub fn pricing_mode_arb() -> impl Strategy<Value = PricingMode> {
         ),
         fixed_pricing_mode_arb(),
         u8_slice_32().prop_map(|receipt| {
-            PricingMode::Reserved {
+            PricingMode::Prepaid {
                 receipt: receipt.into(),
             }
         }),

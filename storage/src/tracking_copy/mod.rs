@@ -782,9 +782,8 @@ where
                 StoredValue::EntryPoint(_) => {
                     return Ok(query.into_not_found_result("EntryPoint value found."));
                 }
-                // TODO: We may be interested in this value, check the logic
-                StoredValue::Reservation(_) => {
-                    return Ok(query.into_not_found_result("Reservation value found."))
+                StoredValue::Prepaid(_) => {
+                    return Ok(query.into_not_found_result("Prepaid value found."))
                 }
             }
         }

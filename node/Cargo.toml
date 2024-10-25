@@ -114,6 +114,7 @@ tokio = { version = "1", features = ["test-util"] }
 failpoints = []
 testing = ["casper-types/testing"]
 vendored-openssl = ["openssl/vendored"]
+datasize = ["casper-types/datasize"]
 
 [[bin]]
 name = "casper-node"

@@ -11,21 +11,21 @@ use casper_storage::{
 use casper_types::{
     account::{AccountHash, ACCOUNT_HASH_LENGTH},
     addressable_entity::{
-        ActionType, AddKeyFailure, AssociatedKeys, EntryPoints, MessageTopics, NamedKeys,
-        RemoveKeyFailure, SetThresholdFailure, Weight,
+        ActionType, AddKeyFailure, AssociatedKeys, EntryPoints, NamedKeys, RemoveKeyFailure,
+        SetThresholdFailure, Weight,
     },
     bytesrepr::ToBytes,
     execution::TransformKindV2,
     system::{AUCTION, HANDLE_PAYMENT, MINT, STANDARD_PAYMENT},
     AccessRights, AddressableEntity, AddressableEntityHash, BlockGlobalAddr, BlockHash, BlockTime,
-    ByteCodeHash, CLValue, ContextAccessRights, Digest,EntityAddr, EntityKind, EntryPointType, Gas,
-    HashAddr, Key, PackageHash, Phase, ProtocolVersion, PublicKey, RuntimeArgs, RuntimeFootprint,
-    SecretKey, StoredValue, SystemHashRegistry, Tagged, Timestamp, TransactionHash,
-    TransactionV1Hash, URef, KEY_HASH_LENGTH, U256, U512,
+    ByteCodeHash, CLValue, ContextAccessRights, Digest, EntityAddr, EntityKind, EntryPointType,
+    Gas, HashAddr, Key, PackageHash, Phase, ProtocolVersion, PublicKey, RuntimeArgs,
+    RuntimeFootprint, SecretKey, StoredValue, SystemHashRegistry, Tagged, Timestamp,
+    TransactionHash, TransactionV1Hash, URef, KEY_HASH_LENGTH, U256, U512,
 };
 use tempfile::TempDir;
 
-use super::{CallingAddContractVersion, ExecError, RuntimeContext};
+use super::{AllowInstallUpgrade, ExecError, RuntimeContext};
 use crate::engine_state::{BlockInfo, EngineConfig};
 
 const TXN_HASH_RAW: [u8; 32] = [1u8; 32];
@@ -69,7 +69,6 @@ fn new_addressable_entity_with_purse(
         URef::new(purse, AccessRights::READ_ADD_WRITE),
         associated_keys,
         Default::default(),
-        MessageTopics::default(),
         entity_kind,
     );
     let account_key = Key::Account(account_hash);
@@ -123,11 +122,7 @@ fn new_runtime_context<'a>(
     named_keys: &'a mut NamedKeys,
     access_rights: ContextAccessRights,
     address_generator: AddressGenerator,
-) -> (
-    RuntimeContext<'a, LmdbGlobalStateView>,
-    TempDir,
-    RuntimeFootprint,
-) {
+) -> (RuntimeContext<'a, LmdbGlobalStateView>, TempDir) {
     let (mut tracking_copy, tempdir) =
         new_tracking_copy(account_hash, entity_address, addressable_entity.clone());
 
@@ -157,7 +152,7 @@ fn new_runtime_context<'a>(
         _ => panic!("unexpected key"),
     };
 
-    let footprint = RuntimeFootprint::new_entity_footprint(
+    let runtime_footprint = RuntimeFootprint::new_entity_footprint(
         addr,
         addressable_entity.clone(),
         named_keys.clone(),
@@ -166,7 +161,7 @@ fn new_runtime_context<'a>(
 
     let runtime_context = RuntimeContext::new(
         named_keys,
-        &footprint,
+        Rc::new(RefCell::new(runtime_footprint)),
         entity_address,
         BTreeSet::from_iter(vec![account_hash]),
         access_rights,
@@ -189,10 +184,10 @@ fn new_runtime_context<'a>(
         Vec::default(),
         U512::MAX,
         EntryPointType::Caller,
-        CallingAddContractVersion::Forbidden,
+        AllowInstallUpgrade::Forbidden,
     );
 
-    (runtime_context, tempdir, footprint)
+    (runtime_context, tempdir)
 }
 
 #[allow(clippy::assertions_on_constants)]
@@ -235,7 +230,7 @@ where
 
     let address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let access_rights = addressable_entity.extract_access_rights(entity_hash, &named_keys);
-    let (runtime_context, _tempdir, _) = new_runtime_context(
+    let (runtime_context, _tempdir) = new_runtime_context(
         &addressable_entity,
         account_hash,
         entity_key,
@@ -251,7 +246,7 @@ where
 fn last_transform_kind_on_addressable_entity(
     runtime_context: &RuntimeContext<LmdbGlobalStateView>,
 ) -> TransformKindV2 {
-    let key = runtime_context.entity_key;
+    let key = runtime_context.context_key;
     runtime_context
         .effects()
         .transforms()
@@ -308,12 +303,12 @@ fn account_key_not_writeable() {
 fn entity_key_readable_valid() {
     // Entity key is readable if it is a "base" key - current context of the
     // execution.
-    let result = build_runtime_context_and_execute(NamedKeys::new(), |mut rc| {
-        let base_key = rc.get_entity_key();
-        let entity = rc.get_entity();
+    let result = build_runtime_context_and_execute(NamedKeys::new(), |rc| {
+        let context_key = rc.get_context_key();
+        let runtime_footprint = rc.runtime_footprint();
 
-        let entity_hash = entity.hash_addr();
-        let key_hash = base_key.into_entity_hash_addr().expect("must get hash");
+        let entity_hash = runtime_footprint.borrow().hash_addr();
+        let key_hash = context_key.into_entity_hash_addr().expect("must get hash");
 
         assert_eq!(entity_hash, key_hash);
         Ok(())
@@ -438,7 +433,7 @@ fn contract_key_addable_valid() {
         _ => panic!("unexpected key"),
     };
 
-    let footprint = RuntimeFootprint::new_entity_footprint(
+    let runtime_footprint = RuntimeFootprint::new_entity_footprint(
         addr,
         AddressableEntity::default(),
         named_keys.clone(),
@@ -447,7 +442,7 @@ fn contract_key_addable_valid() {
 
     let mut runtime_context = RuntimeContext::new(
         &mut named_keys,
-        &footprint,
+        Rc::new(RefCell::new(runtime_footprint)),
         contract_key,
         authorization_keys,
         access_rights,
@@ -470,7 +465,7 @@ fn contract_key_addable_valid() {
         Vec::default(),
         U512::zero(),
         EntryPointType::Caller,
-        CallingAddContractVersion::Forbidden,
+        AllowInstallUpgrade::Forbidden,
     );
 
     assert!(runtime_context
@@ -515,7 +510,7 @@ fn contract_key_addable_invalid() {
         _ => panic!("unexpected key"),
     };
 
-    let footprint = RuntimeFootprint::new_entity_footprint(
+    let runtime_footprint = RuntimeFootprint::new_entity_footprint(
         addr,
         AddressableEntity::default(),
         named_keys.clone(),
@@ -524,7 +519,7 @@ fn contract_key_addable_invalid() {
 
     let mut runtime_context = RuntimeContext::new(
         &mut named_keys,
-        &footprint,
+        Rc::new(RefCell::new(runtime_footprint)),
         other_contract_key,
         authorization_keys,
         access_rights,
@@ -547,7 +542,7 @@ fn contract_key_addable_invalid() {
         Vec::default(),
         U512::zero(),
         EntryPointType::Caller,
-        CallingAddContractVersion::Forbidden,
+        AllowInstallUpgrade::Forbidden,
     );
 
     let result = runtime_context.metered_add_gs(contract_key, named_uref_tuple);
@@ -794,9 +789,8 @@ fn should_verify_ownership_before_adding_key() {
     // making sure `account_dirty` mutated
     let named_keys = NamedKeys::new();
     let functor = |mut runtime_context: RuntimeContext<LmdbGlobalStateView>| {
-        // Overwrites a `base_key` to a different one before doing any operation as
+        // Overwrites a `context_key` to a different one before doing any operation as
         // account `[0; 32]`
-        // TODO: this test should be updated to use v2.0.0 / AddressableEntity model
         let entity_hash_by_account_hash =
             CLValue::from_t(Key::Hash([2; 32])).expect("must convert to cl_value");
 
@@ -811,7 +805,7 @@ fn should_verify_ownership_before_adding_key() {
             .metered_write_gs_unsafe(Key::Hash([1; 32]), AddressableEntity::default())
             .expect("must write key to gs");
 
-        runtime_context.entity_key = Key::Hash([1; 32]);
+        runtime_context.context_key = Key::Hash([1; 32]);
 
         let err = runtime_context
             .add_associated_key(AccountHash::new([84; 32]), Weight::new(123))
@@ -837,10 +831,9 @@ fn should_verify_ownership_before_removing_a_key() {
     // making sure `account_dirty` mutated
     let named_keys = NamedKeys::new();
     let functor = |mut runtime_context: RuntimeContext<LmdbGlobalStateView>| {
-        // Overwrites a `base_key` to a different one before doing any operation as
+        // Overwrites a `context_key` to a different one before doing any operation as
         // account `[0; 32]`
-        // TODO: this test should be updated to use v2.0.0 / AddressableEntity model
-        runtime_context.entity_key = Key::Hash([1; 32]);
+        runtime_context.context_key = Key::Hash([1; 32]);
 
         let err = runtime_context
             .remove_associated_key(AccountHash::new([84; 32]))
@@ -866,10 +859,9 @@ fn should_verify_ownership_before_setting_action_threshold() {
     // making sure `account_dirty` mutated
     let named_keys = NamedKeys::new();
     let functor = |mut runtime_context: RuntimeContext<LmdbGlobalStateView>| {
-        // Overwrites a `base_key` to a different one before doing any operation as
+        // Overwrites a `context_key` to a different one before doing any operation as
         // account `[0; 32]`
-        // TODO: this test should be updated to v2.0.0 / AddressableEntityHash model
-        runtime_context.entity_key = Key::Hash([1; 32]);
+        runtime_context.context_key = Key::Hash([1; 32]);
 
         let err = runtime_context
             .set_action_threshold(ActionType::Deployment, Weight::new(123))
@@ -906,7 +898,7 @@ fn remove_uref_works() {
 
     let access_rights = addressable_entity.extract_access_rights(entity_hash, &named_keys);
 
-    let (mut runtime_context, _tempdir, _) = new_runtime_context(
+    let (mut runtime_context, _tempdir) = new_runtime_context(
         &addressable_entity,
         account_hash,
         entity_key,
@@ -921,7 +913,7 @@ fn remove_uref_works() {
     // even if you remove the URef from the named keys.
     assert!(runtime_context.validate_key(&uref_key).is_ok());
     assert!(!runtime_context.named_keys_contains_key(&uref_name));
-    let entity = runtime_context.get_entity();
+    let footprint = runtime_context.runtime_footprint();
 
     let entity_named_keys = runtime_context
         .get_named_keys(entity_key)
@@ -929,10 +921,13 @@ fn remove_uref_works() {
     assert!(!entity_named_keys.contains(&uref_name));
     // The next time the account is used, the access right is gone for the removed
     // named key.
-    let next_session_access_rights = entity.extract_access_rights(entity_hash.value(), &named_keys);
+
+    let next_session_access_rights = footprint
+        .borrow()
+        .extract_access_rights(entity_hash.value(), &entity_named_keys);
     let address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
 
-    let (runtime_context, _tempdir, _) = new_runtime_context(
+    let (runtime_context, _tempdir) = new_runtime_context(
         &addressable_entity,
         account_hash,
         entity_key,
@@ -950,7 +945,7 @@ fn an_accounts_access_rights_should_include_main_purse() {
     let account_hash = AccountHash::new([0u8; 32]);
     let entity_hash = AddressableEntityHash::new([1u8; 32]);
     let named_keys = NamedKeys::new();
-    let (_base_key, _, entity) = new_addressable_entity_with_purse(
+    let (_context_key, _, entity) = new_addressable_entity_with_purse(
         account_hash,
         entity_hash,
         EntityKind::Account(account_hash),
@@ -978,7 +973,7 @@ fn validate_valid_purse_of_an_account() {
     let deploy_hash = [1u8; 32];
     let account_hash = AccountHash::new([0u8; 32]);
     let entity_hash = AddressableEntityHash::new([1u8; 32]);
-    let (base_key, _, entity) = new_addressable_entity_with_purse(
+    let (context_key, _, entity) = new_addressable_entity_with_purse(
         account_hash,
         entity_hash,
         EntityKind::Account(account_hash),
@@ -989,10 +984,10 @@ fn validate_valid_purse_of_an_account() {
     access_rights.extend(&[test_main_purse]);
 
     let address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
-    let (runtime_context, _tempdir, _) = new_runtime_context(
+    let (runtime_context, _tempdir) = new_runtime_context(
         &entity,
         account_hash,
-        base_key,
+        context_key,
         &mut named_keys,
         access_rights,
         address_generator,
@@ -1093,7 +1088,7 @@ fn should_meter_for_gas_storage_add() {
 #[test]
 fn associated_keys_add_full() {
     let final_add_result = build_runtime_context_and_execute(NamedKeys::new(), |mut rc| {
-        let associated_keys_before = rc.runtime_footprint().associated_keys().len();
+        let associated_keys_before = rc.runtime_footprint().borrow().associated_keys().len();
 
         for count in 0..(rc.engine_config.max_associated_keys() as usize - associated_keys_before) {
             let account_hash = {

@@ -10,17 +10,17 @@ use datasize::DataSize;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// Container for bytes recording location, type and data for a gas reservation
+/// Container for bytes recording location, type and data for a gas pre payment
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "datasize", derive(DataSize))]
 #[cfg_attr(feature = "json-schema", derive(JsonSchema))]
-pub struct ReservationKind {
+pub struct PrepaidKind {
     receipt: Digest,
-    reservation_kind: u8,
-    reservation_data: Bytes,
+    prepayment_kind: u8,
+    prepayment_data: Bytes,
 }
 
-impl ToBytes for ReservationKind {
+impl ToBytes for PrepaidKind {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let mut buffer = bytesrepr::allocate_buffer(self)?;
         self.write_bytes(&mut buffer)?;
@@ -30,13 +30,13 @@ impl ToBytes for ReservationKind {
     fn serialized_length(&self) -> usize {
         self.receipt.serialized_length()
             + U8_SERIALIZED_LENGTH
-            + self.reservation_data.serialized_length()
+            + self.prepayment_data.serialized_length()
     }
 
     fn write_bytes(&self, writer: &mut Vec<u8>) -> Result<(), bytesrepr::Error> {
         self.receipt.write_bytes(writer)?;
-        self.reservation_kind.write_bytes(writer)?;
-        self.reservation_data.write_bytes(writer)?;
+        self.prepayment_kind.write_bytes(writer)?;
+        self.prepayment_data.write_bytes(writer)?;
         Ok(())
     }
 }

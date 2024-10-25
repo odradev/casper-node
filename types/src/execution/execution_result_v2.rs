@@ -27,7 +27,7 @@ use crate::testing::TestRng;
 use crate::Key;
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes},
-    Gas, InitiatorAddr, Transfer, URef, U512,
+    Gas, InitiatorAddr, Transfer, U512,
 };
 
 #[cfg(feature = "json-schema")]
@@ -52,46 +52,11 @@ static EXECUTION_RESULT: Lazy<ExecutionResultV2> = Lazy::new(|| {
         limit: Gas::new(123_456),
         consumed: Gas::new(100_000),
         cost: U512::from(246_912),
-        payment: vec![PaymentInfo {
-            source: URef::new([1; crate::UREF_ADDR_LENGTH], crate::AccessRights::READ),
-        }],
         size_estimate: Transfer::example().serialized_length() as u64,
         transfers,
         effects,
     }
 });
-
-/// Breakdown of payments made to cover the cost.
-#[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
-#[cfg_attr(feature = "datasize", derive(DataSize))]
-#[cfg_attr(feature = "json-schema", derive(JsonSchema))]
-pub struct PaymentInfo {
-    /// Source purse used for payment of the transaction.
-    pub source: URef,
-}
-
-impl ToBytes for PaymentInfo {
-    fn write_bytes(&self, writer: &mut Vec<u8>) -> Result<(), bytesrepr::Error> {
-        self.source.write_bytes(writer)
-    }
-
-    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        let mut buffer = bytesrepr::allocate_buffer(self)?;
-        self.write_bytes(&mut buffer)?;
-        Ok(buffer)
-    }
-
-    fn serialized_length(&self) -> usize {
-        self.source.serialized_length()
-    }
-}
-
-impl FromBytes for PaymentInfo {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
-        let (source, remainder) = URef::from_bytes(bytes)?;
-        Ok((PaymentInfo { source }, remainder))
-    }
-}
 
 /// The result of executing a single transaction.
 #[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
@@ -110,8 +75,6 @@ pub struct ExecutionResultV2 {
     pub consumed: Gas,
     /// How much was paid for this transaction.
     pub cost: U512,
-    /// Breakdown of payments made to cover the cost.
-    pub payment: Vec<PaymentInfo>,
     /// A record of transfers performed while executing this transaction.
     pub transfers: Vec<Transfer>,
     /// The size estimate of the transaction
@@ -151,13 +114,11 @@ impl ExecutionResultV2 {
             .expect("consumed");
         let size_estimate = rng.gen();
 
-        let payment = vec![PaymentInfo { source: rng.gen() }];
         ExecutionResultV2 {
             initiator: InitiatorAddr::random(rng),
             effects,
             transfers,
             cost,
-            payment,
             limit,
             consumed,
             size_estimate,
@@ -171,18 +132,6 @@ impl ExecutionResultV2 {
 }
 
 impl ToBytes for ExecutionResultV2 {
-    fn write_bytes(&self, writer: &mut Vec<u8>) -> Result<(), bytesrepr::Error> {
-        self.initiator.write_bytes(writer)?; // initiator should logically be first
-        self.error_message.write_bytes(writer)?;
-        self.limit.write_bytes(writer)?;
-        self.consumed.write_bytes(writer)?;
-        self.cost.write_bytes(writer)?;
-        self.payment.write_bytes(writer)?;
-        self.transfers.write_bytes(writer)?;
-        self.size_estimate.write_bytes(writer)?;
-        self.effects.write_bytes(writer)
-    }
-
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let mut buffer = bytesrepr::allocate_buffer(self)?;
         self.write_bytes(&mut buffer)?;
@@ -195,10 +144,20 @@ impl ToBytes for ExecutionResultV2 {
             + self.limit.serialized_length()
             + self.consumed.serialized_length()
             + self.cost.serialized_length()
-            + self.payment.serialized_length()
             + self.transfers.serialized_length()
             + self.size_estimate.serialized_length()
             + self.effects.serialized_length()
+    }
+
+    fn write_bytes(&self, writer: &mut Vec<u8>) -> Result<(), bytesrepr::Error> {
+        self.initiator.write_bytes(writer)?; // initiator should logically be first
+        self.error_message.write_bytes(writer)?;
+        self.limit.write_bytes(writer)?;
+        self.consumed.write_bytes(writer)?;
+        self.cost.write_bytes(writer)?;
+        self.transfers.write_bytes(writer)?;
+        self.size_estimate.write_bytes(writer)?;
+        self.effects.write_bytes(writer)
     }
 }
 
@@ -209,7 +168,6 @@ impl FromBytes for ExecutionResultV2 {
         let (limit, remainder) = Gas::from_bytes(remainder)?;
         let (consumed, remainder) = Gas::from_bytes(remainder)?;
         let (cost, remainder) = U512::from_bytes(remainder)?;
-        let (payment, remainder) = Vec::<PaymentInfo>::from_bytes(remainder)?;
         let (transfers, remainder) = Vec::<Transfer>::from_bytes(remainder)?;
         let (size_estimate, remainder) = FromBytes::from_bytes(remainder)?;
         let (effects, remainder) = Effects::from_bytes(remainder)?;
@@ -219,7 +177,6 @@ impl FromBytes for ExecutionResultV2 {
             limit,
             consumed,
             cost,
-            payment,
             transfers,
             size_estimate,
             effects,

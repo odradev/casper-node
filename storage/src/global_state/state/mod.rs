@@ -570,7 +570,7 @@ pub trait CommitProvider: StateProvider {
                 }
             };
 
-            crate::system::runtime_native::Id::Seed(bytes)
+            Id::Seed(bytes)
         };
 
         // this runtime uses the system's context
@@ -1649,7 +1649,6 @@ pub trait StateProvider {
                     Ok(value) => value,
                     Err(tce) => return HandleFeeResult::Failure(tce),
                 };
-                println!("source: {source_purse}");
                 let target_purse = match target.purse_uref(&mut tc.borrow_mut(), protocol_version) {
                     Ok(value) => value,
                     Err(tce) => return HandleFeeResult::Failure(tce),
@@ -2147,8 +2146,7 @@ pub trait StateProvider {
                         return TransferResult::Failure(TransferError::Mint(mint_error));
                     }
                 };
-                // TODO: KARAN TO FIX: this should create a shiny new addressable entity instance,
-                // not create a legacy account and then uplift it.
+
                 let account = Account::create(account_hash, NamedKeys::new(), main_purse);
                 if let Err(tce) = tc
                     .borrow_mut()

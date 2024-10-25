@@ -162,7 +162,7 @@ pub enum ApiError {
     /// # use casper_types::ApiError;
     /// assert_eq!(ApiError::from(10), ApiError::UnexpectedContractRefVariant);
     /// ```
-    UnexpectedContractRefVariant, // TODO: this variant is not used any longer and can be removed
+    UnexpectedContractRefVariant,
     /// Invalid purse name given.
     /// ```
     /// # use casper_types::ApiError;

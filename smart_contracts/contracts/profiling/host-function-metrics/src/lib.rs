@@ -25,8 +25,6 @@ const MAX_FUNCTION_NAME_LENGTH: usize = 100;
 
 const NAMED_KEY_COUNT: usize = 100;
 const MIN_NAMED_KEY_NAME_LENGTH: usize = 10;
-// TODO - consider increasing to e.g. 1_000 once https://casperlabs.atlassian.net/browse/EE-966 is
-//        resolved.
 const MAX_NAMED_KEY_NAME_LENGTH: usize = 100;
 const VALUE_FOR_ADDITION_1: u64 = 1;
 const VALUE_FOR_ADDITION_2: u64 = 2;

@@ -960,7 +960,7 @@ where
     Ev: Send + 'static,
     REv: Send + 'static,
 {
-    // TODO: The double-boxing here is very unfortunate =(.
+    // The double-boxing here is very unfortunate =(.
     (async move {
         let events = effect.await;
         events.into_iter().map(wrap).collect()

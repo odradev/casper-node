@@ -47,7 +47,7 @@ impl Executor {
         execution_kind: ExecutionKind,
         args: RuntimeArgs,
         entity_addr: EntityAddr,
-        entity: &RuntimeFootprint,
+        runtime_footprint: Rc<RefCell<RuntimeFootprint>>,
         named_keys: &mut NamedKeys,
         access_rights: ContextAccessRights,
         authorization_keys: BTreeSet<AccountHash>,
@@ -82,7 +82,7 @@ impl Executor {
             Rc::new(RefCell::new(generator))
         };
 
-        let entity_key = if self.config.enable_entity {
+        let context_key = if self.config.enable_entity {
             Key::AddressableEntity(entity_addr)
         } else {
             match entity_addr {
@@ -100,8 +100,8 @@ impl Executor {
 
         let context = self.create_runtime_context(
             named_keys,
-            entity,
-            entity_key,
+            runtime_footprint,
+            context_key,
             authorization_keys,
             access_rights,
             account_hash,
@@ -162,8 +162,8 @@ impl Executor {
     fn create_runtime_context<'a, R>(
         &self,
         named_keys: &'a mut NamedKeys,
-        runtime_footprint: &'a RuntimeFootprint,
-        entity_key: Key,
+        runtime_footprint: Rc<RefCell<RuntimeFootprint>>,
+        context_key: Key,
         authorization_keys: BTreeSet<AccountHash>,
         access_rights: ContextAccessRights,
         account_hash: AccountHash,
@@ -188,7 +188,7 @@ impl Executor {
         RuntimeContext::new(
             named_keys,
             runtime_footprint,
-            entity_key,
+            context_key,
             authorization_keys,
             access_rights,
             account_hash,

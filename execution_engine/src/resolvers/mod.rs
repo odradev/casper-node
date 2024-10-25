@@ -16,16 +16,16 @@ use crate::resolvers::memory_resolver::MemoryResolver;
 ///
 /// * `protocol_version` Version of the protocol. Can't be lower than 1.
 pub(crate) fn create_module_resolver(
-    protocol_version: ProtocolVersion,
+    _protocol_version: ProtocolVersion,
     engine_config: &EngineConfig,
 ) -> Result<impl ModuleImportResolver + MemoryResolver, ResolverError> {
-    // TODO: revisit how protocol_version check here is meant to combine with upgrade
-    if protocol_version >= ProtocolVersion::V1_0_0 {
-        return Ok(v1_resolver::RuntimeModuleImportResolver::new(
-            engine_config.wasm_config().v1().max_memory(),
-        ));
-    }
-    Err(ResolverError::UnknownProtocolVersion(protocol_version))
+    Ok(v1_resolver::RuntimeModuleImportResolver::new(
+        engine_config.wasm_config().v1().max_memory(),
+    ))
+    // if in future it is necessary to pick a different resolver
+    // based on the protocol version, modify this logic accordingly
+    // if there is an unsupported / unknown protocol version return the following error:
+    // Err(ResolverError::UnknownProtocolVersion(protocol_version))
 }
 
 #[cfg(test)]
@@ -36,8 +36,9 @@ mod tests {
 
     #[test]
     fn resolve_invalid_module() {
+        // NOTE: we are currently not enforcing underlying logic
         assert!(
-            create_module_resolver(ProtocolVersion::default(), &EngineConfig::default()).is_err()
+            create_module_resolver(ProtocolVersion::default(), &EngineConfig::default()).is_ok()
         );
     }
 

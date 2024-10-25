@@ -89,6 +89,7 @@ where
     fn get_main_purse(&self) -> URef {
         self.context
             .runtime_footprint()
+            .borrow()
             .main_purse()
             .expect("did not have purse in mint internal")
     }
@@ -107,7 +108,6 @@ where
     }
 }
 
-// TODO: update Mint + StorageProvider to better handle errors
 impl<'a, R> StorageProvider for Runtime<'a, R>
 where
     R: StateReader<Key, StoredValue, Error = GlobalStateError>,

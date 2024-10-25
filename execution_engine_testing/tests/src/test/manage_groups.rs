@@ -5,13 +5,12 @@ use once_cell::sync::Lazy;
 
 use casper_engine_test_support::{
     DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
-    DEFAULT_PAYMENT, PRODUCTION_RUN_GENESIS_REQUEST,
+    DEFAULT_PAYMENT, LOCAL_GENESIS_REQUEST,
 };
-use casper_execution_engine::{engine_state::Error, execution};
+use casper_execution_engine::{engine_state::Error, execution::ExecError};
 use casper_types::{
     addressable_entity::{self, MAX_GROUPS},
-    package::ENTITY_INITIAL_VERSION,
-    runtime_args, Group, RuntimeArgs,
+    runtime_args, Group, RuntimeArgs, ENTITY_INITIAL_VERSION,
 };
 
 const CONTRACT_GROUPS: &str = "manage_groups.wasm";
@@ -51,19 +50,19 @@ fn should_create_and_remove_group() {
 
     let mut builder = LmdbWasmTestBuilder::default();
 
-    builder.run_genesis(PRODUCTION_RUN_GENESIS_REQUEST.clone());
+    builder.run_genesis(LOCAL_GENESIS_REQUEST.clone());
 
     builder.exec(exec_request_1).expect_success().commit();
 
-    let account = builder
-        .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-        .expect("must have contract");
+    let entity = builder
+        .get_entity_with_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
+        .expect("must have entity");
 
-    let package_hash = account
+    let package_hash = entity
         .named_keys()
         .get(PACKAGE_HASH_KEY)
-        .expect("should have contract package");
-    let _access_uref = account
+        .expect("should have package");
+    let _access_uref = entity
         .named_keys()
         .get(PACKAGE_ACCESS_KEY)
         .expect("should have package hash");
@@ -80,12 +79,12 @@ fn should_create_and_remove_group() {
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
-            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
+            .with_standard_payment(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
             .with_authorization_keys(&[*DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
 
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(&deploy).build()
     };
 
     builder.exec(exec_request_2).expect_success().commit();
@@ -116,12 +115,12 @@ fn should_create_and_remove_group() {
                 REMOVE_GROUP,
                 args,
             )
-            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
+            .with_standard_payment(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
             .with_authorization_keys(&[*DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
 
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(&deploy).build()
     };
 
     builder.exec(exec_request_3).expect_success().commit();
@@ -150,12 +149,12 @@ fn should_create_and_extend_user_group() {
 
     let mut builder = LmdbWasmTestBuilder::default();
 
-    builder.run_genesis(PRODUCTION_RUN_GENESIS_REQUEST.clone());
+    builder.run_genesis(LOCAL_GENESIS_REQUEST.clone());
 
     builder.exec(exec_request_1).expect_success().commit();
 
     let account = builder
-        .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
+        .get_entity_with_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
         .expect("must have contract");
 
     let package_hash = account
@@ -179,12 +178,12 @@ fn should_create_and_extend_user_group() {
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
-            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
+            .with_standard_payment(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
             .with_authorization_keys(&[*DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([5; 32])
             .build();
 
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(&deploy).build()
     };
 
     builder.exec(exec_request_2).expect_success().commit();
@@ -216,12 +215,12 @@ fn should_create_and_extend_user_group() {
                 EXTEND_GROUP_UREFS,
                 args,
             )
-            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
+            .with_standard_payment(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
             .with_authorization_keys(&[*DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
 
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(&deploy).build()
     };
 
     builder.exec(exec_request_3).expect_success().commit();
@@ -254,12 +253,12 @@ fn should_create_and_remove_urefs_from_group() {
 
     let mut builder = LmdbWasmTestBuilder::default();
 
-    builder.run_genesis(PRODUCTION_RUN_GENESIS_REQUEST.clone());
+    builder.run_genesis(LOCAL_GENESIS_REQUEST.clone());
 
     builder.exec(exec_request_1).expect_success().commit();
 
     let account = builder
-        .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
+        .get_entity_with_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
         .expect("must have contract");
     let package_hash = account
         .named_keys()
@@ -282,12 +281,12 @@ fn should_create_and_remove_urefs_from_group() {
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
-            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
+            .with_standard_payment(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
             .with_authorization_keys(&[*DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
 
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(&deploy).build()
     };
 
     builder.exec(exec_request_2).expect_success().commit();
@@ -321,12 +320,12 @@ fn should_create_and_remove_urefs_from_group() {
                 REMOVE_GROUP_UREFS,
                 args,
             )
-            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
+            .with_standard_payment(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
             .with_authorization_keys(&[*DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
 
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(&deploy).build()
     };
 
     builder.exec(exec_request_3).expect_success().commit();
@@ -356,12 +355,12 @@ fn should_limit_max_urefs_while_extending() {
 
     let mut builder = LmdbWasmTestBuilder::default();
 
-    builder.run_genesis(PRODUCTION_RUN_GENESIS_REQUEST.clone());
+    builder.run_genesis(LOCAL_GENESIS_REQUEST.clone());
 
     builder.exec(exec_request_1).expect_success().commit();
 
     let account = builder
-        .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
+        .get_entity_with_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
         .expect("must have contract");
     let package_hash = account
         .named_keys()
@@ -384,12 +383,12 @@ fn should_limit_max_urefs_while_extending() {
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
-            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
+            .with_standard_payment(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
             .with_authorization_keys(&[*DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
 
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(&deploy).build()
     };
 
     builder.exec(exec_request_2).expect_success().commit();
@@ -421,12 +420,12 @@ fn should_limit_max_urefs_while_extending() {
                 EXTEND_GROUP_UREFS,
                 args,
             )
-            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
+            .with_standard_payment(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
             .with_authorization_keys(&[*DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([5; 32])
             .build();
 
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(&deploy).build()
     };
 
     let exec_request_4 = {
@@ -446,12 +445,12 @@ fn should_limit_max_urefs_while_extending() {
                 EXTEND_GROUP_UREFS,
                 args,
             )
-            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
+            .with_standard_payment(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
             .with_authorization_keys(&[*DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([32; 32])
             .build();
 
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(&deploy).build()
     };
 
     builder.exec(exec_request_3).expect_success().commit();
@@ -469,12 +468,10 @@ fn should_limit_max_urefs_while_extending() {
     // Tries to exceed the limit by 1
     builder.exec(exec_request_4).commit();
 
-    let response = builder
-        .get_last_exec_results()
+    let exec_response = builder
+        .get_last_exec_result()
         .expect("should have last response");
-    assert_eq!(response.len(), 1);
-    let exec_response = response.last().expect("should have response");
-    let error = exec_response.as_error().expect("should have error");
+    let error = exec_response.error().expect("should have error");
     let error = assert_matches!(error, Error::Exec(ExecError::Revert(e)) => e);
     assert_eq!(
         error,

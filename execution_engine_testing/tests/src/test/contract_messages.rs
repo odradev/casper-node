@@ -1,5 +1,5 @@
 use num_traits::Zero;
-use std::{cell::RefCell, collections::BTreeMap};
+use std::cell::RefCell;
 
 use casper_execution_engine::runtime::cryptography;
 
@@ -11,9 +11,7 @@ use casper_engine_test_support::{
 use casper_types::{
     addressable_entity::MessageTopics,
     bytesrepr::ToBytes,
-    contract_messages::{
-        MessageChecksum, MessagePayload, MessageTopicOperation, MessageTopicSummary, TopicNameHash,
-    },
+    contract_messages::{MessageChecksum, MessagePayload, MessageTopicSummary, TopicNameHash},
     runtime_args, AddressableEntityHash, BlockGlobalAddr, BlockTime, CLValue, CoreConfig, Digest,
     HostFunction, HostFunctionCosts, Key, MessageLimits, OpcodeCosts, RuntimeArgs, StorageCosts,
     StoredValue, SystemConfig, WasmConfig, WasmV1Config, DEFAULT_V1_MAX_STACK_HEIGHT,
@@ -101,12 +99,12 @@ fn upgrade_messages_emitter_contract(
     )
     .build();
 
-    let new_topics = BTreeMap::from([(
-        MESSAGE_EMITTER_GENERIC_TOPIC.to_string(),
-        MessageTopicOperation::Add,
-    )]);
+    // let new_topics = BTreeMap::from([(
+    //     MESSAGE_EMITTER_GENERIC_TOPIC.to_string(),
+    //     MessageTopicOperation::Add,
+    // )]);
 
-    println!("{}", new_topics.into_bytes().unwrap().len());
+    // println!("{}", new_topics.into_bytes().unwrap().len());
 
     // Execute the request to upgrade the message emitting contract.
     // This will also register a new topic for the contract to emit messages on.
@@ -484,26 +482,28 @@ fn should_not_add_duplicate_topics() {
 #[ignore]
 #[test]
 fn should_not_exceed_configured_limits() {
-    let default_wasm_config = WasmV1Config::default();
-    let wasm_v1_config = WasmV1Config::new(
-        default_wasm_config.max_memory(),
-        default_wasm_config.max_stack_height(),
-        default_wasm_config.opcode_costs(),
-        default_wasm_config.take_host_function_costs(),
-    );
-    let wasm_config = WasmConfig::new(
-        MessageLimits {
-            max_topic_name_size: 32,
-            max_message_size: 100,
-            max_topics_per_contract: 2,
-        },
-        wasm_v1_config,
-    );
-    let chainspec = ChainspecConfig {
-        system_costs_config: SystemConfig::default(),
-        core_config: CoreConfig::default(),
-        wasm_config,
-        storage_costs: StorageCosts::default(),
+    let chainspec = {
+        let default_wasm_config = WasmV1Config::default();
+        let wasm_v1_config = WasmV1Config::new(
+            default_wasm_config.max_memory(),
+            default_wasm_config.max_stack_height(),
+            default_wasm_config.opcode_costs(),
+            default_wasm_config.take_host_function_costs(),
+        );
+        let wasm_config = WasmConfig::new(
+            MessageLimits {
+                max_topic_name_size: 32,
+                max_message_size: 100,
+                max_topics_per_contract: 2,
+            },
+            wasm_v1_config,
+        );
+        ChainspecConfig {
+            system_costs_config: SystemConfig::default(),
+            core_config: CoreConfig::default(),
+            wasm_config,
+            storage_costs: StorageCosts::default(),
+        }
     };
 
     let builder = RefCell::new(LmdbWasmTestBuilder::new_temporary_with_config(chainspec));
@@ -655,19 +655,22 @@ fn should_not_emit_messages_from_account() {
 fn should_charge_expected_gas_for_storage() {
     const GAS_PER_BYTE_COST: u32 = 100;
 
-    let wasm_v1_config = WasmV1Config::new(
-        DEFAULT_V1_WASM_MAX_MEMORY,
-        DEFAULT_V1_MAX_STACK_HEIGHT,
-        OpcodeCosts::zero(),
-        HostFunctionCosts::zero(),
-    );
-    let wasm_config = WasmConfig::new(MessageLimits::default(), wasm_v1_config);
-    let chainspec = ChainspecConfig {
-        wasm_config,
-        core_config: CoreConfig::default(),
-        system_costs_config: SystemConfig::default(),
-        storage_costs: StorageCosts::new(GAS_PER_BYTE_COST),
+    let chainspec = {
+        let wasm_v1_config = WasmV1Config::new(
+            DEFAULT_V1_WASM_MAX_MEMORY,
+            DEFAULT_V1_MAX_STACK_HEIGHT,
+            OpcodeCosts::zero(),
+            HostFunctionCosts::zero(),
+        );
+        let wasm_config = WasmConfig::new(MessageLimits::default(), wasm_v1_config);
+        ChainspecConfig {
+            wasm_config,
+            core_config: CoreConfig::default(),
+            system_costs_config: SystemConfig::default(),
+            storage_costs: StorageCosts::new(GAS_PER_BYTE_COST),
+        }
     };
+
     let builder = RefCell::new(LmdbWasmTestBuilder::new_temporary_with_config(chainspec));
     builder
         .borrow_mut()
@@ -675,9 +678,9 @@ fn should_charge_expected_gas_for_storage() {
 
     let contract_hash = install_messages_emitter_contract(&builder, true);
 
-    let topic_name = "cost_topic";
+    let topic_name = "consume_topic";
 
-    // check the cost of adding a new topic
+    // check the consume of adding a new topic
     let add_topic_request = ExecuteRequestBuilder::contract_call_by_hash(
         *DEFAULT_ACCOUNT_ADDR,
         contract_hash,
@@ -694,7 +697,7 @@ fn should_charge_expected_gas_for_storage() {
         .expect_success()
         .commit();
 
-    let add_topic_cost = builder.borrow().last_exec_gas_cost().value();
+    let add_topic_consumed = builder.borrow().last_exec_gas_consumed().value();
 
     let default_topic_summary =
         MessageTopicSummary::new(0, BlockTime::new(0), topic_name.to_string());
@@ -702,22 +705,22 @@ fn should_charge_expected_gas_for_storage() {
         StoredValue::MessageTopic(default_topic_summary.clone()).serialized_length();
     assert_eq!(
         U512::from(written_size_expected * GAS_PER_BYTE_COST as usize),
-        add_topic_cost
+        add_topic_consumed
     );
 
     let message_topic =
         MessageTopicSummary::new(0, BlockTime::new(0), "generic_messages".to_string());
     emit_message_with_suffix(&builder, "test", &contract_hash, DEFAULT_BLOCK_TIME);
-    // check that the storage cost charged is variable since the message topic hash a variable
+    // check that the storage consume charged is variable since the message topic hash a variable
     // string field with message size that is emitted.
     let written_size_expected = StoredValue::Message(MessageChecksum([0; 32])).serialized_length()
         + StoredValue::MessageTopic(message_topic).serialized_length()
         + StoredValue::CLValue(CLValue::from_t((BlockTime::new(0), 0u64)).unwrap())
             .serialized_length();
-    let emit_message_gas_cost = builder.borrow().last_exec_gas_cost().value();
+    let emit_message_gas_consumed = builder.borrow().last_exec_gas_consumed().value();
     assert_eq!(
         U512::from(written_size_expected * GAS_PER_BYTE_COST as usize),
-        emit_message_gas_cost
+        emit_message_gas_consumed
     );
 
     emit_message_with_suffix(&builder, "test 12345", &contract_hash, DEFAULT_BLOCK_TIME);
@@ -730,57 +733,58 @@ fn should_charge_expected_gas_for_storage() {
         .serialized_length()
         + StoredValue::CLValue(CLValue::from_t((BlockTime::new(0), 0u64)).unwrap())
             .serialized_length();
-    let emit_message_gas_cost = builder.borrow().last_exec_gas_cost().value();
+    let emit_message_gas_consumed = builder.borrow().last_exec_gas_consumed().value();
     assert_eq!(
         U512::from(written_size_expected * GAS_PER_BYTE_COST as usize),
-        emit_message_gas_cost
+        emit_message_gas_consumed
     );
 
-    // emitting messages in a different block will also prune the old entries so check the cost.
+    // emitting messages in a different block will also prune the old entries so check the consumed.
     emit_message_with_suffix(
         &builder,
         "message in different block",
         &contract_hash,
         DEFAULT_BLOCK_TIME + 1,
     );
-    let emit_message_gas_cost = builder.borrow().last_exec_gas_cost().value();
+    let emit_message_gas_consumed = builder.borrow().last_exec_gas_consumed().value();
     assert_eq!(
         U512::from(written_size_expected * GAS_PER_BYTE_COST as usize),
-        emit_message_gas_cost
+        emit_message_gas_consumed
     );
 }
 
 #[ignore]
 #[test]
-fn should_charge_increasing_gas_cost_for_multiple_messages_emitted() {
+fn should_charge_increasing_gas_consumed_for_multiple_messages_emitted() {
     const FIRST_MESSAGE_EMIT_COST: u32 = 100;
     const COST_INCREASE_PER_MESSAGE: u32 = 50;
-    const fn emit_cost_per_execution(num_messages: u32) -> u32 {
+    const fn emit_consumed_per_execution(num_messages: u32) -> u32 {
         FIRST_MESSAGE_EMIT_COST * num_messages
             + (num_messages - 1) * num_messages / 2 * COST_INCREASE_PER_MESSAGE
     }
 
     const MESSAGES_TO_EMIT: u32 = 4;
-    const EMIT_MULTIPLE_EXPECTED_COST: u32 = emit_cost_per_execution(MESSAGES_TO_EMIT);
+    const EMIT_MULTIPLE_EXPECTED_COST: u32 = emit_consumed_per_execution(MESSAGES_TO_EMIT);
     const EMIT_MESSAGES_FROM_MULTIPLE_CONTRACTS: u32 =
-        emit_cost_per_execution(EMIT_MESSAGE_FROM_EACH_VERSION_NUM_MESSAGES);
-
-    let wasm_v1_config = WasmV1Config::new(
-        DEFAULT_V1_WASM_MAX_MEMORY,
-        DEFAULT_V1_MAX_STACK_HEIGHT,
-        OpcodeCosts::zero(),
-        HostFunctionCosts {
-            emit_message: HostFunction::fixed(FIRST_MESSAGE_EMIT_COST),
-            cost_increase_per_message: COST_INCREASE_PER_MESSAGE,
-            ..Zero::zero()
-        },
-    );
-    let wasm_config = WasmConfig::new(MessageLimits::default(), wasm_v1_config);
-    let chainspec = ChainspecConfig {
-        wasm_config,
-        core_config: CoreConfig::default(),
-        system_costs_config: SystemConfig::default(),
-        storage_costs: StorageCosts::zero(),
+        emit_consumed_per_execution(EMIT_MESSAGE_FROM_EACH_VERSION_NUM_MESSAGES);
+    let chainspec = {
+        let wasm_v1_config = WasmV1Config::new(
+            DEFAULT_V1_WASM_MAX_MEMORY,
+            DEFAULT_V1_MAX_STACK_HEIGHT,
+            OpcodeCosts::zero(),
+            HostFunctionCosts {
+                emit_message: HostFunction::fixed(FIRST_MESSAGE_EMIT_COST),
+                cost_increase_per_message: COST_INCREASE_PER_MESSAGE,
+                ..Zero::zero()
+            },
+        );
+        let wasm_config = WasmConfig::new(MessageLimits::default(), wasm_v1_config);
+        ChainspecConfig {
+            wasm_config,
+            core_config: CoreConfig::default(),
+            system_costs_config: SystemConfig::default(),
+            storage_costs: StorageCosts::zero(),
+        }
     };
 
     let builder = RefCell::new(LmdbWasmTestBuilder::new_temporary_with_config(chainspec));
@@ -792,8 +796,8 @@ fn should_charge_increasing_gas_cost_for_multiple_messages_emitted() {
 
     // Emit one message in this execution. Cost should be `FIRST_MESSAGE_EMIT_COST`.
     emit_message_with_suffix(&builder, "test", &contract_hash, DEFAULT_BLOCK_TIME);
-    let emit_message_gas_cost = builder.borrow().last_exec_gas_cost().value();
-    assert_eq!(emit_message_gas_cost, FIRST_MESSAGE_EMIT_COST.into());
+    let emit_message_gas_consume = builder.borrow().last_exec_gas_consumed().value();
+    assert_eq!(emit_message_gas_consume, FIRST_MESSAGE_EMIT_COST.into());
 
     // Emit multiple messages in this execution. Cost should increase for each message emitted.
     let emit_messages_request = ExecuteRequestBuilder::contract_call_by_hash(
@@ -811,19 +815,19 @@ fn should_charge_increasing_gas_cost_for_multiple_messages_emitted() {
         .expect_success()
         .commit();
 
-    let emit_multiple_messages_cost = builder.borrow().last_exec_gas_cost().value();
+    let emit_multiple_messages_consume = builder.borrow().last_exec_gas_consumed().value();
     assert_eq!(
-        emit_multiple_messages_cost,
+        emit_multiple_messages_consume,
         EMIT_MULTIPLE_EXPECTED_COST.into()
     );
 
     // Try another execution where we emit a single message.
     // Cost should be `FIRST_MESSAGE_EMIT_COST`
     emit_message_with_suffix(&builder, "test", &contract_hash, DEFAULT_BLOCK_TIME);
-    let emit_message_gas_cost = builder.borrow().last_exec_gas_cost().value();
-    assert_eq!(emit_message_gas_cost, FIRST_MESSAGE_EMIT_COST.into());
+    let emit_message_gas_consume = builder.borrow().last_exec_gas_consumed().value();
+    assert_eq!(emit_message_gas_consume, FIRST_MESSAGE_EMIT_COST.into());
 
-    // Check gas cost when multiple messages are emitted from different contracts.
+    // Check gas consume when multiple messages are emitted from different contracts.
     let contract_hash = upgrade_messages_emitter_contract(&builder, true, false);
     let emit_message_request = ExecuteRequestBuilder::contract_call_by_hash(
         *DEFAULT_ACCOUNT_ADDR,
@@ -841,11 +845,11 @@ fn should_charge_increasing_gas_cost_for_multiple_messages_emitted() {
         .expect_success()
         .commit();
 
-    // 3 messages are emitted by this execution so the cost would be:
+    // 3 messages are emitted by this execution so the consume would be:
     // `EMIT_MESSAGES_FROM_MULTIPLE_CONTRACTS`
-    let emit_message_gas_cost = builder.borrow().last_exec_gas_cost().value();
+    let emit_message_gas_consume = builder.borrow().last_exec_gas_consumed().value();
     assert_eq!(
-        emit_message_gas_cost,
+        emit_message_gas_consume,
         U512::from(EMIT_MESSAGES_FROM_MULTIPLE_CONTRACTS)
     );
 }
@@ -880,26 +884,28 @@ fn should_register_topic_on_contract_creation() {
 #[ignore]
 #[test]
 fn should_not_exceed_configured_topic_name_limits_on_contract_upgrade_no_init() {
-    let default_wasm_v1_config = WasmV1Config::default();
-    let wasm_v1_config = WasmV1Config::new(
-        default_wasm_v1_config.max_memory(),
-        default_wasm_v1_config.max_stack_height(),
-        default_wasm_v1_config.opcode_costs(),
-        default_wasm_v1_config.take_host_function_costs(),
-    );
-    let wasm_config = WasmConfig::new(
-        MessageLimits {
-            max_topic_name_size: 16, //length of MESSAGE_EMITTER_GENERIC_TOPIC
-            max_message_size: 100,
-            max_topics_per_contract: 3,
-        },
-        wasm_v1_config,
-    );
-    let chainspec = ChainspecConfig {
-        wasm_config,
-        core_config: CoreConfig::default(),
-        system_costs_config: SystemConfig::default(),
-        storage_costs: StorageCosts::default(),
+    let chainspec = {
+        let default_wasm_v1_config = WasmV1Config::default();
+        let wasm_v1_config = WasmV1Config::new(
+            default_wasm_v1_config.max_memory(),
+            default_wasm_v1_config.max_stack_height(),
+            default_wasm_v1_config.opcode_costs(),
+            default_wasm_v1_config.take_host_function_costs(),
+        );
+        let wasm_config = WasmConfig::new(
+            MessageLimits {
+                max_topic_name_size: 16, //length of MESSAGE_EMITTER_GENERIC_TOPIC
+                max_message_size: 100,
+                max_topics_per_contract: 3,
+            },
+            wasm_v1_config,
+        );
+        ChainspecConfig {
+            wasm_config,
+            core_config: CoreConfig::default(),
+            system_costs_config: SystemConfig::default(),
+            storage_costs: StorageCosts::default(),
+        }
     };
 
     let builder = RefCell::new(LmdbWasmTestBuilder::new_temporary_with_config(chainspec));
@@ -914,27 +920,29 @@ fn should_not_exceed_configured_topic_name_limits_on_contract_upgrade_no_init() 
 #[ignore]
 #[test]
 fn should_not_exceed_configured_max_topics_per_contract_upgrade_no_init() {
-    let default_wasm_config = WasmV1Config::default();
-    let wasm_v1_config = WasmV1Config::new(
-        default_wasm_config.max_memory(),
-        default_wasm_config.max_stack_height(),
-        default_wasm_config.opcode_costs(),
-        default_wasm_config.take_host_function_costs(),
-    );
-    let wasm_config = WasmConfig::new(
-        MessageLimits {
-            max_topic_name_size: 32,
-            max_message_size: 100,
-            max_topics_per_contract: 1, /* only allow 1 topic. Since on upgrade previous
-                                         * topics carry over, the upgrade should fail. */
-        },
-        wasm_v1_config,
-    );
-    let chainspec = ChainspecConfig {
-        wasm_config,
-        system_costs_config: SystemConfig::default(),
-        core_config: CoreConfig::default(),
-        storage_costs: StorageCosts::default(),
+    let chainspec = {
+        let default_wasm_config = WasmV1Config::default();
+        let wasm_v1_config = WasmV1Config::new(
+            default_wasm_config.max_memory(),
+            default_wasm_config.max_stack_height(),
+            default_wasm_config.opcode_costs(),
+            default_wasm_config.take_host_function_costs(),
+        );
+        let wasm_config = WasmConfig::new(
+            MessageLimits {
+                max_topic_name_size: 32,
+                max_message_size: 100,
+                max_topics_per_contract: 1, /* only allow 1 topic. Since on upgrade previous
+                                             * topics carry over, the upgrade should fail. */
+            },
+            wasm_v1_config,
+        );
+        ChainspecConfig {
+            wasm_config,
+            system_costs_config: SystemConfig::default(),
+            core_config: CoreConfig::default(),
+            storage_costs: StorageCosts::default(),
+        }
     };
 
     let builder = RefCell::new(LmdbWasmTestBuilder::new_temporary_with_config(chainspec));
@@ -1120,35 +1128,38 @@ fn should_produce_per_block_message_ordering() {
 
 #[ignore]
 #[test]
-fn emit_message_should_charge_variable_gas_cost_based_on_topic_and_message_size() {
+fn emit_message_should_consume_variable_gas_based_on_topic_and_message_size() {
     const MESSAGE_EMIT_COST: u32 = 1_000_000;
 
     const COST_PER_MESSAGE_TOPIC_NAME_SIZE: u32 = 2;
     const COST_PER_MESSAGE_LENGTH: u32 = 1_000;
     const MESSAGE_SUFFIX: &str = "test";
-    let wasm_v1_config = WasmV1Config::new(
-        DEFAULT_V1_WASM_MAX_MEMORY,
-        DEFAULT_V1_MAX_STACK_HEIGHT,
-        OpcodeCosts::zero(),
-        HostFunctionCosts {
-            emit_message: HostFunction::new(
-                MESSAGE_EMIT_COST,
-                [
-                    0,
-                    COST_PER_MESSAGE_TOPIC_NAME_SIZE,
-                    0,
-                    COST_PER_MESSAGE_LENGTH,
-                ],
-            ),
-            ..Zero::zero()
-        },
-    );
-    let wasm_config = WasmConfig::new(MessageLimits::default(), wasm_v1_config);
-    let chainspec = ChainspecConfig {
-        wasm_config,
-        core_config: CoreConfig::default(),
-        system_costs_config: SystemConfig::default(),
-        storage_costs: StorageCosts::zero(),
+
+    let chainspec = {
+        let wasm_v1_config = WasmV1Config::new(
+            DEFAULT_V1_WASM_MAX_MEMORY,
+            DEFAULT_V1_MAX_STACK_HEIGHT,
+            OpcodeCosts::zero(),
+            HostFunctionCosts {
+                emit_message: HostFunction::new(
+                    MESSAGE_EMIT_COST,
+                    [
+                        0,
+                        COST_PER_MESSAGE_TOPIC_NAME_SIZE,
+                        0,
+                        COST_PER_MESSAGE_LENGTH,
+                    ],
+                ),
+                ..Zero::zero()
+            },
+        );
+        let wasm_config = WasmConfig::new(MessageLimits::default(), wasm_v1_config);
+        ChainspecConfig {
+            wasm_config,
+            core_config: CoreConfig::default(),
+            system_costs_config: SystemConfig::default(),
+            storage_costs: StorageCosts::zero(),
+        }
     };
 
     let builder = RefCell::new(LmdbWasmTestBuilder::new_temporary_with_config(chainspec));
@@ -1158,13 +1169,13 @@ fn emit_message_should_charge_variable_gas_cost_based_on_topic_and_message_size(
 
     let contract_hash = install_messages_emitter_contract(&builder, true);
 
-    // Emit one message in this execution. Cost should be cost of the call to emit message + cost
-    // charged for message topic name length + cost for message payload size.
+    // Emit one message in this execution. Cost should be consume of the call to emit message +
+    // consume charged for message topic name length + consume for message payload size.
     emit_message_with_suffix(&builder, MESSAGE_SUFFIX, &contract_hash, DEFAULT_BLOCK_TIME);
-    let emit_message_gas_cost = builder.borrow().last_exec_gas_cost().value();
+    let emit_message_gas_consume = builder.borrow().last_exec_gas_consumed().value();
     let payload: MessagePayload = format!("{}{}", EMITTER_MESSAGE_PREFIX, MESSAGE_SUFFIX).into();
-    let expected_cost = MESSAGE_EMIT_COST
+    let expected_consume = MESSAGE_EMIT_COST
         + COST_PER_MESSAGE_TOPIC_NAME_SIZE * MESSAGE_EMITTER_GENERIC_TOPIC.len() as u32
         + COST_PER_MESSAGE_LENGTH * payload.serialized_length() as u32;
-    assert_eq!(emit_message_gas_cost, expected_cost.into());
+    assert_eq!(emit_message_gas_consume, expected_consume.into());
 }

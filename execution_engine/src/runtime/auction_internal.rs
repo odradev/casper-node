@@ -282,6 +282,7 @@ where
         if !(self
             .context
             .runtime_footprint()
+            .borrow()
             .main_purse()
             .expect("didnt have purse")
             .addr()
@@ -399,6 +400,7 @@ where
         // from userland.
         Runtime::context(self)
             .runtime_footprint()
+            .borrow()
             .main_purse()
             .ok_or(Error::InvalidContext)
     }

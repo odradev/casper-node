@@ -30,8 +30,8 @@ pub enum FeesPurseHandling {
     ToProposer(AccountHash),
     /// Transfer all fees to a system-wide accumulation purse, for future disbursement.
     Accumulate,
-    /// Burn all fees.
-    Burn,
+    /// Burn all fees from specified purse.
+    Burn(URef),
     /// No fees are charged.
     None(URef),
 }
@@ -801,8 +801,6 @@ where
             FeesPurseHandling::ToProposer(proposer) => {
                 let (_, entity) =
                     self.runtime_footprint_by_account_hash(protocol_version, proposer)?;
-
-                println!("foo");
                 Ok(entity
                     .main_purse()
                     .ok_or_else(|| TrackingCopyError::AddressableEntityDisable)?)
@@ -838,10 +836,7 @@ where
 
                 Ok(accumulation_purse_uref)
             }
-            FeesPurseHandling::Burn => {
-                // TODO: replace this with new burn logic once it merges
-                Ok(URef::default())
-            }
+            FeesPurseHandling::Burn(uref) => Ok(uref),
         }
     }
 

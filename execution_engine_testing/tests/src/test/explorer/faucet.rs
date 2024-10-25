@@ -702,7 +702,7 @@ fn faucet_costs() {
         .expect_success()
         .commit();
 
-    let faucet_install_cost = builder.last_exec_gas_cost();
+    let faucet_install_cost = builder.last_exec_gas_consumed();
 
     let assigned_time_interval = 10_000u64;
     let assigned_distributions_per_interval = 2u64;
@@ -730,7 +730,7 @@ fn faucet_costs() {
         .expect_success()
         .commit();
 
-    let faucet_set_variables_cost = builder.last_exec_gas_cost();
+    let faucet_set_variables_cost = builder.last_exec_gas_consumed();
 
     let user_fund_amount = U512::from(10_000_000_000u64);
 
@@ -753,7 +753,7 @@ fn faucet_costs() {
         .expect_success()
         .commit();
 
-    let faucet_call_by_installer_cost = builder.last_exec_gas_cost();
+    let faucet_call_by_installer_cost = builder.last_exec_gas_consumed();
 
     let faucet_contract_hash = get_faucet_entity_hash(&builder, installer_account);
 
@@ -776,7 +776,7 @@ fn faucet_costs() {
         .expect_success()
         .commit();
 
-    let faucet_call_by_user_cost = builder.last_exec_gas_cost();
+    let faucet_call_by_user_cost = builder.last_exec_gas_consumed();
 
     let mut costs_as_expected = true;
     if faucet_install_cost.value().as_u64() != EXPECTED_FAUCET_INSTALL_COST {

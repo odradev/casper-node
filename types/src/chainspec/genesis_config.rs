@@ -393,8 +393,6 @@ impl From<&Chainspec> for GenesisConfig {
         let gas_hold_balance_handling = chainspec.core_config.gas_hold_balance_handling;
         let storage_costs = chainspec.storage_costs;
 
-        // TODO: maybe construct this instead of accreting the values
-        //GenesisConfigBuilder::new(account,..)
         GenesisConfigBuilder::default()
             .with_accounts(chainspec.network_config.accounts_config.clone().into())
             .with_wasm_config(chainspec.wasm_config)

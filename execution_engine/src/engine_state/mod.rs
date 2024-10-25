@@ -121,7 +121,7 @@ impl ExecutionEngineV1 {
             execution_kind,
             args,
             entity_addr,
-            &runtime_footprint,
+            Rc::new(RefCell::new(runtime_footprint)),
             &mut named_keys,
             access_rights,
             authorization_keys,

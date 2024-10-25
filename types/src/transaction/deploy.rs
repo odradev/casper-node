@@ -1324,7 +1324,7 @@ impl GasLimited for Deploy {
                     chainspec.get_max_gas_limit_by_category(LARGE_WASM_LANE_ID)
                 };
                 Gas::new(computation_limit)
-            } // legacy deploys do not support reservations
+            } // legacy deploys do not support prepaid
         };
         Ok(gas_limit)
     }

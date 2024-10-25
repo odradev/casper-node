@@ -1251,6 +1251,7 @@ where
             self.context.args().clone(),
             self.context
                 .runtime_footprint()
+                .borrow()
                 .main_purse()
                 .expect("line 1183")
                 .addr(),
@@ -1682,6 +1683,7 @@ where
                 args,
                 self.context
                     .runtime_footprint()
+                    .borrow()
                     .main_purse()
                     .expect("need purse for attenutation")
                     .addr(),
@@ -2260,6 +2262,13 @@ where
         message_topics: BTreeMap<String, MessageTopicOperation>,
         output_ptr: u32,
     ) -> Result<Result<(), ApiError>, ExecError> {
+        if !self.context.install_upgrade_allowed() {
+            // NOTE: This is not a permission check on the caller,
+            // it is enforcing the rule that only legacy standard deploys (which are grandfathered)
+            // and install / upgrade transactions are allowed to call this method
+            return Ok(Err(ApiError::NotAllowedToAddContractVersion));
+        }
+
         self.context
             .validate_key(&Key::Hash(contract_package_hash))?;
 
@@ -2291,7 +2300,6 @@ where
         let protocol_version = self.context.protocol_version();
         let major = protocol_version.value().major;
 
-        // TODO: EE-1032 - Implement different ways of carrying on existing named keys
         let maybe_previous_hash =
             if let Some(previous_contract_hash) = contract_package.current_contract_hash() {
                 let previous_contract: Contract =
@@ -2307,7 +2315,6 @@ where
         if let Err(err) =
             self.carry_forward_message_topics(maybe_previous_hash, contract_hash, message_topics)?
         {
-            println!("{:?}", err);
             return Ok(Err(err));
         };
 
@@ -2874,6 +2881,7 @@ where
             return self
                 .context
                 .runtime_footprint()
+                .borrow()
                 .can_manage_keys_with(self.context.authorization_keys());
         }
 
@@ -3563,7 +3571,7 @@ where
     #[cfg(feature = "test-support")]
     fn print(&mut self, text_ptr: u32, text_size: u32) -> Result<(), Trap> {
         let text = self.string_from_mem(text_ptr, text_size)?;
-        println!("{}", text);
+        println!("{}", text); // this println! is intentional
         Ok(())
     }
 

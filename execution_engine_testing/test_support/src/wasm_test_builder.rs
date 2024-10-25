@@ -1656,8 +1656,8 @@ where
         }
     }
 
-    /// Returns execution cost.
-    pub fn exec_cost(&self, index: usize) -> Gas {
+    /// Returns how much gas execution consumed / used.
+    pub fn exec_consumed(&self, index: usize) -> Gas {
         self.exec_results
             .get(index)
             .map(WasmV1Result::consumed)
@@ -1665,7 +1665,7 @@ where
     }
 
     /// Returns the `Gas` cost of the last exec.
-    pub fn last_exec_gas_cost(&self) -> Gas {
+    pub fn last_exec_gas_consumed(&self) -> Gas {
         self.exec_results
             .last()
             .map(WasmV1Result::consumed)
@@ -2061,7 +2061,7 @@ where
 
     /// Calculates refunded amount from a last execution request.
     pub fn calculate_refund_amount(&self, payment_amount: U512) -> U512 {
-        let gas_amount = Motes::from_gas(self.last_exec_gas_cost(), DEFAULT_GAS_PRICE)
+        let gas_amount = Motes::from_gas(self.last_exec_gas_consumed(), DEFAULT_GAS_PRICE)
             .expect("should create motes from gas");
 
         let refund_ratio = match self.chainspec.core_config.refund_handling {

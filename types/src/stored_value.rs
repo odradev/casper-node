@@ -25,7 +25,7 @@ use crate::{
     package::Package,
     system::{
         auction::{Bid, BidKind, EraInfo, UnbondingPurse, WithdrawPurse},
-        reservations::ReservationKind,
+        prepayment::PrepaidKind,
     },
     AddressableEntity, ByteCode, CLValue, DeployInfo, EntryPointValue, TransferV1,
 };
@@ -104,7 +104,7 @@ pub enum StoredValue {
     /// A NamedKey record.
     NamedKey(NamedKeyValue),
     /// A reservation record.
-    Reservation(ReservationKind),
+    Prepaid(PrepaidKind),
     /// An entrypoint record.
     EntryPoint(EntryPointValue),
 }
@@ -392,7 +392,7 @@ impl StoredValue {
             StoredValue::MessageTopic(_) => "MessageTopic".to_string(),
             StoredValue::Message(_) => "Message".to_string(),
             StoredValue::NamedKey(_) => "NamedKey".to_string(),
-            StoredValue::Reservation(_) => "Reservation".to_string(),
+            StoredValue::Prepaid(_) => "Reservation".to_string(),
             StoredValue::EntryPoint(_) => "EntryPoint".to_string(),
         }
     }
@@ -417,7 +417,7 @@ impl StoredValue {
             StoredValue::MessageTopic(_) => Tag::MessageTopic,
             StoredValue::Message(_) => Tag::Message,
             StoredValue::NamedKey(_) => Tag::NamedKey,
-            StoredValue::Reservation(_) => Tag::Reservation,
+            StoredValue::Prepaid(_) => Tag::Reservation,
             StoredValue::EntryPoint(_) => Tag::EntryPoint,
         }
     }
@@ -709,7 +709,7 @@ impl ToBytes for StoredValue {
                 }
                 StoredValue::Message(message_digest) => message_digest.serialized_length(),
                 StoredValue::NamedKey(named_key_value) => named_key_value.serialized_length(),
-                StoredValue::Reservation(reservation_kind) => reservation_kind.serialized_length(),
+                StoredValue::Prepaid(reservation_kind) => reservation_kind.serialized_length(),
                 StoredValue::EntryPoint(entry_point_value) => entry_point_value.serialized_length(),
             }
     }
@@ -737,7 +737,7 @@ impl ToBytes for StoredValue {
             }
             StoredValue::Message(message_digest) => message_digest.write_bytes(writer),
             StoredValue::NamedKey(named_key_value) => named_key_value.write_bytes(writer),
-            StoredValue::Reservation(reservation_kind) => reservation_kind.write_bytes(writer),
+            StoredValue::Prepaid(reservation_kind) => reservation_kind.write_bytes(writer),
             StoredValue::EntryPoint(entry_point_value) => entry_point_value.write_bytes(writer),
         }
     }
@@ -830,7 +830,7 @@ mod serde_helpers {
         MessageTopic(&'a MessageTopicSummary),
         Message(&'a MessageChecksum),
         NamedKey(&'a NamedKeyValue),
-        Reservation(&'a ReservationKind),
+        Reservation(&'a PrepaidKind),
         EntryPoint(&'a EntryPointValue),
     }
 
@@ -886,7 +886,7 @@ mod serde_helpers {
                     HumanReadableSerHelper::Message(message_digest)
                 }
                 StoredValue::NamedKey(payload) => HumanReadableSerHelper::NamedKey(payload),
-                StoredValue::Reservation(payload) => HumanReadableSerHelper::Reservation(payload),
+                StoredValue::Prepaid(payload) => HumanReadableSerHelper::Reservation(payload),
                 StoredValue::EntryPoint(payload) => HumanReadableSerHelper::EntryPoint(payload),
             }
         }

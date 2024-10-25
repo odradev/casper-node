@@ -190,7 +190,7 @@ impl TransformKindV2 {
                     let found = "Message".to_string();
                     Err(StoredValueTypeMismatch::new(expected, found).into())
                 }
-                StoredValue::Reservation(_) => {
+                StoredValue::Prepaid(_) => {
                     let expected = "Contract or Account".to_string();
                     let found = "Reservation".to_string();
                     Err(StoredValueTypeMismatch::new(expected, found).into())
