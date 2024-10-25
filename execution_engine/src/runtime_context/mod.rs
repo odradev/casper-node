@@ -445,7 +445,6 @@ where
         } else {
             return Err(ExecError::UnexpectedKeyVariant(entity_key));
         };
-
         self.tracking_copy
             .borrow_mut()
             .get_named_keys(entity_addr)

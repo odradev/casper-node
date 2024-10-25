@@ -26,13 +26,11 @@ use casper_types::{
 use tempfile::TempDir;
 
 use super::{AllowInstallUpgrade, ExecError, RuntimeContext};
-use crate::engine_state::{BlockInfo, EngineConfig};
+use crate::engine_state::{BlockInfo, EngineConfig, EngineConfigBuilder};
 
 const TXN_HASH_RAW: [u8; 32] = [1u8; 32];
 const PHASE: Phase = Phase::Session;
 const GAS_LIMIT: u64 = 500_000_000_000_000u64;
-
-static TEST_ENGINE_CONFIG: Lazy<EngineConfig> = Lazy::new(EngineConfig::default);
 
 fn test_engine_config() -> EngineConfig {
     EngineConfig::default()
@@ -52,7 +50,7 @@ fn new_tracking_copy(
             StoredValue::CLValue(entity_key_cl_value),
         ),
     ];
-    new_temporary_tracking_copy(initial_data, None)
+    new_temporary_tracking_copy(initial_data, None, true)
 }
 
 fn new_addressable_entity_with_purse(
@@ -159,6 +157,11 @@ fn new_runtime_context<'a>(
         EntryPoints::new(),
     );
 
+    let engine_config = {
+        let mut config_builder = EngineConfigBuilder::new();
+        config_builder.with_enable_entity(true).build()
+    };
+
     let runtime_context = RuntimeContext::new(
         named_keys,
         Rc::new(RefCell::new(runtime_footprint)),
@@ -168,7 +171,7 @@ fn new_runtime_context<'a>(
         account_hash,
         Rc::new(RefCell::new(address_generator)),
         Rc::new(RefCell::new(tracking_copy)),
-        TEST_ENGINE_CONFIG.clone(),
+        engine_config,
         BlockInfo::new(
             Digest::default(),
             BlockTime::new(0),
