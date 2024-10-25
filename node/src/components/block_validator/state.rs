@@ -370,13 +370,11 @@ impl BlockValidationState {
                             "no further missing transactions - block validation complete"
                         );
                         let new_state = BlockValidationState::Valid(appendable_block.timestamp());
-                        println!("OK {:?}", responders);
                         (new_state, mem::take(responders))
                     }
                     Err(error) => {
                         warn!(%transaction_hash, ?footprint, %error, "block invalid");
                         let new_state = BlockValidationState::Invalid(appendable_block.timestamp());
-                        println!("ERROR {:?} {:?}", error, responders);
                         (new_state, mem::take(responders))
                     }
                 }

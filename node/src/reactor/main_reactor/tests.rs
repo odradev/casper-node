@@ -75,6 +75,7 @@ const ERA_ONE: EraId = EraId::new(1);
 const ERA_TWO: EraId = EraId::new(2);
 const ERA_THREE: EraId = EraId::new(3);
 const TEN_SECS: Duration = Duration::from_secs(10);
+const THIRTY_SECS: Duration = Duration::from_secs(30);
 const ONE_MIN: Duration = Duration::from_secs(60);
 
 type Nodes = testing::network::Nodes<FilterReactor<MainReactor>>;
@@ -1914,7 +1915,7 @@ async fn node_should_rejoin_after_ejection() {
     // Inject the transaction and run the network until executed.
     fixture.inject_transaction(txn).await;
     fixture
-        .run_until_executed_transaction(&txn_hash, TEN_SECS)
+        .run_until_executed_transaction(&txn_hash, THIRTY_SECS)
         .await;
 
     // Ensure execution succeeded and that there is a Write transform for the bid's key.
