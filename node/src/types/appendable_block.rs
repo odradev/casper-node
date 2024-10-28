@@ -172,6 +172,7 @@ impl AppendableBlock {
         let mut transactions = BTreeMap::new();
         collate(MINT_LANE_ID, &mut transactions, &footprints);
         collate(AUCTION_LANE_ID, &mut transactions, &footprints);
+        collate(INSTALL_UPGRADE_LANE_ID, &mut transactions, &footprints);
         for lane_id in self
             .transaction_config
             .transaction_v1_config
@@ -246,6 +247,11 @@ impl Display for AppendableBlock {
 
 #[cfg(test)]
 mod tests {
+    use casper_types::{
+        testing::TestRng, SingleBlockRewardedSignatures, LARGE_WASM_LANE_ID, MEDIUM_WASM_LANE_ID,
+        SMALL_WASM_LANE_ID,
+    };
+
     use super::*;
     use std::collections::HashSet;
 
@@ -253,5 +259,56 @@ mod tests {
         pub(crate) fn transaction_hashes(&self) -> HashSet<TransactionHash> {
             self.transactions.keys().copied().collect()
         }
+    }
+
+    #[test]
+    pub fn should_build_block_payload_from_all_transactions() {
+        let mut test_rng = TestRng::new();
+        let mut appendable_block =
+            AppendableBlock::new(TransactionConfig::default(), 0, Timestamp::now());
+        let transfer_footprint = TransactionFootprint::random_of_lane(MINT_LANE_ID, &mut test_rng);
+        let auction_footprint =
+            TransactionFootprint::random_of_lane(AUCTION_LANE_ID, &mut test_rng);
+        let install_upgrade_footprint =
+            TransactionFootprint::random_of_lane(INSTALL_UPGRADE_LANE_ID, &mut test_rng);
+        let small_wasm_footprint =
+            TransactionFootprint::random_of_lane(SMALL_WASM_LANE_ID, &mut test_rng);
+        let medium_wasm_footprint =
+            TransactionFootprint::random_of_lane(MEDIUM_WASM_LANE_ID, &mut test_rng);
+        let large_wasm_footprint =
+            TransactionFootprint::random_of_lane(LARGE_WASM_LANE_ID, &mut test_rng);
+        let signatures = RewardedSignatures::new(vec![SingleBlockRewardedSignatures::random(
+            &mut test_rng,
+            2,
+        )]);
+        appendable_block
+            .add_transaction(&transfer_footprint)
+            .unwrap();
+        appendable_block
+            .add_transaction(&auction_footprint)
+            .unwrap();
+        appendable_block
+            .add_transaction(&install_upgrade_footprint)
+            .unwrap();
+        appendable_block
+            .add_transaction(&small_wasm_footprint)
+            .unwrap();
+        appendable_block
+            .add_transaction(&medium_wasm_footprint)
+            .unwrap();
+        appendable_block
+            .add_transaction(&large_wasm_footprint)
+            .unwrap();
+        let block_payload = appendable_block.into_block_payload(vec![], signatures.clone(), false);
+        let transaction_hashes: BTreeSet<TransactionHash> =
+            block_payload.all_transaction_hashes().collect();
+        assert!(transaction_hashes.contains(&transfer_footprint.transaction_hash));
+        assert!(transaction_hashes.contains(&auction_footprint.transaction_hash));
+        assert!(transaction_hashes.contains(&install_upgrade_footprint.transaction_hash));
+        assert!(transaction_hashes.contains(&small_wasm_footprint.transaction_hash));
+        assert!(transaction_hashes.contains(&medium_wasm_footprint.transaction_hash));
+        assert!(transaction_hashes.contains(&large_wasm_footprint.transaction_hash));
+        assert_eq!(transaction_hashes.len(), 6);
+        assert_eq!(*block_payload.rewarded_signatures(), signatures);
     }
 }
