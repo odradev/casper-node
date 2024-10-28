@@ -27,9 +27,7 @@ use ed25519_dalek::{
 };
 use hex_fmt::HexFmt;
 use k256::ecdsa::{
-    signature::{Signer, Verifier},
-    Signature as Secp256k1Signature, SigningKey as Secp256k1SecretKey,
-    VerifyingKey as Secp256k1PublicKey,
+    VerifyingKey, signature::{Signer, Verifier}, RecoveryId, Signature as Secp256k1Signature, SigningKey as Secp256k1SecretKey, VerifyingKey as Secp256k1PublicKey
 };
 #[cfg(feature = "json-schema")]
 use once_cell::sync::Lazy;
@@ -1177,7 +1175,7 @@ pub fn sign<T: AsRef<[u8]>>(
     message: T,
     secret_key: &SecretKey,
     public_key: &PublicKey,
-) -> Signature {
+) -> Signature {    
     match (secret_key, public_key) {
         (SecretKey::System, PublicKey::System) => {
             panic!("cannot create signature with system keys",)
@@ -1195,6 +1193,29 @@ pub fn sign<T: AsRef<[u8]>>(
         }
         _ => panic!("secret and public key types must match"),
     }
+}
+
+pub fn recover_public_secp256k1_from_signature<T: AsRef<[u8]>>(
+    message: T,
+    signature: &Signature
+) -> Result<Vec<PublicKey>, Error> {
+    let Signature::Secp256k1(signature) = signature else {
+        return Err(Error::AsymmetricKey(String::from(
+            "public keys can only be recovered from Secp256k1 signatures"
+        )))
+    };
+
+    let mut possible_keys = vec![];
+    for i in 0..4 {
+        let Ok(key) = VerifyingKey::recover_from_msg(
+            message.as_ref(),
+            &signature,
+            RecoveryId::try_from(i)?
+        ) else { continue };
+        possible_keys.push(PublicKey::Secp256k1(key));
+    }
+
+    Ok(possible_keys)
 }
 
 /// Verifies the signature of the given message against the given public key.
