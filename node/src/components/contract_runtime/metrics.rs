@@ -110,6 +110,9 @@ const DB_FLUSH_TIME_HELP: &str = "time in seconds to flush changes to the databa
 const SCRATCH_LMDB_WRITE_TIME: &str = "contract_runtime_scratch_lmdb_write_time";
 const SCRATCH_LMDB_WRITE_TIME_HELP: &str = "time in seconds to write changes to the database";
 
+const SEIGNIORAGE_TARGET_FRACTION: &str = "contract_runtime_seigniorage_target_fraction";
+const SEIGNIORAGE_TARGET_FRACTION_HELP: &str = "fraction of target seigniorage minted in era";
+
 /// Metrics for the contract runtime component.
 #[derive(Debug)]
 pub struct Metrics {
@@ -148,6 +151,7 @@ pub struct Metrics {
     pub(super) pruning_time: Histogram,
     pub(super) database_flush_time: Histogram,
     pub(super) scratch_lmdb_write_time: Histogram,
+    pub(super) seigniorage_target_fraction: Gauge,
     registry: Registry,
 }
 
@@ -178,6 +182,9 @@ impl Metrics {
 
         let exec_queue_size = IntGauge::new(EXEC_QUEUE_SIZE_NAME, EXEC_QUEUE_SIZE_HELP)?;
         registry.register(Box::new(exec_queue_size.clone()))?;
+
+        let seigniorage_target_fraction = Gauge::new(SEIGNIORAGE_TARGET_FRACTION, SEIGNIORAGE_TARGET_FRACTION_HELP)?;
+        registry.register(Box::new(seigniorage_target_fraction.clone()))?;
 
         Ok(Metrics {
             exec_block_pre_processing: utils::register_histogram_metric(
@@ -344,6 +351,7 @@ impl Metrics {
                 SCRATCH_LMDB_WRITE_TIME_HELP,
                 wider_buckets.clone(),
             )?,
+            seigniorage_target_fraction,
             registry: registry.clone(),
         })
     }
@@ -379,5 +387,6 @@ impl Drop for Metrics {
         unregister_metric!(self.registry, self.pruning_time);
         unregister_metric!(self.registry, self.database_flush_time);
         unregister_metric!(self.registry, self.scratch_lmdb_write_time);
+        unregister_metric!(self.registry, self.seigniorage_target_fraction);
     }
 }
