@@ -28,7 +28,7 @@ use dictionary_call::{
 /// single value.
 fn call_dictionary_contract<T: CLTyped + FromBytes>(entrypoint: &str) -> T {
     let contract_hash: AddressableEntityHash = runtime::get_named_arg(ARG_CONTRACT_HASH);
-    runtime::call_contract(contract_hash, entrypoint, RuntimeArgs::default())
+    runtime::call_contract(contract_hash.into(), entrypoint, RuntimeArgs::default())
 }
 
 #[no_mangle]

@@ -11,8 +11,8 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    addressable_entity::NamedKeys, CLType, CLValue, EntryPoint, EntryPointAccess,
-    EntryPointPayment, EntryPointType, EntryPoints, Key, PackageHash, Parameter, URef,
+    contracts::NamedKeys, CLType, CLValue, EntryPoint, EntryPointAccess, EntryPointPayment,
+    EntryPointType, EntryPoints, Key, PackageHash, Parameter, URef,
 };
 
 pub const METHOD_ADD: &str = "add";

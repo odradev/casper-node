@@ -16,9 +16,10 @@ use casper_contract::{
 };
 
 use casper_types::{
-    addressable_entity::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, NamedKeys},
+    addressable_entity::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints},
     api_error::ApiError,
     contract_messages::MessageTopicOperation,
+    contracts::NamedKeys,
     runtime_args, CLType, CLTyped, EntryPointPayment, PackageHash, Parameter, RuntimeArgs,
 };
 
@@ -64,7 +65,7 @@ pub extern "C" fn emit_message_from_each_version() {
 
     // Call previous contract version which will emit a message.
     runtime::call_versioned_contract::<()>(
-        contract_package_hash,
+        contract_package_hash.into(),
         Some(1),
         FIRST_VERSION_ENTRY_POINT_EMIT_MESSAGE,
         runtime_args! {
@@ -140,7 +141,7 @@ pub extern "C" fn call() {
 
     if register_topic_with_init {
         let (contract_hash, _contract_version) = storage::add_contract_version(
-            message_emitter_package_hash,
+            message_emitter_package_hash.into(),
             emitter_entry_points,
             named_keys,
             BTreeMap::new(),
@@ -154,7 +155,7 @@ pub extern "C" fn call() {
             MessageTopicOperation::Add,
         )]);
         let (_contract_hash, _contract_version) = storage::add_contract_version(
-            message_emitter_package_hash,
+            message_emitter_package_hash.into(),
             emitter_entry_points,
             named_keys,
             new_topics,

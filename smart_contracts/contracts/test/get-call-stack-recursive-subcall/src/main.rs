@@ -7,8 +7,8 @@ use alloc::{boxed::Box, string::ToString, vec};
 
 use casper_contract::contract_api::{runtime, storage};
 use casper_types::{
-    CLType, EntryPoint, EntryPointAccess, EntryPointPayment, EntryPointType, EntryPoints, Key,
-    Parameter,
+    AddressableEntityHash, CLType, EntryPoint, EntryPointAccess, EntryPointPayment, EntryPointType,
+    EntryPoints, Key, Parameter,
 };
 
 use get_call_stack_recursive_subcall::{
@@ -65,5 +65,8 @@ pub extern "C" fn call() {
         None,
     );
 
-    runtime::put_key(CONTRACT_NAME, Key::contract_entity_key(contract_hash));
+    runtime::put_key(
+        CONTRACT_NAME,
+        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
+    );
 }

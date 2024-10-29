@@ -12,8 +12,8 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    runtime_args, CLType, CLValue, EntryPoint, EntryPointAccess, EntryPointPayment, EntryPointType,
-    EntryPoints, Key, Parameter, URef,
+    runtime_args, AddressableEntityHash, CLType, CLValue, EntryPoint, EntryPointAccess,
+    EntryPointPayment, EntryPointType, EntryPoints, Key, Parameter, URef,
 };
 
 const ACCESS_UREF: &str = "access_uref";
@@ -79,5 +79,8 @@ pub extern "C" fn call() {
         entry_points
     };
     let (contract_hash, _) = storage::new_contract(entry_points, None, None, None, None);
-    runtime::put_key(HASH_KEY_NAME, Key::contract_entity_key(contract_hash));
+    runtime::put_key(
+        HASH_KEY_NAME,
+        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
+    );
 }

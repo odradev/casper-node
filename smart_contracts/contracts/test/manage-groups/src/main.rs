@@ -19,9 +19,10 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    addressable_entity::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, NamedKeys},
+    addressable_entity::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints},
     api_error,
     bytesrepr::{self, ToBytes},
+    contracts::{ContractPackageHash, NamedKeys},
     ApiError, CLType, EntryPointPayment, Group, Key, Package, PackageHash, Parameter, URef,
 };
 
@@ -49,7 +50,7 @@ pub extern "C" fn create_group() {
     let existing_urefs: Vec<URef> = (0..total_existing_urefs).map(storage::new_uref).collect();
 
     storage::create_contract_user_group(
-        package_hash_key,
+        package_hash_key.into(),
         &group_name,
         total_urefs as u8,
         BTreeSet::from_iter(existing_urefs),
@@ -64,7 +65,7 @@ pub extern "C" fn remove_group() {
         .unwrap_or_revert()
         .into();
     let group_name: String = runtime::get_named_arg(GROUP_NAME_ARG);
-    storage::remove_contract_user_group(package_hash_key, &group_name).unwrap_or_revert();
+    storage::remove_contract_user_group(package_hash_key.into(), &group_name).unwrap_or_revert();
 }
 
 #[no_mangle]
@@ -78,8 +79,9 @@ pub extern "C" fn extend_group_urefs() {
 
     // Provisions additional urefs inside group
     for _ in 1..=new_urefs_count {
-        let _new_uref = storage::provision_contract_user_group_uref(package_hash_key, &group_name)
-            .unwrap_or_revert();
+        let _new_uref =
+            storage::provision_contract_user_group_uref(package_hash_key.into(), &group_name)
+                .unwrap_or_revert();
     }
 }
 
@@ -162,7 +164,7 @@ pub extern "C" fn remove_group_urefs() {
         );
     }
 
-    storage::remove_contract_user_group_urefs(package_hash, &group_name, urefs_to_remove)
+    storage::remove_contract_user_group_urefs(package_hash.into(), &group_name, urefs_to_remove)
         .unwrap_or_revert();
 }
 
@@ -223,7 +225,7 @@ fn create_entry_points_1() -> EntryPoints {
     entry_points
 }
 
-fn install_version_1(package_hash: PackageHash) {
+fn install_version_1(package_hash: ContractPackageHash) {
     let contract_named_keys = NamedKeys::new();
 
     let entry_points = create_entry_points_1();

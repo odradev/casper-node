@@ -9,7 +9,7 @@ use casper_contract::{
     contract_api::{account, runtime},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use casper_types::{runtime_args, AccessRights, AddressableEntityHash};
+use casper_types::{contracts::ContractHash, runtime_args, AccessRights};
 
 const ARG_PURSE: &str = "purse";
 const CONTRACT_HASH_NAME: &str = "regression-contract-hash";
@@ -25,7 +25,7 @@ pub extern "C" fn call() {
 
     let contract_hash = contract_hash_key
         .into_entity_hash_addr()
-        .map(AddressableEntityHash::new)
+        .map(ContractHash::new)
         .unwrap_or_revert();
 
     let main_purse_modified = account::get_main_purse().with_access_rights(new_access_rights);

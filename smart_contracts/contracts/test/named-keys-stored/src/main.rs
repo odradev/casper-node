@@ -11,9 +11,8 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    addressable_entity::{NamedKeys, Parameters},
-    ApiError, CLType, EntryPoint, EntryPointAccess, EntryPointPayment, EntryPointType, EntryPoints,
-    Key, PackageHash, RuntimeArgs,
+    addressable_entity::Parameters, ApiError, CLType, EntryPoint, EntryPointAccess,
+    EntryPointPayment, EntryPointType, EntryPoints, Key, NamedKeys, PackageHash, RuntimeArgs,
 };
 
 const ENTRY_POINT_CONTRACT: &str = "named_keys_contract";

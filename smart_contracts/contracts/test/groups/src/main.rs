@@ -15,10 +15,11 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    addressable_entity::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, NamedKeys},
+    addressable_entity::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints},
+    contracts::ContractPackageHash,
     runtime_args,
     system::{handle_payment, standard_payment},
-    CLType, CLTyped, EntryPointPayment, Key, PackageHash, Parameter, RuntimeArgs, URef,
+    CLType, CLTyped, EntryPointPayment, Key, NamedKeys, Parameter, RuntimeArgs, URef,
     ENTITY_INITIAL_VERSION, U512,
 };
 
@@ -63,7 +64,7 @@ fn contract_caller() {
     let contract_package_hash = package_hash.into_package_hash().unwrap_or_revert();
     let runtime_args = runtime_args! {};
     runtime::call_versioned_contract(
-        contract_package_hash,
+        contract_package_hash.into(),
         contract_version,
         RESTRICTED_CONTRACT,
         runtime_args,
@@ -111,7 +112,7 @@ pub extern "C" fn call_restricted_entry_points() {
     uncallable_contract();
 }
 
-fn create_group(package_hash: PackageHash) -> URef {
+fn create_group(package_hash: ContractPackageHash) -> URef {
     let new_uref_1 = storage::new_uref(());
     runtime::put_key("saved_uref", new_uref_1.into());
 
@@ -255,7 +256,7 @@ fn create_entry_points_1() -> EntryPoints {
     entry_points
 }
 
-fn install_version_1(contract_package_hash: PackageHash, restricted_uref: URef) {
+fn install_version_1(contract_package_hash: ContractPackageHash, restricted_uref: URef) {
     let contract_named_keys = {
         let contract_variable = storage::new_uref(0);
 
@@ -282,10 +283,7 @@ pub extern "C" fn call() {
     runtime::put_key(PACKAGE_HASH_KEY, contract_package_hash.into());
     runtime::put_key(PACKAGE_ACCESS_KEY, access_uref.into());
 
-    let restricted_uref = create_group(PackageHash::new(contract_package_hash.value()));
+    let restricted_uref = create_group(contract_package_hash);
 
-    install_version_1(
-        PackageHash::new(contract_package_hash.value()),
-        restricted_uref,
-    );
+    install_version_1(contract_package_hash, restricted_uref);
 }

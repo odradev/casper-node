@@ -12,7 +12,7 @@ use casper_contract::{
 use casper_types::{
     addressable_entity::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Parameter},
     system::standard_payment,
-    CLType, EntryPointPayment, Key, RuntimeArgs, URef, U512,
+    AddressableEntityHash, CLType, EntryPointPayment, Key, RuntimeArgs, URef, U512,
 };
 
 const ENTRY_FUNCTION_NAME: &str = "pay";
@@ -67,5 +67,8 @@ pub extern "C" fn call() {
         None,
     );
     runtime::put_key(CONTRACT_VERSION, storage::new_uref(contract_version).into());
-    runtime::put_key(HASH_KEY_NAME, Key::contract_entity_key(contract_hash));
+    runtime::put_key(
+        HASH_KEY_NAME,
+        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
+    );
 }
