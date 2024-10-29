@@ -63,7 +63,7 @@ pub extern "C" fn call() {
         Operation::InvalidPutDictionaryItemKey => {
             let contract_hash: AddressableEntityHash = runtime::get_named_arg(ARG_CONTRACT_HASH);
             runtime::call_contract(
-                contract_hash,
+                contract_hash.into(),
                 INVALID_PUT_DICTIONARY_ITEM_KEY_ENTRYPOINT,
                 RuntimeArgs::default(),
             )

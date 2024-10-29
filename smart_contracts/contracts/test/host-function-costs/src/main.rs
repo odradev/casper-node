@@ -14,8 +14,9 @@ use casper_contract::{
 };
 use casper_types::{
     account::AccountHash,
-    addressable_entity::{ActionType, NamedKeys, Weight},
+    addressable_entity::{ActionType, Weight},
     bytesrepr::Bytes,
+    contracts::NamedKeys,
     runtime_args, ApiError, BlockTime, CLType, CLTyped, CLValue, EntryPoint, EntryPointAccess,
     EntryPointPayment, EntryPointType, EntryPoints, Key, Parameter, Phase, RuntimeArgs, U512,
 };
@@ -173,9 +174,12 @@ pub extern "C" fn account_function() {
     // ========== functions from `account` module ==================================================
 
     let main_purse = account::get_main_purse();
-    account::set_action_threshold(ActionType::Deployment, Weight::new(1)).unwrap_or_revert();
-    account::add_associated_key(DESTINATION_ACCOUNT_HASH, Weight::new(1)).unwrap_or_revert();
-    account::update_associated_key(DESTINATION_ACCOUNT_HASH, Weight::new(1)).unwrap_or_revert();
+    account::set_action_threshold(account::ActionType::Deployment, account::Weight::new(1))
+        .unwrap_or_revert();
+    account::add_associated_key(DESTINATION_ACCOUNT_HASH, account::Weight::new(1))
+        .unwrap_or_revert();
+    account::update_associated_key(DESTINATION_ACCOUNT_HASH, account::Weight::new(1))
+        .unwrap_or_revert();
     account::remove_associated_key(DESTINATION_ACCOUNT_HASH).unwrap_or_revert();
 
     // ========== functions from `system` module ===================================================

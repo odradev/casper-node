@@ -90,7 +90,7 @@ pub extern "C" fn call() {
     };
     // this should overwrite the previous contract obj with the new contract obj at the same uref
     let (new_contract_hash, new_contract_version) = storage::add_contract_version(
-        contract_package,
+        contract_package.into(),
         entry_points,
         NamedKeys::new(),
         BTreeMap::new(),

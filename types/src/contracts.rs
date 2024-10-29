@@ -42,7 +42,8 @@ use crate::{
     uref::{self, URef},
     AddressableEntityHash, CLType, CLTyped, EntityVersionKey, EntryPoint as EntityEntryPoint,
     EntryPointAccess, EntryPointPayment, EntryPointType, EntryPoints as EntityEntryPoints, Group,
-    Groups, HashAddr, Key, Package, Parameter, Parameters, ProtocolVersion, KEY_HASH_LENGTH,
+    Groups, HashAddr, Key, Package, PackageHash, Parameter, Parameters, ProtocolVersion,
+    KEY_HASH_LENGTH,
 };
 
 const CONTRACT_STRING_PREFIX: &str = "contract-";
@@ -496,6 +497,12 @@ impl ContractPackageHash {
 
         let bytes = HashAddr::try_from(checksummed_hex::decode(hex_addr)?.as_ref())?;
         Ok(ContractPackageHash(bytes))
+    }
+}
+
+impl From<PackageHash> for ContractPackageHash {
+    fn from(value: PackageHash) -> Self {
+        ContractPackageHash::new(value.value())
     }
 }
 

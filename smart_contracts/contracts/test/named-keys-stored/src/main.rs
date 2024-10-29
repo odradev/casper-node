@@ -105,7 +105,7 @@ pub extern "C" fn named_keys_contract_to_contract() {
         .unwrap_or_revert();
 
     runtime::call_versioned_contract::<()>(
-        package_hash,
+        package_hash.into(),
         None,
         ENTRY_POINT_CONTRACT,
         RuntimeArgs::default(),
@@ -120,7 +120,7 @@ pub extern "C" fn named_keys_session_to_session() {
         .unwrap_or_revert();
 
     runtime::call_versioned_contract::<()>(
-        package_hash,
+        package_hash.into(),
         None,
         ENTRY_POINT_SESSION,
         RuntimeArgs::default(),

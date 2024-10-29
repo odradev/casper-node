@@ -282,7 +282,10 @@ pub extern "C" fn call() {
     runtime::put_key(PACKAGE_HASH_KEY, contract_package_hash.into());
     runtime::put_key(PACKAGE_ACCESS_KEY, access_uref.into());
 
-    let restricted_uref = create_group(contract_package_hash);
+    let restricted_uref = create_group(PackageHash::new(contract_package_hash.value()));
 
-    install_version_1(contract_package_hash, restricted_uref);
+    install_version_1(
+        PackageHash::new(contract_package_hash.value()),
+        restricted_uref,
+    );
 }

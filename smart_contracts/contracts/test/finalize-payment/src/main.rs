@@ -44,7 +44,7 @@ fn finalize_payment(
     account: AccountHash,
 ) {
     runtime::call_contract(
-        contract_hash,
+        contract_hash.into(),
         "finalize_payment",
         runtime_args! {
             ARG_AMOUNT => amount_spent,
