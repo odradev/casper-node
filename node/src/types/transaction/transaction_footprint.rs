@@ -135,7 +135,7 @@ impl TransactionFootprint {
         let payload_hash = Digest::random(rng);
         let gas_limit = Gas::new(U512::from(1));
         let gas_price_tolerance = rng.gen();
-        let size_estimate = rng.gen();
+        let size_estimate = rng.gen_range(1000..2000);
         let timestamp = Timestamp::now();
         let ttl = TimeDiff::from_millis(15000);
         let mut approvals = BTreeSet::new();
