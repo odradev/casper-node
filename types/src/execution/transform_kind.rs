@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 
 use super::TransformError;
 use crate::{
-    addressable_entity::NamedKeys,
     bytesrepr::{self, FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
+    contracts::NamedKeys,
     CLType, CLTyped, CLValue, Key, StoredValue, StoredValueTypeMismatch, U128, U256, U512,
 };
 

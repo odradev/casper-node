@@ -51,9 +51,9 @@ use casper_storage::{
 
 use casper_types::{
     account::AccountHash,
-    addressable_entity::{EntityKindTag, MessageTopics, NamedKeyAddr, NamedKeys},
+    addressable_entity::{EntityKindTag, MessageTopics, NamedKeyAddr},
     bytesrepr::{self, FromBytes},
-    contracts::ContractHash,
+    contracts::{ContractHash, NamedKeys},
     execution::Effects,
     global_state::TrieMerkleProof,
     runtime_args,

@@ -8,12 +8,12 @@ use casper_storage::{
 };
 
 use casper_types::{
-    account::{AccountHash, ACCOUNT_HASH_LENGTH},
-    addressable_entity::{
-        ActionType, AddKeyFailure, AssociatedKeys, EntryPoints, NamedKeys, RemoveKeyFailure,
-        SetThresholdFailure, Weight,
+    account::{
+        AccountHash, AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, ACCOUNT_HASH_LENGTH,
     },
+    addressable_entity::{ActionType, AssociatedKeys, EntryPoints, Weight},
     bytesrepr::ToBytes,
+    contracts::NamedKeys,
     execution::TransformKindV2,
     system::{AUCTION, HANDLE_PAYMENT, MINT, STANDARD_PAYMENT},
     AccessRights, AddressableEntity, AddressableEntityHash, BlockGlobalAddr, BlockHash, BlockTime,

@@ -16,7 +16,7 @@ use crate::{
     },
     addressable_entity::{
         action_thresholds::gens::action_thresholds_arb, associated_keys::gens::associated_keys_arb,
-        MessageTopics, NamedKeyValue, NamedKeys, Parameters, Weight,
+        MessageTopics, NamedKeyValue, Parameters, Weight,
     },
     block::BlockGlobalAddr,
     byte_code::ByteCodeKind,
@@ -25,6 +25,7 @@ use crate::{
     contracts::{
         Contract, ContractHash, ContractPackage, ContractPackageStatus, ContractVersionKey,
         ContractVersions, EntryPoint as ContractEntryPoint, EntryPoints as ContractEntryPoints,
+        NamedKeys,
     },
     crypto::{
         self,

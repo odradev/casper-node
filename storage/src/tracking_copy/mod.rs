@@ -26,9 +26,10 @@ use crate::{
     KeyPrefix,
 };
 use casper_types::{
-    addressable_entity::{NamedKeyAddr, NamedKeys},
+    addressable_entity::NamedKeyAddr,
     bytesrepr::{self, ToBytes},
     contract_messages::{Message, Messages},
+    contracts::NamedKeys,
     execution::{Effects, TransformError, TransformInstruction, TransformKindV2, TransformV2},
     global_state::TrieMerkleProof,
     handle_stored_dictionary_value, BlockGlobalAddr, CLType, CLValue, CLValueError, Digest, Key,

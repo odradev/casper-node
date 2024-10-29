@@ -6,8 +6,7 @@ use casper_engine_test_support::{
 use casper_execution_engine::{engine_state::Error as CoreError, execution::ExecError};
 use casper_types::{
     account::AccountHash,
-    addressable_entity::NamedKeys,
-    contracts::{ContractHash, ContractPackageHash},
+    contracts::{ContractHash, ContractPackageHash, NamedKeys},
     system::{CallStackElement, Caller, CallerInfo},
     AddressableEntity, AddressableEntityHash, CLValue, EntityAddr, EntryPointType, HashAddr,
     HoldBalanceHandling, Key, PackageAddr, PackageHash, ProtocolVersion, StoredValue, Timestamp,
@@ -36,7 +35,7 @@ const CALL_STACK_FIXTURE: &str = "call_stack_fixture";
 
 fn stored_session(contract_hash: AddressableEntityHash) -> Call {
     Call {
-        contract_address: ContractAddress::ContractHash(contract_hash),
+        contract_address: ContractAddress::ContractHash(ContractHash::new(contract_hash.value())),
         target_method: CONTRACT_FORWARDER_ENTRYPOINT_SESSION.to_string(),
         entry_point_type: EntryPointType::Caller,
     }
@@ -44,7 +43,9 @@ fn stored_session(contract_hash: AddressableEntityHash) -> Call {
 
 fn stored_versioned_session(contract_package_hash: PackageHash) -> Call {
     Call {
-        contract_address: ContractAddress::ContractPackageHash(contract_package_hash),
+        contract_address: ContractAddress::ContractPackageHash(ContractPackageHash::new(
+            contract_package_hash.value(),
+        )),
         target_method: CONTRACT_FORWARDER_ENTRYPOINT_SESSION.to_string(),
         entry_point_type: EntryPointType::Caller,
     }
@@ -52,7 +53,7 @@ fn stored_versioned_session(contract_package_hash: PackageHash) -> Call {
 
 fn stored_contract(contract_hash: AddressableEntityHash) -> Call {
     Call {
-        contract_address: ContractAddress::ContractHash(contract_hash),
+        contract_address: ContractAddress::ContractHash(ContractHash::new(contract_hash.value())),
         target_method: CONTRACT_FORWARDER_ENTRYPOINT_CONTRACT.to_string(),
         entry_point_type: EntryPointType::Called,
     }
@@ -60,7 +61,9 @@ fn stored_contract(contract_hash: AddressableEntityHash) -> Call {
 
 fn stored_versioned_contract(contract_package_hash: PackageHash) -> Call {
     Call {
-        contract_address: ContractAddress::ContractPackageHash(contract_package_hash),
+        contract_address: ContractAddress::ContractPackageHash(ContractPackageHash::new(
+            contract_package_hash.value(),
+        )),
         target_method: CONTRACT_FORWARDER_ENTRYPOINT_CONTRACT.to_string(),
         entry_point_type: EntryPointType::Called,
     }
@@ -433,7 +436,7 @@ fn assert_call_stack_matches_calls(call_stack: Vec<Caller>, calls: &[Call]) {
                     ..
                 },
             ) if *entry_point_type == EntryPointType::Called
-                && *contract_package_hash == *current_contract_package_hash => {}
+                && contract_package_hash.value() == current_contract_package_hash.value() => {}
 
             // Unversioned Call with EntryPointType::Called
             (

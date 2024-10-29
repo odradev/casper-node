@@ -10,7 +10,10 @@ use casper_contract::{
     contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use casper_types::{bytesrepr::FromBytes, AddressableEntityHash, CLTyped, RuntimeArgs, URef};
+use casper_types::{
+    bytesrepr::FromBytes, contracts::ContractHash, AddressableEntityHash, CLTyped, RuntimeArgs,
+    URef,
+};
 
 use dictionary::{
     DEFAULT_DICTIONARY_NAME, DEFAULT_DICTIONARY_VALUE, INVALID_GET_DICTIONARY_ITEM_KEY_ENTRYPOINT,
@@ -68,7 +71,7 @@ pub extern "C" fn call() {
         Operation::InvalidGetDictionaryItemKey => {
             let contract_hash: AddressableEntityHash = runtime::get_named_arg(ARG_CONTRACT_HASH);
             runtime::call_contract(
-                contract_hash,
+                ContractHash::new(contract_hash.value()),
                 INVALID_GET_DICTIONARY_ITEM_KEY_ENTRYPOINT,
                 RuntimeArgs::default(),
             )

@@ -6,9 +6,9 @@ use casper_storage::{
     AddressGenerator,
 };
 use casper_types::{
-    account::AccountHash, addressable_entity::NamedKeys, contract_messages::Messages,
-    execution::Effects, ContextAccessRights, EntityAddr, EntryPointType, Gas, Key, Phase,
-    ProtocolVersion, RuntimeArgs, RuntimeFootprint, StoredValue, TransactionHash, U512,
+    account::AccountHash, contract_messages::Messages, contracts::NamedKeys, execution::Effects,
+    ContextAccessRights, EntityAddr, EntryPointType, Gas, Key, Phase, ProtocolVersion, RuntimeArgs,
+    RuntimeFootprint, StoredValue, TransactionHash, U512,
 };
 
 use crate::{

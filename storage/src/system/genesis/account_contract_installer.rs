@@ -19,11 +19,11 @@ use crate::{
 use casper_types::{
     account::AccountHash,
     addressable_entity::{
-        ActionThresholds, EntityKindTag, MessageTopics, NamedKeyAddr, NamedKeyValue, NamedKeys,
+        ActionThresholds, EntityKindTag, MessageTopics, NamedKeyAddr, NamedKeyValue,
     },
     contracts::{
         ContractHash, ContractPackage, ContractPackageHash, ContractPackageStatus,
-        ContractVersions, DisabledVersions,
+        ContractVersions, DisabledVersions, NamedKeys,
     },
     execution::Effects,
     system::{

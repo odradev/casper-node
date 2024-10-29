@@ -2,6 +2,8 @@
 // TODO - remove once schemars stops causing warning.
 #![allow(clippy::field_reassign_with_default)]
 
+mod named_keys;
+
 use alloc::{
     collections::{BTreeMap, BTreeSet},
     format,
@@ -27,9 +29,11 @@ use serde::{
 use serde_map_to_array::KeyValueJsonSchema;
 use serde_map_to_array::{BTreeMapToArray, KeyValueLabels};
 
+pub use self::named_keys::NamedKeys;
+
 use crate::{
     account,
-    addressable_entity::{NamedKeys, TryFromSliceForAccountHashError},
+    addressable_entity::TryFromSliceForAccountHashError,
     bytesrepr::{self, FromBytes, ToBytes, U32_SERIALIZED_LENGTH},
     checksummed_hex,
     contract_wasm::ContractWasmHash,

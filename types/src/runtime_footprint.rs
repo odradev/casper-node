@@ -1,7 +1,7 @@
 use crate::{
     account::AccountHash,
-    addressable_entity::{AssociatedKeys, NamedKeys, Weight},
-    contracts::ContractHash,
+    addressable_entity::{AssociatedKeys, Weight},
+    contracts::{ContractHash, NamedKeys},
     system::SystemEntityType,
     Account, AddressableEntity, ContextAccessRights, Contract, EntityAddr, EntityKind, EntryPoints,
     HashAddr, Key, ProtocolVersion, TransactionRuntime, URef,

@@ -18,8 +18,8 @@ use tracing::{debug, error, info, warn};
 
 use casper_types::{
     account::AccountHash,
-    addressable_entity::NamedKeys,
     bytesrepr::{self, ToBytes},
+    contracts::NamedKeys,
     execution::{Effects, TransformError, TransformInstruction, TransformKindV2, TransformV2},
     global_state::TrieMerkleProof,
     system::{

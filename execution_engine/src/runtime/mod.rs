@@ -32,12 +32,14 @@ use casper_storage::{
     tracking_copy::TrackingCopyExt,
 };
 use casper_types::{
-    account::{Account, AccountHash},
+    account::{
+        Account, AccountHash, AddKeyFailure, RemoveKeyFailure, SetThresholdFailure,
+        UpdateKeyFailure,
+    },
     addressable_entity::{
-        self, ActionThresholds, ActionType, AddKeyFailure, AddressableEntity,
-        AddressableEntityHash, AssociatedKeys, EntityKindTag, EntryPoint, EntryPointAccess,
-        EntryPointType, EntryPoints, MessageTopicError, MessageTopics, NamedKeyAddr, NamedKeyValue,
-        NamedKeys, Parameter, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure, Weight,
+        self, ActionThresholds, ActionType, AddressableEntity, AddressableEntityHash,
+        AssociatedKeys, EntityKindTag, EntryPoint, EntryPointAccess, EntryPointType, EntryPoints,
+        MessageTopicError, MessageTopics, NamedKeyAddr, NamedKeyValue, Parameter, Weight,
         DEFAULT_ENTRY_POINT_NAME,
     },
     bytesrepr::{self, Bytes, FromBytes, ToBytes},
@@ -46,7 +48,7 @@ use casper_types::{
     },
     contracts::{
         ContractHash, ContractPackage, ContractPackageHash, ContractPackageStatus,
-        ContractVersions, DisabledVersions,
+        ContractVersions, DisabledVersions, NamedKeys,
     },
     system::{
         self,

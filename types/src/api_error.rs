@@ -6,10 +6,10 @@ use core::{
 };
 
 use crate::{
-    addressable_entity::{
-        self, AddKeyFailure, MessageTopicError, RemoveKeyFailure, SetThresholdFailure,
-        TryFromIntError, TryFromSliceForAccountHashError, UpdateKeyFailure,
+    account::{
+        AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, TryFromIntError, UpdateKeyFailure,
     },
+    addressable_entity::{self, MessageTopicError, TryFromSliceForAccountHashError},
     bytesrepr, contracts,
     system::{auction, handle_payment, mint},
     CLValueError,

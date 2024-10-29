@@ -7,11 +7,10 @@ use tracing::{debug, error, info};
 
 use casper_types::{
     addressable_entity::{
-        ActionThresholds, AssociatedKeys, EntityKind, NamedKeyAddr, NamedKeyValue, NamedKeys,
-        Weight,
+        ActionThresholds, AssociatedKeys, EntityKind, NamedKeyAddr, NamedKeyValue, Weight,
     },
     bytesrepr::{self, ToBytes},
-    contracts::ContractHash,
+    contracts::{ContractHash, NamedKeys},
     system::{
         auction::{
             BidAddr, BidKind, ValidatorBid, AUCTION_DELAY_KEY, LOCKED_FUNDS_PERIOD_KEY,

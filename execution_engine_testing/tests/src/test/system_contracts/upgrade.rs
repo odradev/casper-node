@@ -11,7 +11,7 @@ use casper_engine_test_support::{
 use crate::{lmdb_fixture, lmdb_fixture::ENTRY_REGISTRY_SPECIAL_ADDRESS};
 use casper_types::{
     account::{AccountHash, ACCOUNT_HASH_LENGTH},
-    addressable_entity::NamedKeys,
+    contracts::NamedKeys,
     runtime_args,
     system::{
         self,

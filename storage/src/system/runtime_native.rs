@@ -4,9 +4,9 @@ use crate::{
     AddressGenerator, TrackingCopy,
 };
 use casper_types::{
-    account::AccountHash, addressable_entity::NamedKeys, Chainspec, ContextAccessRights,
-    EntityAddr, FeeHandling, Key, Phase, ProtocolVersion, PublicKey, RefundHandling,
-    RuntimeFootprint, StoredValue, TransactionHash, Transfer, URef, U512,
+    account::AccountHash, contracts::NamedKeys, Chainspec, ContextAccessRights, EntityAddr,
+    FeeHandling, Key, Phase, ProtocolVersion, PublicKey, RefundHandling, RuntimeFootprint,
+    StoredValue, TransactionHash, Transfer, URef, U512,
 };
 use num_rational::Ratio;
 use std::{cell::RefCell, collections::BTreeSet, rc::Rc};

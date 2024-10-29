@@ -8,11 +8,11 @@ use casper_wasmi::{Externals, RuntimeArgs, RuntimeValue, Trap};
 use casper_storage::global_state::{error::Error as GlobalStateError, state::StateReader};
 use casper_types::{
     account::AccountHash,
-    addressable_entity::{EntryPoints, NamedKeys},
+    addressable_entity::EntryPoints,
     api_error,
     bytesrepr::{self, ToBytes},
     contract_messages::MessageTopicOperation,
-    contracts::ContractPackageHash,
+    contracts::{ContractPackageHash, NamedKeys},
     AddressableEntityHash, ApiError, EntityVersion, Gas, Group, HashAlgorithm, HostFunction,
     HostFunctionCost, Key, PackageHash, PackageStatus, StoredValue, URef, U512,
     UREF_SERIALIZED_LENGTH,

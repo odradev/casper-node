@@ -8,7 +8,7 @@ use casper_contract::{
     contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use casper_types::{account::AccountHash, runtime_args, Key, URef, U512};
+use casper_types::{account::AccountHash, contracts::ContractHash, runtime_args, Key, URef, U512};
 
 const ENTRYPOINT: &str = "transfer";
 const ARG_SOURCE: &str = "source";
@@ -26,6 +26,7 @@ pub fn delegate() {
 
     let contract_hash = runtime::get_key(HASH_KEY_NAME)
         .and_then(Key::into_entity_hash)
+        .map(|e_hash| ContractHash::new(e_hash.value()))
         .unwrap_or_revert();
 
     runtime::call_contract(

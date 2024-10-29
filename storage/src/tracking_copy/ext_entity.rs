@@ -3,10 +3,8 @@ use tracing::{debug, error};
 
 use casper_types::{
     account::AccountHash,
-    addressable_entity::{
-        ActionThresholds, AssociatedKeys, NamedKeyAddr, NamedKeyValue, NamedKeys, Weight,
-    },
-    contracts::ContractHash,
+    addressable_entity::{ActionThresholds, AssociatedKeys, NamedKeyAddr, NamedKeyValue, Weight},
+    contracts::{ContractHash, NamedKeys},
     system::{
         handle_payment::ACCUMULATION_PURSE_KEY, SystemEntityType, AUCTION, HANDLE_PAYMENT, MINT,
     },

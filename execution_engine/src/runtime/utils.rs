@@ -4,7 +4,7 @@ use casper_wasm::elements::Module;
 use casper_wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef};
 
 use casper_types::{
-    addressable_entity::NamedKeys, AccessRights, CLType, CLValue, Key, ProtocolVersion, PublicKey,
+    contracts::NamedKeys, AccessRights, CLType, CLValue, Key, ProtocolVersion, PublicKey,
     RuntimeArgs, URef, URefAddr, U128, U256, U512,
 };
 

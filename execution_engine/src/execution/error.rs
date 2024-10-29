@@ -5,7 +5,7 @@ use thiserror::Error;
 use casper_storage::{global_state, tracking_copy::TrackingCopyError};
 
 use casper_types::{
-    addressable_entity::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
+    account::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
     bytesrepr,
     execution::TransformError,
     system, AccessRights, AddressableEntityHash, ApiError, ByteCodeHash, CLType, CLValueError,

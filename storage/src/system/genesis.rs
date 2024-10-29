@@ -20,9 +20,9 @@ use serde::{Deserialize, Serialize};
 use casper_types::{
     addressable_entity::{
         ActionThresholds, EntityKind, EntityKindTag, MessageTopics, NamedKeyAddr, NamedKeyValue,
-        NamedKeys,
     },
     bytesrepr,
+    contracts::NamedKeys,
     execution::Effects,
     system::{
         auction::{

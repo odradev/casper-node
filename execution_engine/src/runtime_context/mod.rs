@@ -22,14 +22,17 @@ use casper_storage::{
 };
 
 use casper_types::{
-    account::{Account, AccountHash},
+    account::{
+        Account, AccountHash, AddKeyFailure, RemoveKeyFailure, SetThresholdFailure,
+        UpdateKeyFailure,
+    },
     addressable_entity::{
-        ActionType, AddKeyFailure, EntityKindTag, MessageTopicError, MessageTopics, NamedKeyAddr,
-        NamedKeyValue, NamedKeys, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure, Weight,
+        ActionType, EntityKindTag, MessageTopicError, MessageTopics, NamedKeyAddr, NamedKeyValue,
+        Weight,
     },
     bytesrepr::ToBytes,
     contract_messages::{Message, MessageAddr, MessageTopicSummary, Messages, TopicNameHash},
-    contracts::{ContractHash, ContractPackage, ContractPackageHash},
+    contracts::{ContractHash, ContractPackage, ContractPackageHash, NamedKeys},
     execution::Effects,
     handle_stored_dictionary_value,
     system::auction::EraInfo,
