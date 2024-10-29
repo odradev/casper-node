@@ -191,7 +191,7 @@ impl BlockValidationState {
         block: &ProposedBlock<ClContext>,
         config: &TransactionConfig,
     ) -> Result<(), ()> {
-        for supported_lane in config.transaction_v1_config.get_supported_categories() {
+        for supported_lane in config.transaction_v1_config.get_supported_lanes() {
             let transactions = block.value().count(Some(supported_lane));
             let lane_count_limit = config
                 .transaction_v1_config
@@ -550,7 +550,7 @@ mod tests {
     use rand::Rng;
 
     use casper_types::{
-        testing::TestRng, ChainspecRawBytes, TimeDiff, Transaction, TransactionHash,
+        testing::TestRng, ChainspecRawBytes, TimeDiff, Transaction, TransactionHash, TransactionV1,
     };
 
     use super::{super::tests::*, *};
@@ -611,8 +611,8 @@ mod tests {
                 let mut ret = vec![];
                 for _ in 0..auction_count {
                     let txn = new_auction(self.rng, timestamp, ttl);
-                    ret.push((TransactionHash::V1(*txn.hash()), txn.approvals().clone()));
-                    self.transactions.push(Transaction::V1(txn));
+                    ret.push((txn.hash(), txn.approvals().clone()));
+                    self.transactions.push(txn);
                 }
                 ret
             };
@@ -620,9 +620,11 @@ mod tests {
             let install_upgrade_for_block = {
                 let mut ret = vec![];
                 for _ in 0..install_upgrade_count {
-                    let txn = new_install_upgrade(self.rng, timestamp, ttl);
-                    ret.push((TransactionHash::V1(*txn.hash()), txn.approvals().clone()));
-                    self.transactions.push(Transaction::V1(txn));
+                    let txn: Transaction =
+                        TransactionV1::random_install_upgrade(self.rng, Some(timestamp), Some(ttl))
+                            .into();
+                    ret.push((txn.hash(), txn.approvals().clone()));
+                    self.transactions.push(txn);
                 }
                 ret
             };

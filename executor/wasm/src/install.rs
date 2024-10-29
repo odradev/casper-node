@@ -7,7 +7,7 @@ use casper_types::{
     account::AccountHash,
     contracts::{ContractHash, ContractPackageHash},
     execution::Effects,
-    Digest, Timestamp, TransactionHash,
+    BlockTime, Digest, Timestamp, TransactionHash,
 };
 use parking_lot::RwLock;
 use thiserror::Error;
@@ -35,7 +35,7 @@ pub struct InstallContractRequest {
     /// Chain name.
     pub(crate) chain_name: Arc<str>,
     /// Block time.
-    pub(crate) block_time: Timestamp,
+    pub(crate) block_time: BlockTime,
     /// Seed used for smart contract hash computation.
     pub(crate) seed: Option<[u8; 32]>,
 }
@@ -51,7 +51,7 @@ pub struct InstallContractRequestBuilder {
     transaction_hash: Option<TransactionHash>,
     address_generator: Option<Arc<RwLock<AddressGenerator>>>,
     chain_name: Option<Arc<str>>,
-    block_time: Option<Timestamp>,
+    block_time: Option<BlockTime>,
     seed: Option<[u8; 32]>,
 }
 
@@ -109,12 +109,12 @@ impl InstallContractRequestBuilder {
         self
     }
 
-    pub fn with_block_time(mut self, block_time: Timestamp) -> Self {
+    pub fn with_block_time(mut self, block_time: BlockTime) -> Self {
         self.block_time = Some(block_time);
         self
     }
 
-    pub(crate) fn with_seed(mut self, seed: [u8; 32]) -> Self {
+    pub fn with_seed(mut self, seed: [u8; 32]) -> Self {
         self.seed = Some(seed);
         self
     }

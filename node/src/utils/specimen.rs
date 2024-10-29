@@ -28,7 +28,8 @@ use casper_types::{
     ProtocolVersion, RewardedSignatures, RuntimeArgs, SecretKey, SemVer, SignedBlockHeader,
     SingleBlockRewardedSignatures, TimeDiff, Timestamp, Transaction, TransactionHash,
     TransactionId, TransactionRuntime, TransactionV1, TransactionV1Builder, TransactionV1Hash,
-    URef, AUCTION_LANE_ID, INSTALL_UPGRADE_LANE_ID, KEY_HASH_LENGTH, MINT_LANE_ID, U512,
+    URef, AUCTION_LANE_ID, INSTALL_UPGRADE_LANE_ID, KEY_HASH_LENGTH, LARGE_WASM_LANE_ID,
+    MINT_LANE_ID, U512,
 };
 
 use crate::{
@@ -46,8 +47,6 @@ use casper_storage::block_store::types::ApprovalsHashes;
 
 /// The largest valid unicode codepoint that can be encoded to UTF-8.
 pub(crate) const HIGHEST_UNICODE_CODEPOINT: char = '\u{10FFFF}';
-
-const LARGE_LANE_ID: u8 = 3;
 
 /// A cache used for memoization, typically on a single estimator.
 #[derive(Debug, Default)]
@@ -860,7 +859,7 @@ impl LargestSpecimen for BlockPayload {
             ],
         );
         transactions.insert(
-            LARGE_LANE_ID,
+            LARGE_WASM_LANE_ID,
             vec![
                 large_txn_hash_with_approvals.clone();
                 estimator.parameter::<usize>("max_standard_transactions_per_block")
@@ -1014,15 +1013,16 @@ impl LargestSpecimen for TransactionV1 {
         // See comment in `impl LargestSpecimen for ExecutableDeployItem` below for rationale here.
         let max_size_with_margin =
             estimator.parameter::<i32>("max_transaction_size").max(0) as usize + 10 * 4;
-
         TransactionV1Builder::new_session(
-            casper_types::TransactionLane::InstallUpgrade,
+            true,
             Bytes::from(vec_of_largest_specimen(
                 estimator,
                 max_size_with_margin,
                 cache,
             )),
             TransactionRuntime::VmCasperV1,
+            0,
+            None,
         )
         .with_secret_key(&LargestSpecimen::largest_specimen(estimator, cache))
         .with_timestamp(LargestSpecimen::largest_specimen(estimator, cache))

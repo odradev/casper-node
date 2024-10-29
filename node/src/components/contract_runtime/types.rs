@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, sync::Arc};
 
-use casper_executor_wasm::{WasmV2Error, WasmV2Result};
+use crate::types::TransactionHeader;
 use casper_types::{execution::PaymentInfo, InitiatorAddr, Transfer};
 use datasize::DataSize;
 use serde::Serialize;
@@ -11,17 +11,20 @@ use casper_execution_engine::engine_state::{
 use casper_storage::{
     block_store::types::ApprovalsHashes,
     data_access_layer::{
-        auction::AuctionMethodError, BalanceHoldResult, BiddingResult, EraValidatorsRequest,
-        HandleFeeResult, HandleRefundResult, TransferResult,
+        auction::AuctionMethodError, BalanceHoldResult, BalanceResult, BiddingResult,
+        EraValidatorsRequest, HandleFeeResult, HandleRefundResult, TransferResult,
     },
 };
 use casper_types::{
     contract_messages::Messages,
     execution::{Effects, ExecutionResult, ExecutionResultV2},
     BlockHash, BlockHeaderV2, BlockV2, Digest, EraId, Gas, InvalidDeploy, InvalidTransaction,
-    InvalidTransactionV1, ProtocolVersion, PublicKey, Transaction, TransactionHash,
-    TransactionHeader, U512,
+    InvalidTransactionV1, ProtocolVersion, PublicKey, Transaction, TransactionHash, U512,
 };
+
+use self::wasm_v2_request::{WasmV2Error, WasmV2Result};
+
+use super::operations::wasm_v2_request;
 
 /// Request for validator weights for a specific era.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,7 +87,7 @@ impl ExecutionArtifactBuilder {
         ExecutionArtifactBuilder {
             effects: Effects::new(),
             hash: transaction.hash(),
-            header: transaction.header(),
+            header: transaction.into(),
             error_message: None,
             transfers: vec![],
             messages: Default::default(),
@@ -120,16 +123,43 @@ impl ExecutionArtifactBuilder {
         self
     }
 
+    pub fn with_initial_balance_result(
+        &mut self,
+        balance_result: BalanceResult,
+        minimum_amount: U512,
+    ) -> Result<&mut Self, bool> {
+        if let BalanceResult::RootNotFound = balance_result {
+            return Err(true);
+        }
+        if let (None, Some(err)) = (&self.error_message, balance_result.error()) {
+            self.error_message = Some(format!("{}", err));
+            return Err(false);
+        }
+        if let Some(purse) = balance_result.purse_addr() {
+            let is_sufficient = balance_result.is_sufficient(minimum_amount);
+            if !is_sufficient {
+                self.error_message = Some(format!(
+                    "Purse {} has less than {}",
+                    base16::encode_lower(&purse),
+                    minimum_amount
+                ));
+                return Ok(self);
+            }
+        }
+        Ok(self)
+    }
+
     pub fn with_wasm_v1_result(&mut self, wasm_v1_result: WasmV1Result) -> Result<&mut Self, ()> {
         if let Some(Error::RootNotFound(_)) = wasm_v1_result.error() {
             return Err(());
         }
+        self.with_added_consumed(wasm_v1_result.consumed());
         if let (None, Some(err)) = (&self.error_message, wasm_v1_result.error()) {
             self.error_message = Some(format!("{}", err));
+            return Ok(self);
         }
-        self.with_added_consumed(wasm_v1_result.consumed())
+        self.with_appended_transfers(&mut wasm_v1_result.transfers().clone())
             .with_appended_messages(&mut wasm_v1_result.messages().clone())
-            .with_appended_transfers(&mut wasm_v1_result.transfers().clone())
             .with_appended_effects(wasm_v1_result.effects().clone());
         Ok(self)
     }
@@ -275,6 +305,7 @@ impl ExecutionArtifactBuilder {
         if let TransferResult::Success {
             mut transfers,
             effects,
+            cache,
         } = transfer_result
         {
             self.with_appended_transfers(&mut transfers)
@@ -328,7 +359,7 @@ impl ExecutionArtifactBuilder {
     /// Adds the error message from a `InvalidRequest` to the artifact.
     pub(crate) fn with_invalid_wasm_v2_request(
         &mut self,
-        ire: &casper_executor_wasm::InvalidRequest,
+        ire: wasm_v2_request::InvalidRequest,
     ) -> &mut Self {
         if self.error_message.is_none() {
             self.error_message = Some(format!("{}", ire));
@@ -421,6 +452,10 @@ impl SpeculativeExecutionResult {
                 InvalidTransaction::V1(InvalidTransactionV1::UnableToCalculateGasLimit),
             ),
         }
+    }
+
+    pub fn invalid_transaction(error: InvalidTransaction) -> Self {
+        SpeculativeExecutionResult::InvalidTransaction(error)
     }
 }
 

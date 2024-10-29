@@ -30,7 +30,10 @@ pub use engine_config::{
 };
 pub use error::Error;
 use execution_kind::ExecutionKind;
-pub use wasm_v1::{ExecutableItem, InvalidRequest, WasmV1Request, WasmV1Result};
+pub use wasm_v1::{
+    BlockInfo, ExecutableItem, InvalidRequest, SessionDataDeploy, SessionDataV1, SessionInputData,
+    WasmV1Request, WasmV1Result,
+};
 
 /// The maximum amount of motes that payment code execution can cost.
 pub const MAX_PAYMENT_AMOUNT: u64 = 2_500_000_000;
@@ -69,8 +72,7 @@ impl ExecutionEngineV1 {
         wasm_v1_request: WasmV1Request,
     ) -> WasmV1Result {
         let WasmV1Request {
-            state_hash,
-            block_time,
+            block_info,
             transaction_hash,
             gas_limit,
             initiator_addr,
@@ -88,6 +90,7 @@ impl ExecutionEngineV1 {
 
         let account_hash = initiator_addr.account_hash();
         let protocol_version = self.config.protocol_version();
+        let state_hash = block_info.state_hash;
         let tc = match state_provider.tracking_copy(state_hash) {
             Ok(Some(tracking_copy)) => Rc::new(RefCell::new(tracking_copy)),
             Ok(None) => return WasmV1Result::root_not_found(gas_limit, state_hash),
@@ -141,7 +144,7 @@ impl ExecutionEngineV1 {
             access_rights,
             authorization_keys,
             account_hash,
-            block_time,
+            block_info,
             transaction_hash,
             gas_limit,
             protocol_version,
@@ -158,7 +161,7 @@ impl ExecutionEngineV1 {
     pub fn execute_with_tracking_copy<R>(
         &self,
         tracking_copy: TrackingCopy<R>,
-        block_time: BlockTime,
+        block_info: BlockInfo,
         transaction_hash: TransactionHash,
         gas_limit: Gas,
         initiator_addr: InitiatorAddr,
@@ -223,7 +226,7 @@ impl ExecutionEngineV1 {
             access_rights,
             authorization_keys,
             account_hash,
-            block_time,
+            block_info,
             transaction_hash,
             gas_limit,
             protocol_version,

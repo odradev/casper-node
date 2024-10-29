@@ -20,7 +20,7 @@ use casper_storage::{
     AddressGenerator,
 };
 use casper_types::{
-    account::AccountHash, bytesrepr::ToBytes, ChainspecRegistry, Digest, EntityAddr,
+    account::AccountHash, bytesrepr::ToBytes, BlockTime, ChainspecRegistry, Digest, EntityAddr,
     GenesisAccount, GenesisConfigBuilder, Key, Motes, Phase, ProtocolVersion, PublicKey,
     RuntimeArgs, SecretKey, StoredValue, Timestamp, TransactionHash, TransactionV1Hash, U512,
 };
@@ -74,7 +74,7 @@ fn base_execute_builder() -> ExecuteRequestBuilder {
         .with_transferred_value(1000)
         .with_transaction_hash(TRANSACTION_HASH)
         .with_chain_name(DEFAULT_CHAIN_NAME)
-        .with_block_time(Timestamp::now())
+        .with_block_time(Timestamp::now().into())
 }
 
 fn base_install_request_builder() -> InstallContractRequestBuilder {
@@ -83,7 +83,7 @@ fn base_install_request_builder() -> InstallContractRequestBuilder {
         .with_gas_limit(1_000_000)
         .with_transaction_hash(TRANSACTION_HASH)
         .with_chain_name(DEFAULT_CHAIN_NAME)
-        .with_block_time(Timestamp::now())
+        .with_block_time(Timestamp::now().into())
 }
 
 // #[test]
@@ -160,7 +160,7 @@ fn harness() {
         .with_serialized_input((flipper_address,))
         .with_shared_address_generator(address_generator)
         .with_chain_name(DEFAULT_CHAIN_NAME)
-        .with_block_time(Timestamp::now())
+        .with_block_time(Timestamp::now().into())
         .build()
         .expect("should build");
     run_wasm_session(
@@ -202,7 +202,7 @@ fn cep18() {
         .with_entry_point("new".to_string())
         .with_input(input_data)
         .with_chain_name(DEFAULT_CHAIN_NAME)
-        .with_block_time(Timestamp::now())
+        .with_block_time(Timestamp::now().into())
         .build()
         .expect("should build");
 
@@ -229,7 +229,7 @@ fn cep18() {
         .with_transferred_value(0)
         .with_shared_address_generator(Arc::clone(&address_generator))
         .with_chain_name(DEFAULT_CHAIN_NAME)
-        .with_block_time(Timestamp::now())
+        .with_block_time(Timestamp::now().into())
         .build()
         .expect("should build");
 

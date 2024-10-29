@@ -8,7 +8,8 @@ use casper_storage::{
     AddressGenerator, TrackingCopy,
 };
 use casper_types::{
-    account::AccountHash, execution::Effects, Digest, EntityAddr, Key, Timestamp, TransactionHash,
+    account::AccountHash, execution::Effects, BlockHash, BlockTime, Digest, EntityAddr, Key,
+    StorageCosts, Timestamp, TransactionHash,
 };
 use parking_lot::RwLock;
 use thiserror::Error;
@@ -47,8 +48,14 @@ pub struct ExecuteRequest {
     ///
     /// This is very important ingredient for deriving contract hashes on the network.
     pub chain_name: Arc<str>,
-    /// Block time.
-    pub block_time: Timestamp,
+    /// Block time represented as a unix timestamp.
+    pub block_time: BlockTime,
+    /// State root hash of the global state in which the transaction will be executed.
+    pub state_hash: Digest,
+    /// Parent block hash.
+    pub parent_block_hash: BlockHash,
+    /// Block height.
+    pub block_height: u64,
 }
 
 /// Builder for `ExecuteRequest`.
@@ -64,7 +71,10 @@ pub struct ExecuteRequestBuilder {
     transaction_hash: Option<TransactionHash>,
     address_generator: Option<Arc<RwLock<AddressGenerator>>>,
     chain_name: Option<Arc<str>>,
-    block_time: Option<Timestamp>,
+    block_time: Option<BlockTime>,
+    state_hash: Option<Digest>,
+    parent_block_hash: Option<BlockHash>,
+    block_height: Option<u64>,
 }
 
 impl ExecuteRequestBuilder {
@@ -152,7 +162,7 @@ impl ExecuteRequestBuilder {
     }
 
     /// Set the block time.
-    pub fn with_block_time(mut self, block_time: Timestamp) -> Self {
+    pub fn with_block_time(mut self, block_time: BlockTime) -> Self {
         self.block_time = Some(block_time);
         self
     }
@@ -172,6 +182,11 @@ impl ExecuteRequestBuilder {
             .ok_or("Address generator is not set")?;
         let chain_name = self.chain_name.ok_or("Chain name is not set")?;
         let block_time = self.block_time.ok_or("Block time is not set")?;
+        let state_hash = self.state_hash.ok_or("State hash is not set")?;
+        let parent_block_hash = self
+            .parent_block_hash
+            .ok_or("Parent block hash is not set")?;
+        let block_height = self.block_height.ok_or("Block height is not set")?;
         Ok(ExecuteRequest {
             initiator,
             caller_key,
@@ -184,6 +199,9 @@ impl ExecuteRequestBuilder {
             address_generator,
             chain_name,
             block_time,
+            state_hash,
+            parent_block_hash,
+            block_height,
         })
     }
 }

@@ -138,7 +138,11 @@ impl TokenOwnerContract {
 #[casper(path = crate::traits)]
 impl Deposit for TokenOwnerContract {
     fn deposit(&mut self) {
-        log!("Received deposit with value = {} current handler is {:?}", host::get_value(), self.fallback_handler);
+        log!(
+            "Received deposit with value = {} current handler is {:?}",
+            host::get_value(),
+            self.fallback_handler
+        );
         match std::mem::replace(&mut self.fallback_handler, FallbackHandler::AcceptTokens) {
             FallbackHandler::AcceptTokens => {
                 let value = host::get_value();

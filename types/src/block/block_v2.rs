@@ -19,14 +19,14 @@ use once_cell::sync::OnceCell;
 use super::{Block, BlockBodyV2, BlockConversionError, RewardedSignatures};
 #[cfg(any(all(feature = "std", feature = "testing"), test))]
 use crate::testing::TestRng;
-#[cfg(feature = "json-schema")]
-use crate::transaction::{TransactionLane, TransactionV1Hash};
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes},
     transaction::TransactionHash,
     BlockHash, BlockHeaderV2, BlockValidationError, Digest, EraEndV2, EraId, ProtocolVersion,
     PublicKey, Timestamp,
 };
+#[cfg(feature = "json-schema")]
+use crate::{TransactionV1Hash, AUCTION_LANE_ID, INSTALL_UPGRADE_LANE_ID, MINT_LANE_ID};
 
 #[cfg(feature = "json-schema")]
 static BLOCK_V2: Lazy<BlockV2> = Lazy::new(|| {
@@ -50,18 +50,11 @@ static BLOCK_V2: Lazy<BlockV2> = Lazy::new(|| {
     let installer_upgrader_hashes = vec![TransactionHash::V1(TransactionV1Hash::new(
         Digest::from([22; Digest::LENGTH]),
     ))];
-    let standard = vec![TransactionHash::V1(
-        crate::transaction::TransactionV1Hash::new(Digest::from([23; Digest::LENGTH])),
-    )];
     let transactions = {
         let mut ret = BTreeMap::new();
-        ret.insert(TransactionLane::Mint as u8, mint_hashes);
-        ret.insert(TransactionLane::Auction as u8, auction_hashes);
-        ret.insert(
-            TransactionLane::InstallUpgrade as u8,
-            installer_upgrader_hashes,
-        );
-        ret.insert(TransactionLane::Large as u8, standard);
+        ret.insert(MINT_LANE_ID, mint_hashes);
+        ret.insert(AUCTION_LANE_ID, auction_hashes);
+        ret.insert(INSTALL_UPGRADE_LANE_ID, installer_upgrader_hashes);
         ret
     };
     let rewarded_signatures = RewardedSignatures::default();
@@ -255,24 +248,14 @@ impl BlockV2 {
         self.body.auction()
     }
 
-    /// Returns the hashes of the installer/upgrader transactions within the block.
+    /// Returns the hashes of the install/upgrade wasm transactions within the block.
     pub fn install_upgrade(&self) -> impl Iterator<Item = TransactionHash> {
         self.body.install_upgrade()
     }
 
-    /// Returns the hashes of all other large transactions within the block.
-    pub fn large(&self) -> impl Iterator<Item = TransactionHash> {
-        self.body.large()
-    }
-
-    /// Returns the hashes of all other medium transactions within the block.
-    pub fn medium(&self) -> impl Iterator<Item = TransactionHash> {
-        self.body.medium()
-    }
-
-    /// Returns the hashes of all other small transactions within the block.
-    pub fn small(&self) -> impl Iterator<Item = TransactionHash> {
-        self.body.small()
+    /// Returns the hashes of the transactions filtered by lane id within the block.
+    pub fn transactions_by_lane_id(&self, lane_id: u8) -> impl Iterator<Item = TransactionHash> {
+        self.body.transaction_by_lane(lane_id)
     }
 
     /// Returns all of the transaction hashes in the order in which they were executed.

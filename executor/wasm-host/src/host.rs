@@ -1124,5 +1124,5 @@ pub fn casper_env_block_time<S: GlobalStateReader, E: Executor>(
     caller: impl Caller<Context = Context<S, E>>,
 ) -> VMResult<u64> {
     let block_time = caller.context().block_time;
-    Ok(block_time.millis())
+    Ok(block_time.value())
 }

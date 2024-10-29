@@ -10,13 +10,21 @@ use std::error::Error as StdError;
 use datasize::DataSize;
 use serde::Serialize;
 
-use super::super::TransactionEntryPoint;
 #[cfg(doc)]
 use super::TransactionV1;
 use crate::{
-    bytesrepr, crypto, transaction::PricingMode, CLType, DisplayIter, TimeDiff, Timestamp,
-    TransactionRuntime, U512,
+    bytesrepr, crypto, CLType, DisplayIter, PricingMode, TimeDiff, Timestamp,
+    TransactionEntryPoint, TransactionRuntime, U512,
 };
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "std", derive(Serialize))]
+#[cfg_attr(feature = "datasize", derive(DataSize))]
+pub enum FieldDeserializationError {
+    IndexNotExists { index: u16 },
+    FromBytesError { index: u16, error: bytesrepr::Error },
+    LingeringBytesInField { index: u16 },
+}
 
 /// Returned when a [`TransactionV1`] fails validation.
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -138,6 +146,11 @@ pub enum InvalidTransaction {
         /// The invalid entry point.
         entry_point: TransactionEntryPoint,
     },
+    /// The entry point for this transaction target must be `TransactionEntryPoint::Call`.
+    EntryPointMustBeCall {
+        /// The invalid entry point.
+        entry_point: TransactionEntryPoint,
+    },
     /// The transaction has empty module bytes.
     EmptyModuleBytes,
     /// Attempt to factor the amount over the gas_price failed.
@@ -157,7 +170,9 @@ pub enum InvalidTransaction {
         price_mode: PricingMode,
     },
     /// The transaction provided is not supported.
-    InvalidTransactionKind(u8),
+    InvalidTransactionLane(u8),
+    /// No wasm lane matches transaction
+    NoWasmLaneMatchesTransaction(),
     /// Gas price tolerance too low.
     GasPriceToleranceTooLow {
         /// The minimum gas price tolerance.
@@ -165,6 +180,17 @@ pub enum InvalidTransaction {
         /// The provided gas price tolerance.
         provided_gas_price_tolerance: u8,
     },
+    /// Error when trying to deserialize one of the transactionV1 payload fields.
+    CouldNotDeserializeField {
+        /// Underlying reason why the deserialization failed
+        error: FieldDeserializationError,
+    },
+
+    /// Unable to calculate hash for payloads transaction.
+    CannotCalculateFieldsHash,
+
+    /// The transactions field map had entries that were unexpected
+    UnexpectedTransactionFieldEntries,
     /// The transaction requires named arguments.
     ExpectedNamedArguments,
     /// The transaction runtime is invalid.
@@ -172,6 +198,8 @@ pub enum InvalidTransaction {
         /// The expected runtime as specified by the chainspec.
         expected: TransactionRuntime,
     },
+    /// The transaction is missing a seed field.
+    MissingSeed,
 }
 
 impl Display for InvalidTransaction {
@@ -304,7 +332,7 @@ impl Display for InvalidTransaction {
                     "received a transaction with an invalid mode {price_mode}"
                 )
             }
-            InvalidTransaction::InvalidTransactionKind(kind) => {
+            InvalidTransaction::InvalidTransactionLane(kind) => {
                 write!(
                     formatter,
                     "received a transaction with an invalid kind {kind}"
@@ -320,6 +348,35 @@ impl Display for InvalidTransaction {
                     provided_gas_price_tolerance, min_gas_price_tolerance
                 )
             }
+            InvalidTransaction::CouldNotDeserializeField { error } => {
+                match error {
+                    FieldDeserializationError::IndexNotExists { index } => write!(
+                        formatter,
+                        "tried to deserialize a field under index {} but it is not present in the payload",
+                        index
+                    ),
+                    FieldDeserializationError::FromBytesError { index, error } => write!(
+                        formatter,
+                        "tried to deserialize a field under index {} but it failed with error: {}",
+                        index,
+                        error
+                    ),
+                    FieldDeserializationError::LingeringBytesInField { index } => write!(
+                        formatter,
+                        "tried to deserialize a field under index {} but after deserialization there were still bytes left",
+                        index,
+                    ),
+                }
+            },
+            InvalidTransaction::CannotCalculateFieldsHash => write!(
+                formatter,
+                "cannot calculate a hash digest for the transaction"
+            ),
+            InvalidTransaction::EntryPointMustBeCall { entry_point } => {
+                write!(formatter, "entry point must be call: {entry_point}")
+            },
+            InvalidTransaction::NoWasmLaneMatchesTransaction() => write!(formatter, "Could not match any generic wasm lane to the specified transaction"),
+            InvalidTransaction::UnexpectedTransactionFieldEntries => write!(formatter, "There were entries in the fields map of the payload that could not be matched"),
             InvalidTransaction::ExpectedNamedArguments => {
                 write!(formatter, "transaction requires named arguments")
             }
@@ -328,6 +385,9 @@ impl Display for InvalidTransaction {
                     formatter,
                     "invalid transaction runtime: expected {expected}"
                 )
+            }
+            InvalidTransaction::MissingSeed => {
+                write!(formatter, "missing seed for install or upgrade")
             }
         }
     }
@@ -361,15 +421,25 @@ impl StdError for InvalidTransaction {
             | InvalidTransaction::EntryPointCannotBeCall
             | InvalidTransaction::EntryPointCannotBeCustom { .. }
             | InvalidTransaction::EntryPointMustBeCustom { .. }
+            | InvalidTransaction::EntryPointMustBeCall { .. }
             | InvalidTransaction::EmptyModuleBytes
             | InvalidTransaction::GasPriceConversion { .. }
             | InvalidTransaction::UnableToCalculateGasLimit
             | InvalidTransaction::UnableToCalculateGasCost
             | InvalidTransaction::InvalidPricingMode { .. }
             | InvalidTransaction::GasPriceToleranceTooLow { .. }
-            | InvalidTransaction::InvalidTransactionKind(_)
-            | InvalidTransaction::ExpectedNamedArguments
-            | InvalidTransaction::InvalidTransactionRuntime { .. } => None,
+            | InvalidTransaction::InvalidTransactionLane(_)
+            | InvalidTransaction::CannotCalculateFieldsHash
+            | InvalidTransaction::NoWasmLaneMatchesTransaction()
+            | InvalidTransaction::UnexpectedTransactionFieldEntries => None,
+            InvalidTransaction::CouldNotDeserializeField { error } => match error {
+                FieldDeserializationError::IndexNotExists { .. }
+                | FieldDeserializationError::LingeringBytesInField { .. } => None,
+                FieldDeserializationError::FromBytesError { error, .. } => Some(error),
+            },
+            InvalidTransaction::ExpectedNamedArguments
+            | InvalidTransaction::InvalidTransactionRuntime { .. }
+            | InvalidTransaction::MissingSeed => None,
         }
     }
 }

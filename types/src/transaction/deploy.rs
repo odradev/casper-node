@@ -62,12 +62,11 @@ use crate::{
 };
 
 #[cfg(any(feature = "std", test))]
-use crate::{chainspec::PricingHandling, transaction::TransactionLane, Chainspec};
+use crate::{chainspec::PricingHandling, Chainspec, LARGE_WASM_LANE_ID};
 #[cfg(any(feature = "std", test))]
 use crate::{system::auction::ARG_AMOUNT, transaction::GasLimited, Gas, Motes, U512};
 #[cfg(any(feature = "std", test))]
 pub use deploy_builder::{DeployBuilder, DeployBuilderError};
-pub use deploy_category::DeployCategory;
 pub use deploy_hash::DeployHash;
 pub use deploy_header::DeployHeader;
 pub use deploy_id::DeployId;
@@ -410,9 +409,12 @@ impl Deploy {
             return Err(InvalidDeploy::InvalidRuntime);
         }
 
+        // We're assuming that Deploy can have a maximum size of an InstallUpgrade transaction.
+        //  We're passing 0 as transaction size since determining max transaction size for
+        //  InstallUpgrade doesn't rely on the size of transaction
         let max_transaction_size = config
             .transaction_v1_config
-            .get_max_serialized_length(TransactionLane::Large as u8);
+            .get_max_serialized_length(LARGE_WASM_LANE_ID);
         self.is_valid_size(max_transaction_size as u32)?;
 
         let header = self.header();
@@ -1326,7 +1328,7 @@ impl GasLimited for Deploy {
                 let computation_limit = if self.is_transfer() {
                     costs.mint_costs().transfer as u64
                 } else {
-                    chainspec.get_max_gas_limit_by_lane(TransactionLane::Large as u8)
+                    chainspec.get_max_gas_limit_by_category(LARGE_WASM_LANE_ID)
                 };
                 Gas::new(computation_limit)
             } // legacy deploys do not support reservations
@@ -1764,7 +1766,7 @@ mod tests {
         let deploy = create_deploy(
             &mut rng,
             config.max_ttl,
-            config.deploy_config.max_dependencies.into(),
+            0,
             &chain_name,
             GAS_PRICE_TOLERANCE as u64,
         );
@@ -1789,7 +1791,7 @@ mod tests {
         let deploy = create_deploy(
             &mut rng,
             config.max_ttl,
-            config.deploy_config.max_dependencies.into(),
+            0,
             &wrong_chain_name,
             GAS_PRICE_TOLERANCE as u64,
         );
@@ -1821,12 +1823,10 @@ mod tests {
         chainspec.with_chain_name(chain_name.to_string());
         let config = chainspec.transaction_config.clone();
 
-        let dependency_count = usize::from(config.deploy_config.max_dependencies + 1);
-
         let deploy = create_deploy(
             &mut rng,
             config.max_ttl,
-            dependency_count,
+            1,
             chain_name,
             GAS_PRICE_TOLERANCE as u64,
         );
@@ -1857,13 +1857,7 @@ mod tests {
 
         let ttl = config.max_ttl + TimeDiff::from(Duration::from_secs(1));
 
-        let deploy = create_deploy(
-            &mut rng,
-            ttl,
-            config.deploy_config.max_dependencies.into(),
-            chain_name,
-            GAS_PRICE_TOLERANCE as u64,
-        );
+        let deploy = create_deploy(&mut rng, ttl, 0, chain_name, GAS_PRICE_TOLERANCE as u64);
 
         let expected_error = InvalidDeploy::ExcessiveTimeToLive {
             max_ttl: config.max_ttl,
@@ -1896,7 +1890,7 @@ mod tests {
         let deploy = create_deploy(
             &mut rng,
             config.max_ttl,
-            config.deploy_config.max_dependencies.into(),
+            0,
             chain_name,
             GAS_PRICE_TOLERANCE as u64,
         );
@@ -1933,7 +1927,7 @@ mod tests {
         let deploy = create_deploy(
             &mut rng,
             config.max_ttl,
-            config.deploy_config.max_dependencies.into(),
+            0,
             chain_name,
             GAS_PRICE_TOLERANCE as u64,
         );
@@ -1971,7 +1965,7 @@ mod tests {
         let mut deploy = create_deploy(
             &mut rng,
             config.max_ttl,
-            config.deploy_config.max_dependencies.into(),
+            0,
             chain_name,
             GAS_PRICE_TOLERANCE as u64,
         );
@@ -2020,7 +2014,7 @@ mod tests {
         let mut deploy = create_deploy(
             &mut rng,
             config.max_ttl,
-            config.deploy_config.max_dependencies.into(),
+            0,
             chain_name,
             GAS_PRICE_TOLERANCE as u64,
         );
@@ -2070,7 +2064,7 @@ mod tests {
         let mut deploy = create_deploy(
             &mut rng,
             config.max_ttl,
-            config.deploy_config.max_dependencies.into(),
+            0,
             chain_name,
             GAS_PRICE_TOLERANCE as u64,
         );
@@ -2156,7 +2150,7 @@ mod tests {
         let deploy = create_deploy(
             &mut rng,
             config.max_ttl,
-            config.deploy_config.max_dependencies as usize,
+            0,
             chain_name,
             GAS_PRICE_TOLERANCE as u64,
         );
@@ -2187,7 +2181,7 @@ mod tests {
         let mut deploy = create_deploy(
             &mut rng,
             config.max_ttl,
-            config.deploy_config.max_dependencies as usize,
+            0,
             chain_name,
             GAS_PRICE_TOLERANCE as u64,
         );
@@ -2218,7 +2212,7 @@ mod tests {
         let mut deploy = create_deploy(
             &mut rng,
             config.max_ttl,
-            config.deploy_config.max_dependencies as usize,
+            0,
             chain_name,
             GAS_PRICE_TOLERANCE as u64,
         );
@@ -2253,7 +2247,7 @@ mod tests {
         let deploy = create_deploy(
             &mut rng,
             config.max_ttl,
-            config.deploy_config.max_dependencies as usize,
+            0,
             chain_name,
             GAS_PRICE_TOLERANCE as u64,
         );
@@ -2283,7 +2277,7 @@ mod tests {
         let mut deploy = create_deploy(
             &mut rng,
             config.max_ttl,
-            config.deploy_config.max_dependencies as usize,
+            0,
             chain_name,
             GAS_PRICE_TOLERANCE as u64,
         );
@@ -2343,7 +2337,7 @@ mod tests {
         let mut deploy = create_deploy(
             &mut rng,
             config.max_ttl,
-            config.deploy_config.max_dependencies.into(),
+            0,
             chain_name,
             GAS_PRICE_TOLERANCE as u64,
         );
@@ -2404,7 +2398,7 @@ mod tests {
         let mut deploy = create_deploy(
             &mut rng,
             config.max_ttl,
-            config.deploy_config.max_dependencies.into(),
+            0,
             chain_name,
             GAS_PRICE_TOLERANCE as u64,
         );

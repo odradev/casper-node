@@ -12,7 +12,12 @@ use casper_sdk::{
         },
         error::Error,
         keyspace::Keyspace,
-    }, collections::Map, host::{self, Entity}, log, revert, types::CallError, ContractHandle
+    },
+    collections::Map,
+    host::{self, Entity},
+    log, revert,
+    types::CallError,
+    ContractHandle,
 };
 
 use crate::traits::{DepositExt, DepositRef};

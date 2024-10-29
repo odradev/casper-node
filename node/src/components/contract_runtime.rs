@@ -151,6 +151,7 @@ impl ContractRuntime {
             .with_refund_handling(chainspec.core_config.refund_handling)
             .with_fee_handling(chainspec.core_config.fee_handling)
             .with_protocol_version(chainspec.protocol_version())
+            .with_storage_costs(chainspec.storage_costs)
             .build();
 
         let data_access_layer = Arc::new(
@@ -782,7 +783,7 @@ impl ContractRuntime {
             let req = TrieRequest::new(trie_key, Some(chunk_index));
             let maybe_raw = data_access_layer
                 .trie(req)
-                .into_legacy()
+                .into_raw()
                 .map_err(ContractRuntimeError::FailedToRetrieveTrieById)?;
             let ret = match maybe_raw {
                 Some(raw) => Some(TrieOrChunk::new(raw.into(), chunk_index)?),
