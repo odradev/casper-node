@@ -310,6 +310,9 @@ impl<REv: 'static> ComponentHarness<REv> {
                     ControlAnnouncement::ShutdownForUpgrade { .. } => {
                         panic!("a control announcement requesting a shutdown for upgrade was received")
                     }
+                    ControlAnnouncement::ShutdownAfterCatchingUp { .. } => {
+                        panic!("a control announcement requesting a shutdown after catching up was received")
+                    }
                     fatal @ ControlAnnouncement::FatalError { .. } => {
                         panic!(
                             "a control announcement requesting a fatal error was received: {}",
