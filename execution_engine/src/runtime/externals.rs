@@ -1436,7 +1436,9 @@ where
                 )?;
 
                 if recovery_id >= 4 {
-                    return Err(Trap::from(ExecError::InvalidImputedOperation));
+                    return Ok(Some(RuntimeValue::I32(
+                        u32::from(ApiError::InvalidArgument) as i32,
+                    )));
                 }
 
                 let data = self.bytes_from_mem(data_ptr, data_size as usize)?;
@@ -1447,18 +1449,24 @@ where
                     &signature,
                     recovery_id as u8
                 ) else {
-                    return Err(Trap::from(ExecError::InvalidImputedOperation));
+                    return Ok(Some(RuntimeValue::I32(
+                        u32::from(ApiError::InvalidArgument) as i32,
+                    )));
                 };
 
                 let Ok(key_bytes) = public_key.to_bytes() else {
-                    return Err(Trap::from(ExecError::InvalidImputedOperation))
+                    return Ok(Some(RuntimeValue::I32(
+                        u32::from(ApiError::OutOfMemory) as i32,
+                    )));
                 };
 
                 if self.try_get_memory()?.set(
                     public_key_ptr,
                     &key_bytes
                 ).is_err() {
-                    return Err(Trap::from(ExecError::InvalidImputedOperation));
+                    return Ok(Some(RuntimeValue::I32(
+                        u32::from(ApiError::HostBufferEmpty) as i32,
+                    )));
                 }
 
                 Ok(Some(RuntimeValue::I32(0)))
@@ -1482,7 +1490,6 @@ where
                     out_ptr
                 ) = Args::parse(args)?;
 
-                // PIN: Add chainspec setting for this call
                 self.charge_host_function_call(
                     &host_function_costs.verify_signature,
                     [message_ptr, message_size, signature_ptr, signature_size, public_key_ptr, public_key_size, out_ptr],
