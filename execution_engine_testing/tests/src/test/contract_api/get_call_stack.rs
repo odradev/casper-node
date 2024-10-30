@@ -73,9 +73,8 @@ fn execute_and_assert_result(
     call_depth: usize,
     builder: &mut LmdbWasmTestBuilder,
     execute_request: ExecuteRequest,
-    is_entry_point_type_session: bool,
 ) {
-    if call_depth == 0 && !is_entry_point_type_session {
+    if call_depth == 0 {
         builder.exec(execute_request).commit().expect_success();
     } else {
         builder.exec(execute_request).commit().expect_failure();
@@ -431,8 +430,8 @@ fn assert_call_stack_matches_calls(call_stack: Vec<Caller>, calls: &[Call]) {
                         ContractAddress::ContractPackageHash(current_contract_package_hash),
                     ..
                 }),
-                Caller::Entity {
-                    package_hash: contract_package_hash,
+                Caller::SmartContract {
+                    contract_package_hash,
                     ..
                 },
             ) if *entry_point_type == EntryPointType::Called
@@ -445,10 +444,33 @@ fn assert_call_stack_matches_calls(call_stack: Vec<Caller>, calls: &[Call]) {
                     contract_address: ContractAddress::ContractHash(current_contract_hash),
                     ..
                 }),
-                Caller::Entity {
-                    entity_addr: contract_hash,
+                Caller::Entity { entity_addr, .. },
+            ) if *entry_point_type == EntryPointType::Called
+                && entity_addr.value() == current_contract_hash.value() => {}
+
+            // Versioned Call with EntryPointType::Session
+            (
+                Some(Call {
+                    entry_point_type,
+                    contract_address:
+                        ContractAddress::ContractPackageHash(current_contract_package_hash),
+                    ..
+                }),
+                Caller::SmartContract {
+                    contract_package_hash,
                     ..
                 },
+            ) if *entry_point_type == EntryPointType::Caller
+                && *contract_package_hash == *current_contract_package_hash => {}
+
+            // Unversioned Call with EntryPointType::Session
+            (
+                Some(Call {
+                    entry_point_type,
+                    contract_address: ContractAddress::ContractHash(current_contract_hash),
+                    ..
+                }),
+                Caller::SmartContract { contract_hash, .. },
             ) if *entry_point_type == EntryPointType::Called
                 && contract_hash.value() == current_contract_hash.value() => {}
 
@@ -459,6 +481,47 @@ fn assert_call_stack_matches_calls(call_stack: Vec<Caller>, calls: &[Call]) {
         }
     }
 }
+
+// fn assert_call_stack_matches_calls(call_stack: Vec<Caller>, calls: &[Call]) {
+//     for (index, expected_call_stack_element) in call_stack.iter().enumerate() {
+//         let maybe_call = calls.get(index);
+//         match (maybe_call, expected_call_stack_element) {
+//             // Versioned Call with EntryPointType::Called
+//             (
+//                 Some(Call {
+//                     entry_point_type,
+//                     contract_address:
+//                         ContractAddress::ContractPackageHash(current_contract_package_hash),
+//                     ..
+//                 }),
+//                 Caller::Entity {
+//                     package_hash: contract_package_hash,
+//                     ..
+//                 },
+//             ) if *entry_point_type == EntryPointType::Called
+//                 && contract_package_hash.value() == current_contract_package_hash.value() => {}
+//
+//             // Unversioned Call with EntryPointType::Called
+//             (
+//                 Some(Call {
+//                     entry_point_type,
+//                     contract_address: ContractAddress::ContractHash(current_contract_hash),
+//                     ..
+//                 }),
+//                 Caller::Entity {
+//                     entity_addr: contract_hash,
+//                     ..
+//                 },
+//             ) if *entry_point_type == EntryPointType::Called
+//                 && contract_hash.value() == current_contract_hash.value() => {}
+//
+//             _ => panic!(
+//                 "call stack element {:#?} didn't match expected call {:#?} at index {}, {:#?}",
+//                 expected_call_stack_element, maybe_call, index, call_stack,
+//             ),
+//         }
+//     }
+// }
 
 mod session {
     use crate::test::contract_api::get_call_stack::EntityWithKeys;
@@ -3251,9 +3314,7 @@ mod payment {
 
     use rand::Rng;
 
-    use crate::test::contract_api::get_call_stack::{
-        EntityWithKeys, IS_NOT_SESSION_ENTRY_POINT, IS_SESSION_ENTRY_POINT,
-    };
+    use crate::test::contract_api::get_call_stack::EntityWithKeys;
     use casper_engine_test_support::{
         DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     };
@@ -3289,12 +3350,7 @@ mod payment {
             .build();
         let execute_request = ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
 
-        super::execute_and_assert_result(
-            call_depth,
-            builder,
-            execute_request,
-            IS_NOT_SESSION_ENTRY_POINT,
-        );
+        super::execute_and_assert_result(call_depth, builder, execute_request);
     }
 
     fn execute_stored_payment_by_package_name(
@@ -3328,12 +3384,7 @@ mod payment {
 
         let execute_request = ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
 
-        super::execute_and_assert_result(
-            call_depth,
-            builder,
-            execute_request,
-            IS_SESSION_ENTRY_POINT,
-        );
+        super::execute_and_assert_result(call_depth, builder, execute_request);
     }
 
     fn execute_stored_payment_by_package_hash(
@@ -3364,12 +3415,7 @@ mod payment {
             .build();
         let execute_request = ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
 
-        super::execute_and_assert_result(
-            call_depth,
-            builder,
-            execute_request,
-            IS_SESSION_ENTRY_POINT,
-        );
+        super::execute_and_assert_result(call_depth, builder, execute_request);
     }
 
     fn execute_stored_payment_by_contract_name(
@@ -3402,12 +3448,7 @@ mod payment {
 
         let execute_request = ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
 
-        super::execute_and_assert_result(
-            call_depth,
-            builder,
-            execute_request,
-            IS_SESSION_ENTRY_POINT,
-        );
+        super::execute_and_assert_result(call_depth, builder, execute_request);
     }
 
     fn execute_stored_payment_by_contract_hash(
@@ -3439,12 +3480,7 @@ mod payment {
 
         let is_entry_point_type_session = true;
 
-        super::execute_and_assert_result(
-            call_depth,
-            builder,
-            execute_request,
-            is_entry_point_type_session,
-        );
+        super::execute_and_assert_result(call_depth, builder, execute_request);
     }
 
     // Session + recursive subcall

@@ -220,6 +220,11 @@ where
         self.named_keys
     }
 
+    /// Returns a mutable reference to named keys.
+    pub fn named_keys_mut(&mut self) -> &mut NamedKeys {
+        self.named_keys
+    }
+
     /// Checks if named keys contains a key referenced by name.
     pub fn named_keys_contains_key(&self, name: &str) -> bool {
         self.named_keys.contains(name)

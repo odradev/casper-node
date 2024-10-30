@@ -65,8 +65,5 @@ pub extern "C" fn call() {
         None,
     );
 
-    runtime::put_key(
-        CONTRACT_NAME,
-        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
-    );
+    runtime::put_key(CONTRACT_NAME, Key::Hash(contract_hash.value()));
 }

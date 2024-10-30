@@ -1331,6 +1331,7 @@ where
     ) -> Result<AddressableEntityHash, ExecError> {
         let current = self.context.entry_point_type();
         let next = entry_point.entry_point_type();
+        println!("{:?} {:?}", current, next);
         match (current, next) {
             (EntryPointType::Called, EntryPointType::Caller) => {
                 // Session code can't be called from Contract code for security reasons.
@@ -1589,9 +1590,6 @@ where
             return Err(ExecError::InvalidContext);
         }
 
-        // First check if we can fetch the discrete record
-        // if not use the method on the tracking copy to fetch the
-        // full set which also peeks the cache.
         let entry_point = footprint
             .entry_points()
             .get(entry_point_name)
@@ -1600,14 +1598,14 @@ where
 
         let entry_point_type = entry_point.entry_point_type();
 
-        if entry_point_type.is_invalid_context() {
+        if self.context.engine_config().enable_entity && entry_point_type.is_invalid_context() {
             return Err(ExecError::InvalidContext);
         }
 
         // Get contract entry point hash
         // if public, allowed
-        // if not public, restricted to user group access
-        // if abstract, not allowed
+        // if group, restricted to user group access
+        // if template, not allowed
         self.validate_entry_point_access(&package, entry_point_name, entry_point.access())?;
         if self.context.engine_config().strict_argument_checking() {
             let entry_point_args_lookup: BTreeMap<&str, &Parameter> = entry_point
@@ -1853,6 +1851,13 @@ where
                 // did not explicitly call `runtime::ret()`.  Treat as though the
                 // execution returned the unit type `()` as per Rust functions which
                 // don't specify a return value.
+                if self.context.entry_point_type() == EntryPointType::Caller
+                    && runtime.context.entry_point_type() == EntryPointType::Caller
+                {
+                    // Overwrites parent's named keys with child's new named key but only when
+                    // running session code.
+                    *self.context.named_keys_mut() = runtime.context.named_keys().clone();
+                }
                 self.context
                     .set_remaining_spending_limit(runtime.context.remaining_spending_limit());
                 Ok(runtime.take_host_buffer().unwrap_or(CLValue::from_t(())?))
@@ -1878,7 +1883,14 @@ where
                             // Those returned URef's are guaranteed to be valid as they were already
                             // validated in the `ret` call inside context we ret from.
                             self.context.access_rights_extend(ret_urefs);
-
+                            if self.context.entry_point_type() == EntryPointType::Caller
+                                && runtime.context.entry_point_type() == EntryPointType::Caller
+                            {
+                                // Overwrites parent's named keys with child's new named key but
+                                // only when running session code.
+                                *self.context.named_keys_mut() =
+                                    runtime.context.named_keys().clone();
+                            }
                             // Stored contracts are expected to always call a `ret` function,
                             // otherwise it's an error.
                             runtime
@@ -2270,6 +2282,13 @@ where
             // and install / upgrade transactions are allowed to call this method
             return Ok(Err(ApiError::NotAllowedToAddContractVersion));
         }
+
+        // if entry_points.contains_stored_session() {
+        //     // As of 2.0 we do not allow stored session logic to be
+        //     // installed or upgraded. Pre-existing stored
+        //     // session logic is still callable.
+        //     return Err(ExecError::InvalidEntryPointType);
+        // }
 
         self.context
             .validate_key(&Key::Hash(contract_package_hash))?;
