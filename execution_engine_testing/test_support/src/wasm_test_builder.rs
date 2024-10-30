@@ -66,7 +66,7 @@ use casper_types::{
         mint::{MINT_GAS_HOLD_HANDLING_KEY, MINT_GAS_HOLD_INTERVAL_KEY},
         AUCTION, HANDLE_PAYMENT, MINT, STANDARD_PAYMENT,
     },
-    AccessRights, AddressableEntity, AddressableEntityHash, AuctionCosts, BlockGlobalAddr,
+    AccessRights, Account, AddressableEntity, AddressableEntityHash, AuctionCosts, BlockGlobalAddr,
     BlockTime, ByteCode, ByteCodeAddr, ByteCodeHash, CLTyped, CLValue, Contract, Digest,
     EntityAddr, EntryPoints, EraId, FeeHandling, Gas, HandlePaymentCosts, HashAddr,
     HoldBalanceHandling, InitiatorAddr, Key, KeyTag, MintCosts, Motes, Package, PackageHash, Phase,
@@ -1422,6 +1422,14 @@ where
         assert!(result.is_err(), "Expected Failure got {:?}", result);
 
         self
+    }
+
+    pub fn get_account(&self, account_hash: AccountHash) -> Option<Account> {
+        let stored_value = self
+            .query(None, Key::Account(account_hash), &[])
+            .expect("must have stored value");
+
+        stored_value.into_account()
     }
 
     /// Returns the "handle payment" contract, panics if it can't be found.

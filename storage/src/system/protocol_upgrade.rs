@@ -35,8 +35,8 @@ use crate::{
     AddressGenerator,
 };
 
-const NO_PRUNE: bool = false;
-const PRUNE: bool = true;
+const NO_CARRY_FORWARD: bool = false;
+const CARRY_FORWARD: bool = true;
 
 /// Represents outcomes of a failed protocol upgrade.
 #[derive(Clone, Error, Debug)]
@@ -194,8 +194,6 @@ where
         self.handle_new_locked_funds_period_millis(system_entity_addresses.auction())?;
         self.handle_new_unbonding_delay(system_entity_addresses.auction())?;
         self.handle_new_round_seigniorage_rate(system_entity_addresses.mint())?;
-        // self.handle_legacy_accounts_migration()?;
-        // self.handle_legacy_contracts_migration()?;
         self.handle_bids_migration(
             self.config.minimum_delegation_amount(),
             self.config.maximum_delegation_amount(),
@@ -350,7 +348,7 @@ where
         debug!(%system_entity_type, "refresh system contract entry points");
         let entity_name = system_entity_type.entity_name();
 
-        let (mut entity, maybe_named_keys, must_prune) =
+        let (mut entity, maybe_named_keys, must_carry_forward) =
             match self.retrieve_system_entity(hash_addr, system_entity_type) {
                 Ok(ret) => ret,
                 Err(err) => {
@@ -429,14 +427,33 @@ where
             StoredValue::Package(package),
         );
 
-        if must_prune {
-            // Start pruning legacy records
-            self.tracking_copy
-                .prune(Key::Hash(entity.package_hash().value()));
-            self.tracking_copy.prune(Key::Hash(entity_hash.value()));
-            let contract_wasm_key = Key::Hash(entity.byte_code_hash().value());
+        if must_carry_forward {
+            // carry forward
+            let package_key = Key::Package(entity.package_hash().value());
+            let uref = URef::default();
+            let indirection = CLValue::from_t((package_key, uref))
+                .map_err(|cl_error| ProtocolUpgradeError::CLValue(cl_error.to_string()))?;
 
-            self.tracking_copy.prune(contract_wasm_key);
+            self.tracking_copy.write(
+                Key::Hash(entity.package_hash().value()),
+                StoredValue::CLValue(indirection),
+            );
+
+            let contract_wasm_key = Key::Hash(entity.byte_code_hash().value());
+            let contract_wasm_indirection = CLValue::from_t(Key::ByteCode(ByteCodeAddr::Empty))
+                .map_err(|cl_error| ProtocolUpgradeError::CLValue(cl_error.to_string()))?;
+            self.tracking_copy.write(
+                contract_wasm_key,
+                StoredValue::CLValue(contract_wasm_indirection),
+            );
+
+            let contract_indirection = CLValue::from_t(Key::AddressableEntity(entity_addr))
+                .map_err(|cl_error| ProtocolUpgradeError::CLValue(cl_error.to_string()))?;
+
+            self.tracking_copy.write(
+                Key::Hash(entity_addr.value()),
+                StoredValue::CLValue(contract_indirection),
+            )
         }
 
         Ok(())
@@ -495,7 +512,7 @@ where
             })?
         {
             let named_keys = system_contract.named_keys().clone();
-            return Ok((system_contract.into(), Some(named_keys), PRUNE));
+            return Ok((system_contract.into(), Some(named_keys), CARRY_FORWARD));
         }
 
         if let Some(StoredValue::AddressableEntity(system_entity)) = self
@@ -507,7 +524,7 @@ where
                 )
             })?
         {
-            return Ok((system_entity, None, NO_PRUNE));
+            return Ok((system_entity, None, NO_CARRY_FORWARD));
         }
 
         Err(ProtocolUpgradeError::UnableToRetrieveSystemContract(

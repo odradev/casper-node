@@ -1,5 +1,5 @@
 use std::collections::BTreeSet;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use casper_types::{
     account::AccountHash,
@@ -160,17 +160,80 @@ where
         &self,
         entity_addr: EntityAddr,
     ) -> Result<RuntimeFootprint, Self::Error> {
-        let key = if self.enable_addressable_entity {
-            Key::AddressableEntity(entity_addr)
-        } else {
-            match entity_addr {
-                EntityAddr::System(system_hash_addr) => Key::Hash(system_hash_addr),
-                EntityAddr::Account(account_hash) => Key::Account(AccountHash::new(account_hash)),
-                EntityAddr::SmartContract(contract_hash_addr) => Key::Hash(contract_hash_addr),
+        // let key = if self.enable_addressable_entity {
+        //     Key::AddressableEntity(entity_addr)
+        // } else {
+        //     match entity_addr {
+        //         EntityAddr::System(system_hash_addr) => Key::Hash(system_hash_addr),
+        //         EntityAddr::Account(account_hash) =>
+        // Key::Account(AccountHash::new(account_hash)),
+        //         EntityAddr::SmartContract(contract_hash_addr) => Key::Hash(contract_hash_addr),
+        //     }
+        // };
+
+        let entity_key = match entity_addr {
+            EntityAddr::Account(account_addr) => {
+                let account_key = Key::Account(AccountHash::new(account_addr));
+                match self.read(&account_key)? {
+                    Some(StoredValue::Account(account)) => {
+                        return Ok(RuntimeFootprint::new_account_footprint(account))
+                    }
+                    Some(StoredValue::CLValue(cl_value)) => {
+                        let key = cl_value.to_t::<Key>()?;
+                        key
+                    }
+                    Some(other) => {
+                        return Err(TrackingCopyError::TypeMismatch(
+                            StoredValueTypeMismatch::new(
+                                "Account or Key".to_string(),
+                                other.type_name(),
+                            ),
+                        ))
+                    }
+                    None => return Err(TrackingCopyError::KeyNotFound(account_key)),
+                }
+            }
+            EntityAddr::SmartContract(addr) | EntityAddr::System(addr) => {
+                let contract_key = Key::Hash(addr);
+                match self.read(&contract_key)? {
+                    Some(StoredValue::Contract(contract)) => {
+                        println!("Contract: {:?}", contract);
+                        let contract_hash = ContractHash::new(entity_addr.value());
+                        let maybe_system_entity_type = {
+                            let mut ret = None;
+                            let registry = self.get_system_entity_registry()?;
+                            for (name, hash) in registry.inner().into_iter() {
+                                if hash == entity_addr.value() {
+                                    match name.as_ref() {
+                                        MINT => ret = Some(SystemEntityType::Mint),
+                                        AUCTION => ret = Some(SystemEntityType::Auction),
+                                        HANDLE_PAYMENT => {
+                                            ret = Some(SystemEntityType::HandlePayment)
+                                        }
+                                        _ => continue,
+                                    }
+                                }
+                            }
+
+                            ret
+                        };
+
+                        return Ok(RuntimeFootprint::new_contract_footprint(
+                            contract_hash,
+                            contract,
+                            maybe_system_entity_type,
+                        ));
+                    }
+                    Some(StoredValue::CLValue(cl_value)) => {
+                        let key = cl_value.to_t::<Key>()?;
+                        key
+                    }
+                    Some(_) | None => Key::AddressableEntity(entity_addr),
+                }
             }
         };
 
-        match self.read(&key)? {
+        match self.read(&entity_key)? {
             Some(StoredValue::AddressableEntity(entity)) => {
                 let named_keys = self.get_named_keys(entity_addr)?;
                 let entry_points = self.get_v1_entry_points(entity_addr)?;
@@ -181,41 +244,10 @@ where
                     entry_points,
                 ))
             }
-            Some(StoredValue::Account(account)) => {
-                Ok(RuntimeFootprint::new_account_footprint(account))
-            }
-            Some(StoredValue::Contract(contract)) => {
-                let contract_hash = ContractHash::new(entity_addr.value());
-                let maybe_system_entity_type = {
-                    let mut ret = None;
-                    let registry = self.get_system_entity_registry()?;
-                    for (name, hash) in registry.inner().into_iter() {
-                        if hash == entity_addr.value() {
-                            match name.as_ref() {
-                                MINT => ret = Some(SystemEntityType::Mint),
-                                AUCTION => ret = Some(SystemEntityType::Auction),
-                                HANDLE_PAYMENT => ret = Some(SystemEntityType::HandlePayment),
-                                _ => continue,
-                            }
-                        }
-                    }
-
-                    ret
-                };
-
-                Ok(RuntimeFootprint::new_contract_footprint(
-                    contract_hash,
-                    contract,
-                    maybe_system_entity_type,
-                ))
-            }
             Some(other) => Err(TrackingCopyError::TypeMismatch(
-                StoredValueTypeMismatch::new(
-                    "AddressableEntity or Contract".to_string(),
-                    other.type_name(),
-                ),
+                StoredValueTypeMismatch::new("AddressableEntity".to_string(), other.type_name()),
             )),
-            None => Err(TrackingCopyError::KeyNotFound(key)),
+            None => Err(TrackingCopyError::KeyNotFound(entity_key)),
         }
     }
 

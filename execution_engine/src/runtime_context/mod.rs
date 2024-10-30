@@ -418,6 +418,7 @@ where
         // the element stored under `base_key`) is allowed to add new named keys to itself.
         match self.get_context_key() {
             Key::Account(_) | Key::Hash(_) => {
+                println!("{name} for {}", self.get_context_key());
                 let named_key_value = StoredValue::CLValue(CLValue::from_t((name.clone(), key))?);
                 self.validate_value(&named_key_value)?;
                 self.metered_add_gs_unsafe(self.get_context_key(), named_key_value)?;

@@ -1324,11 +1324,23 @@ where
         self.execute_contract(identifier, &entry_point_name, args)
     }
 
+    fn get_key_from_entity_addr(&self, entity_addr: EntityAddr) -> Key {
+        if self.context().engine_config().enable_entity {
+            Key::AddressableEntity(entity_addr)
+        } else {
+            match entity_addr {
+                EntityAddr::System(system_hash_addr) => Key::Hash(system_hash_addr),
+                EntityAddr::Account(account_hash) => Key::Account(AccountHash::new(account_hash)),
+                EntityAddr::SmartContract(contract_hash_addr) => Key::Hash(contract_hash_addr),
+            }
+        }
+    }
+
     fn get_context_key_for_contract_call(
         &self,
-        entity_hash: AddressableEntityHash,
+        entity_addr: EntityAddr,
         entry_point: &EntryPoint,
-    ) -> Result<AddressableEntityHash, ExecError> {
+    ) -> Result<Key, ExecError> {
         let current = self.context.entry_point_type();
         let next = entry_point.entry_point_type();
         println!("{:?} {:?}", current, next);
@@ -1343,16 +1355,15 @@ where
             }
             (EntryPointType::Caller, EntryPointType::Caller) => {
                 // Session code called from session reuses current base key
-                match self.context.get_context_key().into_entity_hash() {
-                    Some(entity_hash) => Ok(entity_hash),
-                    None => Err(ExecError::InvalidEntity(entity_hash)),
-                }
+                Ok(self.context.get_context_key())
             }
             (EntryPointType::Caller, EntryPointType::Called)
-            | (EntryPointType::Called, EntryPointType::Called) => Ok(entity_hash),
+            | (EntryPointType::Called, EntryPointType::Called) => {
+                Ok(self.get_key_from_entity_addr(entity_addr))
+            }
             _ => {
                 // Any other combination (installer, normal, etc.) is a contract context.
-                Ok(entity_hash)
+                Ok(self.get_key_from_entity_addr(entity_addr))
             }
         }
     }
@@ -1596,6 +1607,8 @@ where
             .cloned()
             .ok_or_else(|| ExecError::NoSuchMethod(entry_point_name.to_owned()))?;
 
+        println!("entry point: {:?}", entry_point);
+
         let entry_point_type = entry_point.entry_point_type();
 
         if self.context.engine_config().enable_entity && entry_point_type.is_invalid_context() {
@@ -1646,15 +1659,21 @@ where
             && !package.is_entity_enabled(&entity_hash)
             && !self
                 .context
-                .is_system_addressable_entity(&entity_hash.value())?
+                .is_system_addressable_entity(&entity_addr.value())?
         {
             return Err(ExecError::DisabledEntity(entity_hash));
         }
 
         // if session the caller's context
         // else the called contract's context
-        let context_entity_hash =
-            self.get_context_key_for_contract_call(entity_hash, &entry_point)?;
+        let context_entity_key =
+            self.get_context_key_for_contract_call(entity_addr, &entry_point)?;
+
+        let context_entity_hash = context_entity_key
+            .into_entity_hash_addr()
+            .ok_or_else(|| ExecError::UnexpectedKeyVariant(context_entity_key))?;
+
+        println!("ceh {:?}", context_entity_hash);
 
         let (should_attenuate_urefs, should_validate_urefs) = {
             // Determines if this call originated from the system account based on a first
@@ -1665,8 +1684,7 @@ where
             let is_caller_system_contract =
                 self.is_system_contract(self.context.access_rights().context_key())?;
             // Checks if the contract we're about to call is a system contract.
-            let is_calling_system_contract =
-                self.is_system_contract(context_entity_hash.value())?;
+            let is_calling_system_contract = self.is_system_contract(context_entity_hash)?;
             // uref attenuation is necessary in the following circumstances:
             //   the originating account (aka the caller) is not the system account and
             //   the immediate caller is either a normal account or a normal contract and
@@ -1809,17 +1827,6 @@ where
         };
 
         let mut named_keys = footprint.take_named_keys();
-
-        let context_entity_key = if self.context.engine_config().enable_entity {
-            Key::AddressableEntity(entity_addr)
-        } else {
-            match entity_addr {
-                EntityAddr::System(hash_addr) | EntityAddr::SmartContract(hash_addr) => {
-                    Key::Hash(hash_addr)
-                }
-                EntityAddr::Account(hash_addr) => Key::Account(AccountHash::new(hash_addr)),
-            }
-        };
 
         let context = self.context.new_from_self(
             context_entity_key,
