@@ -64,7 +64,7 @@ pub(crate) enum FunctionIndex {
     GetBlockInfoIndex,
     GenericHash,
     RecoverSecp256k1,
-    VerifySignature
+    VerifySignature,
 }
 
 impl From<FunctionIndex> for usize {

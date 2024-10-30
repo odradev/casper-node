@@ -908,32 +908,35 @@ extern "C" {
 
     /// Attempts to recover a Secp256k1 public key from a signed message
     /// and a signature used in the process of signing.
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `message_ptr` - pointer to the signed data
     /// * `message_size` - length of the signed data in bytes
     /// * `signature_ptr` - pointer to byte-encoded signature
     /// * `signature_size` - length of the byte-encoded signature
-    /// * `out_ptr` - pointer to a buffer of size PublicKey::SECP256K1_LENGTH which will
-    /// be populated with the recovered key's bytes representation
-    /// * `recovery_id` - an integer value 0, 1, 2, or 3 used to select the correct public key from the signature:
-    ///   - Low bit (0/1): was the y-coordinate of the affine point resulting from the fixed-base multiplication 𝑘×𝑮 odd?
-    ///   - Hi bit (3/4): did the affine x-coordinate of 𝑘×𝑮 overflow the order of the scalar field, requiring a reduction when computing r?
+    /// * `out_ptr` - pointer to a buffer of size PublicKey::SECP256K1_LENGTH which will be
+    ///   populated with the recovered key's bytes representation
+    /// * `recovery_id` - an integer value 0, 1, 2, or 3 used to select the correct public key from
+    ///   the signature:
+    ///   - Low bit (0/1): was the y-coordinate of the affine point resulting from the fixed-base
+    ///     multiplication 𝑘×𝑮 odd?
+    ///   - Hi bit (3/4): did the affine x-coordinate of 𝑘×𝑮 overflow the order of the scalar field,
+    ///     requiring a reduction when computing r?
     pub fn casper_recover_secp256k1(
         message_ptr: *const u8,
         message_size: usize,
         signature_ptr: *const u8,
         signature_size: usize,
         out_ptr: *const u8,
-        recovery_id: u8
+        recovery_id: u8,
     ) -> i32;
 
     /// Verifies the signature of the given message against the given public key.
     /// Writes `1` to `out_ptr` if verification succeeded, and `0` if failed.
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `message_ptr` - pointer to the signed data
     /// * `message_size` - length of the signed data in bytes
     /// * `signature_ptr` - pointer to byte-encoded signature

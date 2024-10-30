@@ -27,7 +27,9 @@ use ed25519_dalek::{
 };
 use hex_fmt::HexFmt;
 use k256::ecdsa::{
-    VerifyingKey, signature::{Signer, Verifier}, RecoveryId, Signature as Secp256k1Signature, SigningKey as Secp256k1SecretKey, VerifyingKey as Secp256k1PublicKey
+    signature::{Signer, Verifier},
+    RecoveryId, Signature as Secp256k1Signature, SigningKey as Secp256k1SecretKey, VerifyingKey,
+    VerifyingKey as Secp256k1PublicKey,
 };
 #[cfg(feature = "json-schema")]
 use once_cell::sync::Lazy;
@@ -1175,7 +1177,7 @@ pub fn sign<T: AsRef<[u8]>>(
     message: T,
     secret_key: &SecretKey,
     public_key: &PublicKey,
-) -> Signature {    
+) -> Signature {
     match (secret_key, public_key) {
         (SecretKey::System, PublicKey::System) => {
             panic!("cannot create signature with system keys",)
@@ -1195,24 +1197,25 @@ pub fn sign<T: AsRef<[u8]>>(
     }
 }
 
+/// Attempts to recover a Secp256k1 [`PublicKey`] from a message and a signature over it.
 pub fn recover_secp256k1<T: AsRef<[u8]>>(
     message: T,
     signature: &Signature,
-    recovery_id: u8
+    recovery_id: u8,
 ) -> Result<PublicKey, Error> {
     let Signature::Secp256k1(signature) = signature else {
         return Err(Error::AsymmetricKey(String::from(
-            "public keys can only be recovered from Secp256k1 signatures"
-        )))
+            "public keys can only be recovered from Secp256k1 signatures",
+        )));
     };
 
     let Ok(key) = VerifyingKey::recover_from_msg(
         message.as_ref(),
-        &signature,
-        RecoveryId::try_from(recovery_id)?
-    ) else { return Err(Error::AsymmetricKey(String::from(
-        "Key extraction failed"
-    ))) };
+        signature,
+        RecoveryId::try_from(recovery_id)?,
+    ) else {
+        return Err(Error::AsymmetricKey(String::from("Key extraction failed")));
+    };
 
     Ok(PublicKey::Secp256k1(key))
 }

@@ -471,7 +471,7 @@ impl Zero for HostFunctionCosts {
             get_block_info,
             generic_hash,
             recover_secp256k1,
-            verify_signature
+            verify_signature,
         } = self;
         read_value.is_zero()
             && dictionary_get.is_zero()
@@ -736,11 +736,13 @@ impl Default for HostFunctionCosts {
             get_block_info: HostFunction::new(DEFAULT_FIXED_COST, [NOT_USED, NOT_USED]),
             recover_secp256k1: HostFunction::new(
                 DEFAULT_RECOVER_SECP256K1_COST,
-                [NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED]
+                [NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED],
             ),
             verify_signature: HostFunction::new(
                 DEFAULT_VERIFY_SIGNATURE_COST,
-                [NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED]
+                [
+                    NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED,
+                ],
             ),
         }
     }
@@ -969,7 +971,7 @@ impl FromBytes for HostFunctionCosts {
                 get_block_info,
                 generic_hash,
                 recover_secp256k1,
-                verify_signature
+                verify_signature,
             },
             rem,
         ))
@@ -1032,7 +1034,7 @@ impl Distribution<HostFunctionCosts> for Standard {
             get_block_info: rng.gen(),
             generic_hash: rng.gen(),
             recover_secp256k1: rng.gen(),
-            verify_signature: rng.gen()
+            verify_signature: rng.gen(),
         }
     }
 }
