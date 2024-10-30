@@ -7,7 +7,7 @@ use casper_wasmi::{Externals, RuntimeArgs, RuntimeValue, Trap};
 
 use casper_storage::global_state::{error::Error as GlobalStateError, state::StateReader};
 use casper_types::{
-    account::AccountHash, addressable_entity::{EntryPoints, NamedKeys}, api_error, bytesrepr::{self, ToBytes}, contract_messages::MessageTopicOperation, contracts::ContractPackageHash, AddressableEntityHash, ApiError, EntityVersion, Gas, Group, HashAlgorithm, HostFunction, HostFunctionCost, Key, PackageHash, PackageStatus, Signature, StoredValue, URef, U512, UREF_SERIALIZED_LENGTH
+    account::AccountHash, addressable_entity::{EntryPoints, NamedKeys}, api_error, bytesrepr::{self, ToBytes}, contract_messages::MessageTopicOperation, contracts::ContractPackageHash, AddressableEntityHash, ApiError, EntityVersion, Gas, Group, HashAlgorithm, HostFunction, HostFunctionCost, Key, PackageHash, PackageStatus, PublicKey, Signature, StoredValue, URef, U512, UREF_SERIALIZED_LENGTH
 };
 
 use super::{args::Args, ExecError, Runtime};
@@ -1435,6 +1435,10 @@ where
                     [data_ptr, data_size, signature_ptr, signature_size, public_key_ptr, recovery_id],
                 )?;
 
+                if recovery_id >= 4 {
+                    return Err(Trap::from(ExecError::InvalidImputedOperation));
+                }
+
                 let data = self.bytes_from_mem(data_ptr, data_size as usize)?;
                 let signature: Signature = self.t_from_mem(signature_ptr, signature_size)?;
 
@@ -1459,6 +1463,53 @@ where
 
                 Ok(Some(RuntimeValue::I32(0)))
             },
+
+            FunctionIndex::VerifySignature => {
+                // args(0) = pointer to message bytes in memory
+                // args(1) = length of message bytes
+                // args(2) = pointer to signature bytes in memory 
+                // args(3) = length of signature bytes
+                // args(4) = pointer to public key bytes in memory
+                // args(5) = length of public key bytes
+                // args(6) = pointer to a boolean value in wasm
+                let (
+                    message_ptr,
+                    message_size,
+                    signature_ptr,
+                    signature_size,
+                    public_key_ptr,
+                    public_key_size,
+                    out_ptr
+                ) = Args::parse(args)?;
+
+                // PIN: Add chainspec setting for this call
+                self.charge_host_function_call(
+                    &host_function_costs.verify_signature,
+                    [message_ptr, message_size, signature_ptr, signature_size, public_key_ptr, public_key_size, out_ptr],
+                )?;
+
+                let message = self.bytes_from_mem(message_ptr, message_size as usize)?;
+                let signature: Signature = self.t_from_mem(signature_ptr, signature_size)?;
+                let public_key: PublicKey = self.t_from_mem(public_key_ptr, public_key_size)?;
+                
+                let Ok(result_bytes) = casper_types::crypto::verify(
+                    message,
+                    &signature,
+                    &public_key
+                ).is_ok().to_bytes() else {
+                    return Ok(Some(RuntimeValue::I32(
+                        u32::from(ApiError::OutOfMemory) as i32,
+                    )));
+                };
+
+                if self.try_get_memory()?.set(out_ptr, result_bytes.as_ref()).is_err() {
+                    return Ok(Some(RuntimeValue::I32(
+                        u32::from(ApiError::HostBufferEmpty) as i32,
+                    )));
+                }
+
+                Ok(Some(RuntimeValue::I32(0)))
+            }
         }
     }
 }

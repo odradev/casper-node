@@ -1,6 +1,6 @@
 //! Functions with cryptographic utils.
 
-use casper_types::{api_error, bytesrepr::ToBytes, AsymmetricType, HashAlgorithm, PublicKey, Signature, BLAKE2B_DIGEST_LENGTH};
+use casper_types::{api_error, bytesrepr::{self, ToBytes}, AsymmetricType, HashAlgorithm, PublicKey, Signature, BLAKE2B_DIGEST_LENGTH};
 
 use crate::{ext_ffi, unwrap_or_revert::UnwrapOrRevert};
 
@@ -43,4 +43,30 @@ pub fn recover_secp256k1<T: AsRef<[u8]>>(
     api_error::result_from(result).unwrap_or_revert();
 
     PublicKey::secp256k1_from_bytes(buffer).unwrap()
+}
+
+pub fn verify_signature<T: AsRef<[u8]>>(
+    data: T,
+    signature: &Signature,
+    public_key: &PublicKey
+) -> bool {
+    let mut buffer = [0u8];
+    let signature_bytes = signature.to_bytes().unwrap();
+    let public_key_bytes = public_key.to_bytes().unwrap();
+
+    let result = unsafe {
+        ext_ffi::casper_verify_signature(
+            data.as_ref().as_ptr(),
+            data.as_ref().len(),
+            signature_bytes.as_ptr(),
+            signature_bytes.len(),
+            public_key_bytes.as_ptr(),
+            public_key_bytes.len(),
+            buffer.as_mut_ptr(),
+        )
+    };
+
+    api_error::result_from(result).unwrap_or_revert();
+
+    buffer[0] != 0
 }

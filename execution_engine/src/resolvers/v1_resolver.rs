@@ -269,6 +269,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 6][..], Some(ValueType::I32)),
                 FunctionIndex::RecoverSecp256k1.into(),
             ),
+            "casper_verify_signature" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 6][..], Some(ValueType::I32)),
+                FunctionIndex::VerifySignature.into(),
+            ),
             _ => {
                 return Err(InterpreterError::Function(format!(
                     "host module doesn't export function with name {}",
