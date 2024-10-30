@@ -63,6 +63,7 @@ pub(crate) enum FunctionIndex {
     LoadCallerInformation,
     GetBlockInfoIndex,
     GenericHash,
+    RecoverSecp256k1
 }
 
 impl From<FunctionIndex> for usize {

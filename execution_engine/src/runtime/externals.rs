@@ -7,15 +7,7 @@ use casper_wasmi::{Externals, RuntimeArgs, RuntimeValue, Trap};
 
 use casper_storage::global_state::{error::Error as GlobalStateError, state::StateReader};
 use casper_types::{
-    account::AccountHash,
-    addressable_entity::{EntryPoints, NamedKeys},
-    api_error,
-    bytesrepr::{self, ToBytes},
-    contract_messages::MessageTopicOperation,
-    contracts::ContractPackageHash,
-    AddressableEntityHash, ApiError, EntityVersion, Gas, Group, HashAlgorithm, HostFunction,
-    HostFunctionCost, Key, PackageHash, PackageStatus, StoredValue, URef, U512,
-    UREF_SERIALIZED_LENGTH,
+    account::AccountHash, addressable_entity::{EntryPoints, NamedKeys}, api_error, bytesrepr::{self, ToBytes}, contract_messages::MessageTopicOperation, contracts::ContractPackageHash, AddressableEntityHash, ApiError, EntityVersion, Gas, Group, HashAlgorithm, HostFunction, HostFunctionCost, Key, PackageHash, PackageStatus, Signature, StoredValue, URef, U512, UREF_SERIALIZED_LENGTH
 };
 
 use super::{args::Args, ExecError, Runtime};
@@ -1421,6 +1413,52 @@ where
 
                 Ok(Some(RuntimeValue::I32(0)))
             }
+
+            FunctionIndex::RecoverSecp256k1 => {
+                // args(0) = pointer to input bytes in memory
+                // args(1) = length of input bytes in memory
+                // args(2) = pointer to signature bytes in memory 
+                // args(3) = length of signature bytes in memory
+                // args(4) = pointer to public key buffer in memory (size is fixed)
+                // args(5) = the recovery id
+                let (
+                    data_ptr,
+                    data_size,
+                    signature_ptr,
+                    signature_size,
+                    public_key_ptr,
+                    recovery_id
+                ) = Args::parse(args)?;
+
+                self.charge_host_function_call(
+                    &host_function_costs.recover_secp256k1,
+                    [data_ptr, data_size, signature_ptr, signature_size, public_key_ptr, recovery_id],
+                )?;
+
+                let data = self.bytes_from_mem(data_ptr, data_size as usize)?;
+                let signature: Signature = self.t_from_mem(signature_ptr, signature_size)?;
+
+                let Ok(public_key) = casper_types::crypto::recover_secp256k1(
+                    data,
+                    &signature,
+                    recovery_id as u8
+                ) else {
+                    return Err(Trap::from(ExecError::InvalidImputedOperation));
+                };
+
+                let Ok(key_bytes) = public_key.to_bytes() else {
+                    return Err(Trap::from(ExecError::InvalidImputedOperation))
+                };
+
+                if self.try_get_memory()?.set(
+                    public_key_ptr,
+                    &key_bytes
+                ).is_err() {
+                    return Err(Trap::from(ExecError::InvalidImputedOperation));
+                }
+
+                Ok(Some(RuntimeValue::I32(0)))
+            },
         }
     }
 }

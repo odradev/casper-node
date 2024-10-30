@@ -905,4 +905,27 @@ extern "C" {
         out_ptr: *const u8,
         out_size: usize,
     ) -> i32;
+
+    /// Attempts to recover a Secp256k1 public key from a signed message
+    /// and a signature used in the process of signing.
+    /// 
+    /// # Arguments
+    /// 
+    /// * 'signed_bytes_ptr' - pointer to the signed data
+    /// * 'signed_bytes_size' - length of the signed data in bytes
+    /// * 'signature_bytes_ptr' - pointer to byte-encoded signature
+    /// * 'signature_bytes_len' - length of the byte-encoded signature
+    /// * 'out_ptr' - pointer to a buffer of size PublicKey::SECP256K1_LENGTH which will
+    /// be populated with the recovered key's bytes representation
+    /// * 'recovery_id' - an integer value 0, 1, 2, or 3 used to select the correct public key from the signature:
+    ///   - Low bit (0/1): was the y-coordinate of the affine point resulting from the fixed-base multiplication 𝑘×𝑮 odd?
+    ///   - Hi bit (3/4): did the affine x-coordinate of 𝑘×𝑮 overflow the order of the scalar field, requiring a reduction when computing r?
+    pub fn casper_recover_secp256k1(
+        signed_bytes_ptr: *const u8,
+        signed_bytes_size: usize,
+        signature_bytes_ptr: *const u8,
+        signature_bytes_len: usize,
+        out_ptr: *const u8,
+        recovery_id: u8
+    ) -> i32;
 }

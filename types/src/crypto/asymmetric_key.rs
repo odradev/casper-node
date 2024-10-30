@@ -1195,27 +1195,26 @@ pub fn sign<T: AsRef<[u8]>>(
     }
 }
 
-pub fn recover_public_secp256k1_from_signature<T: AsRef<[u8]>>(
+pub fn recover_secp256k1<T: AsRef<[u8]>>(
     message: T,
-    signature: &Signature
-) -> Result<Vec<PublicKey>, Error> {
+    signature: &Signature,
+    recovery_id: u8
+) -> Result<PublicKey, Error> {
     let Signature::Secp256k1(signature) = signature else {
         return Err(Error::AsymmetricKey(String::from(
             "public keys can only be recovered from Secp256k1 signatures"
         )))
     };
 
-    let mut possible_keys = vec![];
-    for i in 0..4 {
-        let Ok(key) = VerifyingKey::recover_from_msg(
-            message.as_ref(),
-            &signature,
-            RecoveryId::try_from(i)?
-        ) else { continue };
-        possible_keys.push(PublicKey::Secp256k1(key));
-    }
+    let Ok(key) = VerifyingKey::recover_from_msg(
+        message.as_ref(),
+        &signature,
+        RecoveryId::try_from(recovery_id)?
+    ) else { return Err(Error::AsymmetricKey(String::from(
+        "Key extraction failed"
+    ))) };
 
-    Ok(possible_keys)
+    Ok(PublicKey::Secp256k1(key))
 }
 
 /// Verifies the signature of the given message against the given public key.
