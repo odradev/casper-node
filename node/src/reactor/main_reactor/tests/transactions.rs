@@ -1599,7 +1599,7 @@ async fn refunds_are_payed_and_fees_are_on_hold(txn_pricing_mode: PricingMode) {
 
     let txn = invalid_wasm_txn(BOB_SECRET_KEY.clone(), txn_pricing_mode);
     let meta_transaction =
-        MetaTransaction::from(&txn, &test.chainspec().transaction_config).unwrap();
+        MetaTransaction::from_transaction(&txn, &test.chainspec().transaction_config).unwrap();
     // Fixed transaction pricing.
     let expected_consumed_gas = Gas::new(0); // expect that this transaction doesn't consume any gas since it has invalid wasm.
     let expected_transaction_cost = meta_transaction

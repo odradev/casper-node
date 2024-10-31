@@ -444,6 +444,7 @@ mod tests {
         bytesrepr::test_serialization_roundtrip(&classic);
         bytesrepr::test_serialization_roundtrip(&PricingMode::Fixed {
             gas_price_tolerance: 2,
+            additional_computation_factor: 1,
         });
         bytesrepr::test_serialization_roundtrip(&PricingMode::Reserved {
             receipt: Digest::default(),

@@ -626,7 +626,7 @@ impl TestScenario {
             }
             TestScenario::InvalidFields | TestScenario::InvalidFieldsFromPeer => {
                 let mut additional_fields = BTreeMap::new();
-                additional_fields.insert(5, Bytes::from(vec![1]));
+                additional_fields.insert(42, Bytes::from(vec![1]));
                 let txn = TransactionV1Builder::new_session(
                     false,
                     Bytes::from(vec![1]),
@@ -1119,7 +1119,8 @@ fn inject_balance_check_for_peer(
     let txn = txn.clone();
     let block = TestBlockBuilder::new().build(rng);
     let block_header = Box::new(block.header().clone().into());
-    let meta_transaction = MetaTransaction::from(&txn, &chainspec.transaction_config).unwrap();
+    let meta_transaction =
+        MetaTransaction::from_transaction(&txn, &chainspec.transaction_config).unwrap();
     |effect_builder: EffectBuilder<Event>| {
         let event_metadata = Box::new(EventMetadata::new(
             txn,

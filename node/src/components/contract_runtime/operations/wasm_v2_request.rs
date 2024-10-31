@@ -80,8 +80,14 @@ pub(crate) enum WasmV2Error {
 
 #[derive(Clone, Eq, PartialEq, Error, Debug)]
 pub(crate) enum InvalidRequest {
+    #[error("Expected bytes arguments")]
+    ExpectedBytesArguments,
+    #[error("Expected target")]
+    ExpectedTarget,
     #[error("Invalid gas limit: {0}")]
     InvalidGasLimit(U512),
+    #[error("Expected transferred value")]
+    ExpectedTransferredValue,
 }
 
 impl WasmV2Request {
@@ -90,192 +96,189 @@ impl WasmV2Request {
         network_name: impl Into<Arc<str>>,
         transaction: &MetaTransaction,
     ) -> Result<Self, InvalidRequest> {
-        // let transaction_v1 = transaction.ta
-        // let transaction_hash = transaction.hash();
-        // let initiator_addr = transaction.initiator_addr();
+        let transaction_hash = transaction.hash();
+        let initiator_addr = transaction.initiator_addr();
 
-        // let gas_limit: u64 = gas_limit
-        //     .value()
-        //     .try_into()
-        //     .map_err(|_| InvalidRequest::InvalidGasLimit(gas_limit.value()))?;
+        let gas_limit: u64 = gas_limit
+            .value()
+            .try_into()
+            .map_err(|_| InvalidRequest::InvalidGasLimit(gas_limit.value()))?;
 
-        // let address_generator = AddressGeneratorBuilder::default()
-        //     .seed_with(transaction_hash.as_ref())
-        //     .build();
+        let address_generator = AddressGeneratorBuilder::default()
+            .seed_with(transaction_hash.as_ref())
+            .build();
 
-        // // If it's wrong args variant => invalid request => penalty payment
-        // // let input_data = transaction_v1.body().args().clone().into_bytesrepr(); // TODO: Make
-        // non optional // let value = transaction_v1.body().transferred_value();
-        // let input_data = Some(Vec::new());
-        // let value = 0;
+        let session_args = transaction.session_args();
 
-        // enum Target {
-        //     Install {
-        //         module_bytes: Bytes,
-        //         entry_point: String,
-        //         seed: Option<[u8; 32]>,
-        //     },
-        //     Session {
-        //         module_bytes: Bytes,
-        //     },
-        //     Stored {
-        //         id: TransactionInvocationTarget,
-        //         entry_point: String,
-        //     },
-        // }
+        let input_data = session_args
+            .as_bytesrepr()
+            .ok_or(InvalidRequest::ExpectedBytesArguments)?;
 
-        // let target = match transaction.target() {
-        //     TransactionTarget::Native => todo!(), //
-        //     TransactionTarget::Stored {
-        //         id,
-        //         runtime: _,
-        //         transferred_value: _,
-        //     } => match transaction_v1.body().entry_point() {
-        //         TransactionEntryPoint::Custom(entry_point) => Target::Stored {
-        //             id: id.clone(),
-        //             entry_point: entry_point.clone(),
-        //         },
-        //         _ => todo!(),
-        //     },
-        //     TransactionTarget::Session {
-        //         module_bytes,
-        //         runtime: _,
-        //         transferred_value: _,
-        //         seed,
-        //         is_install_upgrade,
-        //     } => match transaction_v1.payload().entry_point() {
-        //         TransactionEntryPoint::Call => Target::Session {
-        //             module_bytes: module_bytes.clone().take_inner().into(),
-        //         },
-        //         TransactionEntryPoint::Custom(entry_point) => Target::Install {
-        //             module_bytes: module_bytes.clone().take_inner().into(),
-        //             entry_point: entry_point.to_string(),
-        //             seed: seed.clone(),
-        //         },
-        //         _ => todo!(),
-        //     },
-        // };
+        let value = transaction
+            .transferred_value()
+            .ok_or(InvalidRequest::ExpectedTransferredValue)?;
 
-        // info!(%transaction_hash, "executing v1 contract");
+        enum Target {
+            Install {
+                module_bytes: Bytes,
+                entry_point: String,
+                seed: Option<[u8; 32]>,
+            },
+            Session {
+                module_bytes: Bytes,
+            },
+            Stored {
+                id: TransactionInvocationTarget,
+                entry_point: String,
+            },
+        }
 
-        // match target {
-        //     Target::Install {
-        //         module_bytes,
-        //         entry_point,
-        //         seed,
-        //     } => {
-        //         let mut builder = InstallContractRequestBuilder::default();
+        let target = transaction.target().ok_or(InvalidRequest::ExpectedTarget)?;
+        let target = match target {
+            TransactionTarget::Native => todo!(), //
+            TransactionTarget::Stored {
+                id,
+                runtime: _,
+                transferred_value: _,
+            } => match transaction.entry_point() {
+                TransactionEntryPoint::Custom(entry_point) => Target::Stored {
+                    id: id.clone(),
+                    entry_point: entry_point.clone(),
+                },
+                _ => todo!(),
+            },
+            TransactionTarget::Session {
+                module_bytes,
+                runtime: _,
+                transferred_value: _,
+                seed,
+                is_install_upgrade: _, // TODO: Handle this
+            } => match transaction.entry_point() {
+                TransactionEntryPoint::Call => Target::Session {
+                    module_bytes: module_bytes.clone().take_inner().into(),
+                },
+                TransactionEntryPoint::Custom(entry_point) => Target::Install {
+                    module_bytes: module_bytes.clone().take_inner().into(),
+                    entry_point: entry_point.to_string(),
+                    seed,
+                },
+                _ => todo!(),
+            },
+        };
 
-        //         let entry_point = (!entry_point.is_empty()).then_some(entry_point);
+        info!(%transaction_hash, "executing v1 contract");
 
-        //         match entry_point {
-        //             Some(entry_point) => {
-        //                 builder = builder.with_entry_point(entry_point.clone());
+        match target {
+            Target::Install {
+                module_bytes,
+                entry_point,
+                seed,
+            } => {
+                let mut builder = InstallContractRequestBuilder::default();
 
-        //                 if let Some(input_data) = input_data {
-        //                     builder = builder.with_input(input_data.take_inner().into());
-        //                 }
-        //             }
-        //             None => {
-        //                 assert!(
-        //                     input_data.is_none()
-        //                         || matches!(input_data, Some(input_data) if input_data.is_empty())
-        //                 );
-        //             }
-        //         }
+                let entry_point = (!entry_point.is_empty()).then_some(entry_point);
 
-        //         if let Some(seed) = seed {
-        //             builder = builder.with_seed(seed);
-        //         }
+                match entry_point {
+                    Some(entry_point) => {
+                        builder = builder
+                            .with_entry_point(entry_point.clone())
+                            // Args only matter if there is a constructor to be called.
+                            .with_input(input_data.clone().take_inner().into());
+                    }
+                    None => {
+                        // No input data expected if there is no entry point. This should be
+                        // validated in transaction acceptor.
+                        assert!(input_data.is_empty());
+                    }
+                }
 
-        //         let install_request = builder
-        //             .with_initiator(initiator_addr.account_hash())
-        //             .with_gas_limit(gas_limit)
-        //             .with_transaction_hash(transaction_hash)
-        //             .with_wasm_bytes(module_bytes)
-        //             .with_address_generator(address_generator)
-        //             .with_transferred_value(value.into()) // TODO: Replace u128 to u64
-        //             .with_chain_name(network_name)
-        //             .with_block_time(transaction.timestamp())
-        //             .build()
-        //             .expect("should build");
+                if let Some(seed) = seed {
+                    builder = builder.with_seed(seed);
+                }
 
-        //         Ok(Self::Install(install_request))
-        //     }
-        //     Target::Session { .. } | Target::Stored { .. } => {
-        //         let mut builder = ExecuteRequestBuilder::default();
+                let install_request = builder
+                    .with_initiator(initiator_addr.account_hash())
+                    .with_gas_limit(gas_limit)
+                    .with_transaction_hash(transaction_hash)
+                    .with_wasm_bytes(module_bytes)
+                    .with_address_generator(address_generator)
+                    .with_transferred_value(value.into()) // TODO: Replace u128 to u64
+                    .with_chain_name(network_name)
+                    .with_block_time(transaction.timestamp().into())
+                    .build()
+                    .expect("should build");
 
-        //         let initiator_account_hash = &initiator_addr.account_hash();
+                Ok(Self::Install(install_request))
+            }
+            Target::Session { .. } | Target::Stored { .. } => {
+                let mut builder = ExecuteRequestBuilder::default();
 
-        //         let initiator_key = Key::Account(*initiator_account_hash);
+                let initiator_account_hash = &initiator_addr.account_hash();
 
-        //         builder = builder
-        //             .with_address_generator(address_generator)
-        //             .with_gas_limit(gas_limit)
-        //             .with_transaction_hash(transaction_hash)
-        //             .with_initiator(*initiator_account_hash)
-        //             .with_caller_key(initiator_key)
-        //             // TODO: Callee is unnecessary as it can be derived from the
-        //             // execution target inside the executor
-        //             .with_callee_key(initiator_key)
-        //             .with_chain_name(network_name)
-        //             .with_transferred_value(value.into()) // TODO: Remove u128 internally
-        //             .with_block_time(transaction.timestamp());
+                let initiator_key = Key::Account(*initiator_account_hash);
 
-        //         if let Some(input_data) = input_data.clone() {
-        //             builder = builder.with_input(input_data.clone().take_inner().into());
-        //         }
+                builder = builder
+                    .with_address_generator(address_generator)
+                    .with_gas_limit(gas_limit)
+                    .with_transaction_hash(transaction_hash)
+                    .with_initiator(*initiator_account_hash)
+                    .with_caller_key(initiator_key)
+                    // TODO: Callee is unnecessary as it can be derived from the
+                    // execution target inside the executor
+                    .with_callee_key(initiator_key)
+                    .with_chain_name(network_name)
+                    .with_transferred_value(value.into()) // TODO: Remove u128 internally
+                    .with_block_time(transaction.timestamp().into())
+                    .with_input(input_data.clone().take_inner().into());
+                let execution_kind = match target {
+                    Target::Session { module_bytes } => ExecutionKind::SessionBytes(module_bytes),
+                    Target::Stored {
+                        id: TransactionInvocationTarget::ByHash(address),
+                        entry_point,
+                    } => ExecutionKind::Stored {
+                        address: EntityAddr::SmartContract(address),
+                        entry_point: entry_point.clone(),
+                    },
+                    Target::Stored { id, entry_point } => {
+                        todo!("Unsupported target {entry_point} {id:?}")
+                    }
+                    Target::Install { .. } => unreachable!(),
+                };
 
-        //         let execution_kind = match target {
-        //             Target::Session { module_bytes } =>
-        // ExecutionKind::SessionBytes(module_bytes),             Target::Stored {
-        //                 id: TransactionInvocationTarget::ByHash(address),
-        //                 entry_point,
-        //             } => ExecutionKind::Stored {
-        //                 address: EntityAddr::SmartContract(address),
-        //                 entry_point: entry_point.clone(),
-        //             },
-        //             Target::Stored { id, entry_point } => {
-        //                 todo!("Unsupported target {entry_point} {id:?}")
-        //             }
-        //             Target::Install { .. } => unreachable!(),
-        //         };
+                builder = builder.with_target(execution_kind);
 
-        //         builder = builder.with_target(execution_kind);
+                let execute_request = builder.build().expect("should build");
 
-        //         let execute_request = builder.build().expect("should build");
-
-        //         Ok(Self::Execute(execute_request))
-        //     }
-        // }
-        todo!()
+                Ok(Self::Execute(execute_request))
+            }
+        }
     }
 
     pub(crate) fn execute<P>(
         self,
         engine: &ExecutorV2,
+        state_root_hash: Digest,
         state_provider: &P,
     ) -> Result<WasmV2Result, WasmV2Error>
     where
         P: StateProvider + CommitProvider,
         <P as StateProvider>::Reader: 'static,
     {
-        // match self {
-        //     WasmV2Request::Install(install_request) => {
-        //         match engine.install_contract(install_request.state_hash(), state_provider,
-        // install_request) {             Ok(result) => Ok(WasmV2Result::Install(result)),
-        //             Err(error) => Err(WasmV2Error::Install(error)),
-        //         }
-        //     }
-        //     WasmV2Request::Execute(execute_request) => {
-        //         match engine.execute_with_provider(execute_request.state_root_hash(),
-        // state_provider, execute_request)         {
-        //             Ok(result) => Ok(WasmV2Result::Execute(result)),
-        //             Err(error) => Err(WasmV2Error::Execute(error)),
-        //         }
-        //     }
-        // }
-        todo!()
+        match self {
+            WasmV2Request::Install(install_request) => {
+                match engine.install_contract(state_root_hash, state_provider, install_request) {
+                    Ok(result) => Ok(WasmV2Result::Install(result)),
+                    Err(error) => Err(WasmV2Error::Install(error)),
+                }
+            }
+            WasmV2Request::Execute(execute_request) => {
+                match engine.execute_with_provider(state_root_hash, state_provider, execute_request)
+                {
+                    Ok(result) => Ok(WasmV2Result::Execute(result)),
+                    Err(error) => Err(WasmV2Error::Execute(error)),
+                }
+            }
+        }
     }
 }
 

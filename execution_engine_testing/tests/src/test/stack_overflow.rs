@@ -14,7 +14,7 @@ fn runtime_stack_overflow_should_cause_unreachable_error() {
         (memory $memory 1)
       )"#;
 
-    let module_bytes = wabt::wat2wasm(wat).unwrap();
+    let module_bytes = wat::parse_str(wat).unwrap();
 
     let do_stack_overflow_request = ExecuteRequestBuilder::module_bytes(
         *DEFAULT_ACCOUNT_ADDR,

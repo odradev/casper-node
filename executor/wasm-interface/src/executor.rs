@@ -9,7 +9,7 @@ use casper_storage::{
 };
 use casper_types::{
     account::AccountHash, execution::Effects, BlockHash, BlockTime, Digest, EntityAddr, Key,
-    StorageCosts, Timestamp, TransactionHash,
+    TransactionHash,
 };
 use parking_lot::RwLock;
 use thiserror::Error;

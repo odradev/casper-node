@@ -8,7 +8,7 @@ use casper_execution_engine::{
 };
 use casper_types::{
     ApiError, BlockTime, InitiatorAddr, Phase, PricingMode, RuntimeArgs, Transaction,
-    TransactionEntryPoint, TransactionTarget, TransactionV1Builder,
+    TransactionEntryPoint, TransactionRuntime, TransactionTarget, TransactionV1Builder,
 };
 
 const CONTRACT: &str = "do_nothing_stored.wasm";
@@ -63,7 +63,7 @@ fn try_add_contract_version(is_install_upgrade: bool, should_succeed: bool) {
         }
         Transaction::V1(ref v1) => {
             let initiator_addr = txn.initiator_addr();
-            let is_standard_payment = if let PricingMode::Classic {
+            let is_standard_payment = if let PricingMode::PaymentLimited {
                 standard_payment, ..
             } = v1.pricing_mode()
             {

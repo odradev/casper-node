@@ -16,7 +16,6 @@ use datasize::DataSize;
 pub(crate) use meta_transaction_v1::MetaTransactionV1;
 use serde::Serialize;
 use std::{borrow::Cow, collections::BTreeSet};
-pub(crate) use transaction_lane::TransactionLane;
 
 #[cfg_attr(feature = "datasize", derive(DataSize))]
 #[derive(Clone, Debug, Serialize)]
@@ -182,15 +181,15 @@ impl MetaTransaction {
         }
     }
 
-    pub fn from(
+    /// Create a new `MetaTransaction` from a `Transaction`.
+    pub fn from_transaction(
         transaction: &Transaction,
         transaction_config: &TransactionConfig,
     ) -> Result<Self, InvalidTransaction> {
         match transaction {
             Transaction::Deploy(deploy) => Ok(MetaTransaction::Deploy(deploy.clone())),
-            Transaction::V1(v1) => {
-                MetaTransactionV1::from(v1, transaction_config).map(MetaTransaction::V1)
-            }
+            Transaction::V1(v1) => MetaTransactionV1::from_transaction_v1(v1, transaction_config)
+                .map(MetaTransaction::V1),
         }
     }
 
@@ -258,24 +257,38 @@ impl MetaTransaction {
 
     pub fn is_v2_wasm(&self) -> bool {
         match self {
-            MetaTransaction::Deploy(deploy) => false,
+            MetaTransaction::Deploy(_) => false,
             MetaTransaction::V1(v1) => v1.is_v2_wasm(),
         }
     }
 
     pub(crate) fn seed(&self) -> Option<[u8; 32]> {
         match self {
-            MetaTransaction::Deploy(deploy) => None,
+            MetaTransaction::Deploy(_) => None,
             MetaTransaction::V1(v1) => v1.seed(),
         }
     }
 
     pub(crate) fn is_install_or_upgrade(&self) -> bool {
         match self {
-            MetaTransaction::Deploy(deploy) => false,
+            MetaTransaction::Deploy(_) => false,
             MetaTransaction::V1(meta_transaction_v1) => {
                 meta_transaction_v1.transaction_lane() == INSTALL_UPGRADE_LANE_ID
             }
+        }
+    }
+
+    pub(crate) fn transferred_value(&self) -> Option<u64> {
+        match self {
+            MetaTransaction::Deploy(_) => None,
+            MetaTransaction::V1(v1) => Some(v1.transferred_value()),
+        }
+    }
+
+    pub(crate) fn target(&self) -> Option<TransactionTarget> {
+        match self {
+            MetaTransaction::Deploy(_) => None,
+            MetaTransaction::V1(v1) => Some(v1.target().clone()),
         }
     }
 }
@@ -298,8 +311,8 @@ mod proptests {
     proptest! {
         #[test]
         fn construction_roundtrip(transaction in legal_transaction_arb()) {
-            let maybe_transaction = MetaTransaction::from(&transaction, &TransactionConfig::default());
-            assert!(maybe_transaction.is_ok());
+            let maybe_transaction = MetaTransaction::from_transaction(&transaction, &TransactionConfig::default());
+            prop_assert!(matches!(maybe_transaction, Ok(_)), "{:?}", maybe_transaction);
         }
     }
 }

@@ -995,6 +995,24 @@ pub fn transaction_target_arb() -> impl Strategy<Value = TransactionTarget> {
                     runtime,
                     transferred_value
                 )
+            ),
+        (
+            any::<bool>(),
+            Just(Bytes::from(vec![1; 10])),
+            transaction_runtime_arb(),
+            any::<u64>(),
+            any::<Option<[u8; 32]>>(),
+        )
+            .prop_map(
+                |(is_install_upgrade, module_bytes, runtime, transferred_value, seed)| {
+                    TransactionTarget::new_session(
+                        is_install_upgrade,
+                        module_bytes,
+                        runtime,
+                        transferred_value,
+                        seed,
+                    )
+                }
             )
     ]
 }
@@ -1042,6 +1060,18 @@ pub fn runtime_args_arb() -> impl Strategy<Value = RuntimeArgs> {
         let _ = runtime_args_1.insert(key.to_string(), Bytes::from(val_str.as_bytes()));
     }
     prop_oneof![Just(runtime_args_1)]
+}
+
+fn transaction_args_bytes_arbitrary() -> impl Strategy<Value = TransactionArgs> {
+    prop::collection::vec(any::<u8>(), 0..100)
+        .prop_map(|bytes| TransactionArgs::Bytesrepr(bytes.into()))
+}
+
+pub fn transaction_args_arb() -> impl Strategy<Value = TransactionArgs> {
+    prop_oneof![
+        runtime_args_arb().prop_map(TransactionArgs::Named),
+        transaction_args_bytes_arbitrary()
+    ]
 }
 
 pub fn fields_arb() -> impl Strategy<Value = BTreeMap<u16, Bytes>> {
@@ -1123,7 +1153,7 @@ pub fn legal_v1_transaction_arb() -> impl Strategy<Value = TransactionV1> {
         any::<u32>(),
         pricing_mode_arb(),
         secret_key_arb_no_system(),
-        runtime_args_arb(),
+        transaction_args_arb(),
         transaction_scheduling_arb(),
         legal_target_entry_point_calls_arb(),
     )
@@ -1144,12 +1174,7 @@ pub fn legal_v1_transaction_arb() -> impl Strategy<Value = TransactionV1> {
                     initiator_addr,
                     secret_key: &secret_key,
                 };
-                let container = FieldsContainer::new(
-                    TransactionArgs::Named(args),
-                    target,
-                    entry_point,
-                    scheduling,
-                );
+                let container = FieldsContainer::new(args, target, entry_point, scheduling);
                 TransactionV1::build(
                     chain_name,
                     timestamp,

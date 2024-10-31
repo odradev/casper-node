@@ -79,5 +79,5 @@ pub(crate) fn make_module_with_start_section() -> Vec<u8> {
             )
         )
     "#;
-    wabt::wat2wasm(module).expect("should parse wat")
+    wat::parse_str(module).expect("should parse wat")
 }

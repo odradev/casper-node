@@ -1658,10 +1658,10 @@
           "description": "The original payment model, where the creator of the transaction specifies how much they will pay, at what gas price.",
           "type": "object",
           "required": [
-            "Classic"
+            "PaymentLimited"
           ],
           "properties": {
-            "Classic": {
+            "PaymentLimited": {
               "type": "object",
               "required": [
                 "gas_price_tolerance",
@@ -1743,38 +1743,6 @@
                       "$ref": "#/definitions/Digest"
                     }
                   ]
-                }
-              },
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
-        },
-        {
-          "description": "Gas limited transaction.",
-          "type": "object",
-          "required": [
-            "GasLimited"
-          ],
-          "properties": {
-            "GasLimited": {
-              "type": "object",
-              "required": [
-                "gas_limit",
-                "gas_price_tolerance"
-              ],
-              "properties": {
-                "gas_limit": {
-                  "description": "User-specified gas limit.",
-                  "type": "integer",
-                  "format": "uint64",
-                  "minimum": 0.0
-                },
-                "gas_price_tolerance": {
-                  "description": "User-specified gas_price tolerance (minimum 1). This is interpreted to mean \"do not include this transaction in a block if the current gas price is greater than this number\"",
-                  "type": "integer",
-                  "format": "uint8",
-                  "minimum": 0.0
                 }
               },
               "additionalProperties": false

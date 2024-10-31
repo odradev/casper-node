@@ -2,6 +2,7 @@ use crate::{
     bytesrepr::{self, Bytes, FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
     CLTyped, CLValueError, RuntimeArgs,
 };
+use alloc::{string::String, vec::Vec};
 #[cfg(feature = "datasize")]
 use datasize::DataSize;
 #[cfg(feature = "json-schema")]
@@ -49,6 +50,14 @@ impl TransactionArgs {
 
     /// Returns `Bytes` if the transaction arguments are chunked.
     pub fn into_bytesrepr(self) -> Option<Bytes> {
+        match self {
+            TransactionArgs::Named(_) => None,
+            TransactionArgs::Bytesrepr(bytes) => Some(bytes),
+        }
+    }
+
+    /// Returns `Bytes` if the transaction arguments are bytes.
+    pub fn as_bytesrepr(&self) -> Option<&Bytes> {
         match self {
             TransactionArgs::Named(_) => None,
             TransactionArgs::Bytesrepr(bytes) => Some(bytes),
@@ -114,6 +123,20 @@ impl ToBytes for TransactionArgs {
                 writer.push(1);
                 bytes.write_bytes(writer)
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use proptest::prelude::*;
+
+    use crate::{bytesrepr, gens::transaction_args_arb};
+
+    proptest! {
+        #[test]
+        fn serialization_roundtrip(args in transaction_args_arb()) {
+            bytesrepr::test_serialization_roundtrip(&args);
         }
     }
 }

@@ -7,7 +7,7 @@ use casper_types::{
     account::AccountHash,
     contracts::{ContractHash, ContractPackageHash},
     execution::Effects,
-    BlockTime, Digest, Timestamp, TransactionHash,
+    BlockTime, Digest, TransactionHash,
 };
 use parking_lot::RwLock;
 use thiserror::Error;

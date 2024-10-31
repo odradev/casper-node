@@ -18,7 +18,7 @@ use casper_storage::{
     TrackingCopy,
 };
 use casper_types::{
-    account::AccountHash, BlockTime, Gas, InitiatorAddr, Key, Phase, RuntimeArgs, StoredValue,
+    account::AccountHash, Gas, InitiatorAddr, Key, Phase, RuntimeArgs, StoredValue,
     TransactionHash, U512,
 };
 
@@ -158,6 +158,7 @@ impl ExecutionEngineV1 {
     }
 
     /// Executes wasm, and that's all. Does not commit or handle payment or anything else.
+    #[allow(clippy::too_many_arguments)]
     pub fn execute_with_tracking_copy<R>(
         &self,
         tracking_copy: TrackingCopy<R>,

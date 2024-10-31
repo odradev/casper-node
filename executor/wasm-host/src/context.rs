@@ -3,7 +3,7 @@ use std::sync::Arc;
 use bytes::Bytes;
 use casper_executor_wasm_interface::executor::Executor;
 use casper_storage::{global_state::GlobalStateReader, AddressGenerator, TrackingCopy};
-use casper_types::{account::AccountHash, BlockTime, Key, Timestamp, TransactionHash};
+use casper_types::{account::AccountHash, BlockTime, Key, TransactionHash};
 use parking_lot::RwLock;
 
 /// Container that holds all relevant modules necessary to process an execution request.

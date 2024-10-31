@@ -366,6 +366,7 @@ impl From<CLValueError> for AddResult {
     }
 }
 
+/// A helper type for `TrackingCopy` that represents a key-value pair.
 pub type TrackingCopyParts = (TrackingCopyCache, Effects, Messages);
 
 impl<R: StateReader<Key, StoredValue>> TrackingCopy<R>

@@ -30,29 +30,22 @@ use casper_storage::{
         state::{CommitProvider, StateProvider},
         GlobalStateReader,
     },
-    AddressGeneratorBuilder, TrackingCopy,
+    TrackingCopy,
 };
 use casper_types::{
     account::AccountHash,
     addressable_entity::{ActionThresholds, AssociatedKeys, MessageTopics},
     bytesrepr,
     contracts::{ContractHash, ContractPackageHash},
-    execution::Effects,
-    AddressableEntity, BlockHash, BlockTime, ByteCode, ByteCodeAddr, ByteCodeHash, ByteCodeKind,
-    Digest, EntityAddr, EntityKind, Gas, Groups, InitiatorAddr, Key, Package, PackageHash,
-    PackageStatus, Phase, ProtocolVersion, StoredValue, Timestamp, Transaction,
-    TransactionEntryPoint, TransactionInvocationTarget, TransactionRuntime, TransactionTarget,
-    URef, U512,
+    AddressableEntity, ByteCode, ByteCodeAddr, ByteCodeHash, ByteCodeKind, Digest, EntityAddr,
+    EntityKind, Gas, Groups, InitiatorAddr, Key, Package, PackageHash, PackageStatus, Phase,
+    ProtocolVersion, StoredValue, TransactionInvocationTarget, TransactionRuntime, URef, U512,
 };
 use either::Either;
-use install::{
-    InstallContractError, InstallContractRequest, InstallContractRequestBuilder,
-    InstallContractResult,
-};
+use install::{InstallContractError, InstallContractRequest, InstallContractResult};
 use parking_lot::RwLock;
 use system::{MintArgs, MintTransferArgs};
-use thiserror::Error;
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 
 const DEFAULT_WASM_ENTRY_POINT: &str = "call";
 
@@ -365,9 +358,8 @@ impl ExecutorV2 {
 
                                 return self.execute_legacy_wasm_byte_code(
                                     initiator,
-                                    block_time,
                                     entity_addr,
-                                    entry_point,
+                                    entry_point.clone(),
                                     &input,
                                     &mut tracking_copy,
                                     block_info,
@@ -436,18 +428,13 @@ impl ExecutorV2 {
                         (Bytes::from(wasm_bytes), Either::Left(entry_point.as_str()))
                     }
                     Some(StoredValue::Contract(_legacy_contract)) => {
-                        let block_info = BlockInfo::new(
-                            state_hash,
-                            block_time.into(),
-                            parent_block_hash,
-                            block_height,
-                        );
+                        let block_info =
+                            BlockInfo::new(state_hash, block_time, parent_block_hash, block_height);
 
                         return self.execute_legacy_wasm_byte_code(
                             initiator,
-                            block_time,
                             entity_addr,
-                            entry_point,
+                            entry_point.clone(),
                             &input,
                             &mut tracking_copy,
                             block_info,
@@ -572,12 +559,12 @@ impl ExecutorV2 {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn execute_legacy_wasm_byte_code<R>(
         &self,
         initiator: AccountHash,
-        block_time: BlockTime,
         entity_addr: &EntityAddr,
-        entry_point: &String,
+        entry_point: String,
         input: &Bytes,
         tracking_copy: &mut TrackingCopy<R>,
         block_info: BlockInfo,
@@ -589,7 +576,6 @@ impl ExecutorV2 {
     {
         let authorization_keys = BTreeSet::from_iter([initiator]);
         let initiator_addr = InitiatorAddr::AccountHash(initiator);
-        let block_time = BlockTime::from(block_time);
         let executable_item =
             ExecutableItem::Invocation(TransactionInvocationTarget::ByHash(entity_addr.value()));
         let entry_point = entry_point.clone();
@@ -633,7 +619,7 @@ impl ExecutorV2 {
 
         let mut output = wasm_v1_result
             .ret()
-            .map(|ret| bytesrepr::serialize(&ret).unwrap())
+            .map(|ret| bytesrepr::serialize(ret).unwrap())
             .map(Bytes::from);
 
         let host_error = match wasm_v1_result.error() {
@@ -659,13 +645,13 @@ impl ExecutorV2 {
         let remaining_points = gas_limit.checked_sub(gas_consumed).unwrap();
 
         let fork2 = tracking_copy.fork2();
-        return Ok(ExecuteResult {
+        Ok(ExecuteResult {
             host_error,
             output,
             gas_usage: GasUsage::new(gas_limit, remaining_points),
             effects: fork2.effects(),
             cache: fork2.cache(),
-        });
+        })
     }
 
     pub fn execute_with_provider<R>(

@@ -77,7 +77,7 @@ pub fn make_n_arg_call_bytes(
         (memory $memory 1)
       )"#
     );
-    let module_bytes = wabt::wat2wasm(wat)?;
+    let module_bytes = wat::parse_str(wat)?;
     Ok(module_bytes)
 }
 

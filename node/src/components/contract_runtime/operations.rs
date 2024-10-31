@@ -149,8 +149,9 @@ pub fn execute_finalized_block(
 
     for stored_transaction in executable_block.transactions {
         let mut artifact_builder = ExecutionArtifactBuilder::new(&stored_transaction);
-        let transaction = MetaTransaction::from(&stored_transaction, transaction_config)
-            .map_err(|err| BlockExecutionError::TransactionConversion(err.to_string()))?;
+        let transaction =
+            MetaTransaction::from_transaction(&stored_transaction, transaction_config)
+                .map_err(|err| BlockExecutionError::TransactionConversion(err.to_string()))?;
         let initiator_addr = transaction.initiator_addr();
         let transaction_hash = transaction.hash();
         let transaction_args = transaction.session_args().clone();
@@ -440,7 +441,11 @@ pub fn execute_finalized_block(
                     &transaction,
                 ) {
                     Ok(wasm_v2_request) => {
-                        let result = wasm_v2_request.execute(&execution_engine_v2, &scratch_state);
+                        let result = wasm_v2_request.execute(
+                            &execution_engine_v2,
+                            state_root_hash,
+                            &scratch_state,
+                        );
                         match result {
                             Ok(wasm_v2_result) => {
                                 state_root_hash = wasm_v2_result.state_root_hash();
@@ -1121,7 +1126,8 @@ where
     S: StateProvider,
 {
     let transaction_config = &chainspec.transaction_config;
-    let maybe_transaction = MetaTransaction::from(&input_transaction, transaction_config);
+    let maybe_transaction =
+        MetaTransaction::from_transaction(&input_transaction, transaction_config);
     if let Err(error) = maybe_transaction {
         return SpeculativeExecutionResult::invalid_transaction(error);
     }

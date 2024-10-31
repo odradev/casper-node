@@ -48,7 +48,7 @@ fn make_oom_payload(initial: u32, maximum: Option<u32>) -> Vec<u8> {
             "#,
         bounds
     );
-    wabt::wat2wasm(wat).expect("should parse wat")
+    wat::parse_str(wat).expect("should parse wat")
 }
 
 #[ignore]
@@ -226,7 +226,7 @@ fn test_element_section(
     wat += ")\n";
     wat += ")";
 
-    let module_bytes = wabt::wat2wasm(wat).unwrap();
+    let module_bytes = wat::parse_str(wat).unwrap();
     let exec_request = ExecuteRequestBuilder::module_bytes(
         *DEFAULT_ACCOUNT_ADDR,
         module_bytes,
@@ -244,8 +244,6 @@ fn test_element_section(
 fn should_not_allow_more_than_one_table() {
     let mut builder = LmdbWasmTestBuilder::default();
     builder.run_genesis(LOCAL_GENESIS_REQUEST.clone());
-
-    // wabt::wat2wasm doesn't allow multiple tables so we'll go with a builder
 
     let module = builder::module()
         // table 1

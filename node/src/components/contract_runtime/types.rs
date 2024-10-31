@@ -305,7 +305,7 @@ impl ExecutionArtifactBuilder {
         if let TransferResult::Success {
             mut transfers,
             effects,
-            cache,
+            cache: _,
         } = transfer_result
         {
             self.with_appended_transfers(&mut transfers)

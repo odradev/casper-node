@@ -31,11 +31,14 @@ const ARGS_MAP_KEY: u16 = 0;
 const TARGET_MAP_KEY: u16 = 1;
 const ENTRY_POINT_MAP_KEY: u16 = 2;
 const SCHEDULING_MAP_KEY: u16 = 3;
-const EXPECTED_FIELD_KEYS: [u16; 4] = [
+
+const EXPECTED_FIELD_KEYS: [u16; 6] = [
     ARGS_MAP_KEY,
     TARGET_MAP_KEY,
     ENTRY_POINT_MAP_KEY,
     SCHEDULING_MAP_KEY,
+    4,
+    5,
 ];
 
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]

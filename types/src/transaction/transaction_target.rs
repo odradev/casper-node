@@ -227,7 +227,7 @@ impl ToBytes for TransactionTarget {
 
 impl FromBytes for TransactionTarget {
     fn from_bytes(bytes: &[u8]) -> Result<(TransactionTarget, &[u8]), Error> {
-        let (binary_payload, remainder) = CalltableSerializationEnvelope::from_bytes(4, bytes)?;
+        let (binary_payload, remainder) = CalltableSerializationEnvelope::from_bytes(6, bytes)?;
         let window = binary_payload.start_consuming()?.ok_or(Formatting)?;
         window.verify_index(TAG_FIELD_INDEX)?;
         let (tag, window) = window.deserialize_and_maybe_next::<u8>()?;
@@ -271,9 +271,11 @@ impl FromBytes for TransactionTarget {
                 window.verify_index(SESSION_MODULE_BYTES_INDEX)?;
                 let (module_bytes, window) = window.deserialize_and_maybe_next::<Bytes>()?;
                 let window = window.ok_or(Formatting)?;
+
                 window.verify_index(SESSION_TRANSFERRED_VALUE_INDEX)?;
                 let (transferred_value, window) = window.deserialize_and_maybe_next::<u64>()?;
                 let window = window.ok_or(Formatting)?;
+
                 window.verify_index(SESSION_SEED_INDEX)?;
                 let (seed, window) = window.deserialize_and_maybe_next::<Option<[u8; 32]>>()?;
 
@@ -381,13 +383,6 @@ mod tests {
     use super::*;
     use crate::{bytesrepr, gens::transaction_target_arb};
     use proptest::prelude::*;
-    #[test]
-    fn bytesrepr_roundtrip() {
-        let rng = &mut TestRng::new();
-        for _ in 0..10 {
-            bytesrepr::test_serialization_roundtrip(&TransactionTarget::random(rng));
-        }
-    }
 
     proptest! {
         #[test]

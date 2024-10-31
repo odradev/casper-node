@@ -2,7 +2,7 @@ use super::transaction_lane::{calculate_transaction_lane, TransactionLane};
 use casper_types::{
     arg_handling, bytesrepr::ToBytes, crypto, Approval, Chainspec, Digest, DisplayIter, Gas,
     InitiatorAddr, InvalidTransaction, InvalidTransactionV1, PricingHandling, PricingMode,
-    RuntimeArgs, TimeDiff, Timestamp, TransactionArgs, TransactionConfig, TransactionEntryPoint,
+    TimeDiff, Timestamp, TransactionArgs, TransactionConfig, TransactionEntryPoint,
     TransactionRuntime, TransactionScheduling, TransactionTarget, TransactionV1,
     TransactionV1ExcessiveSizeError, TransactionV1Hash, U512,
 };
@@ -53,7 +53,7 @@ pub struct MetaTransactionV1 {
 }
 
 impl MetaTransactionV1 {
-    pub fn from(
+    pub fn from_transaction_v1(
         v1: &TransactionV1,
         transaction_config: &TransactionConfig,
     ) -> Result<MetaTransactionV1, InvalidTransaction> {
@@ -600,18 +600,26 @@ impl MetaTransactionV1 {
         }
     }
 
+    /// Returns the serialized length of the transaction.
     pub fn serialized_length(&self) -> usize {
         self.serialized_length
     }
 
+    /// Returns the gas limit for the transaction.
     pub fn gas_limit(&self, chainspec: &Chainspec) -> Result<Gas, InvalidTransaction> {
         self.pricing_mode()
             .gas_limit(chainspec, self.entry_point(), self.transaction_lane as u8)
             .map_err(Into::into)
     }
 
+    /// Returns the seed of the transaction.
     pub(crate) fn seed(&self) -> Option<[u8; 32]> {
         self.seed
+    }
+
+    /// Returns the transferred value of the transaction.
+    pub fn transferred_value(&self) -> u64 {
+        self.transferred_value
     }
 }
 

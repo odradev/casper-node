@@ -1072,6 +1072,5 @@ fn json_schema_check() {
         env!("CARGO_MANIFEST_DIR")
     );
     let pretty = serde_json::to_string_pretty(&schema_for!(SseData)).unwrap();
-    std::fs::write("/tmp/schema.json", &pretty).unwrap();
     assert_schema(schema_path, pretty);
 }

@@ -460,6 +460,7 @@ pub struct WasmV1Result {
 
 impl WasmV1Result {
     /// Creates a new instance.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         limit: Gas,
         consumed: Gas,

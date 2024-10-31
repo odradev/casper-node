@@ -369,28 +369,6 @@ impl<'a> TransactionV1Builder<'a> {
         builder
     }
 
-    /// Returns a new `TransactionV1Builder` suitable for building a transaction for calling a smart
-    /// contract.
-    pub fn new_call(
-        entity_address: AddressableEntityHash,
-        entry_point: String,
-        input_data: Option<Bytes>,
-        transferred_value: u64,
-    ) -> Self {
-        let args = TransactionArgs::Bytesrepr(input_data.unwrap_or_default());
-        let target = TransactionTarget::Stored {
-            id: TransactionInvocationTarget::ByHash(entity_address.value()),
-            runtime: TransactionRuntime::VmCasperV2,
-            transferred_value,
-        };
-        let mut builder = TransactionV1Builder::new();
-        builder.args = TransactionArgs::Named(RuntimeArgs::new());
-        builder.target = target;
-        builder.entry_point = TransactionEntryPoint::Call;
-        builder.scheduling = Self::DEFAULT_SCHEDULING;
-        builder
-    }
-
     /// Returns a new `TransactionV1Builder` which will build a random, valid but possibly expired
     /// transaction.
     ///
