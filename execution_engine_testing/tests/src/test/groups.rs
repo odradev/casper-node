@@ -10,7 +10,8 @@ use casper_engine_test_support::{
 };
 use casper_execution_engine::{engine_state::Error, execution::ExecError};
 use casper_types::{
-    account::AccountHash, runtime_args, HoldBalanceHandling, Key, RuntimeArgs, Timestamp, U512,
+    account::AccountHash, contracts::CONTRACT_INITIAL_VERSION, runtime_args, HoldBalanceHandling,
+    Key, RuntimeArgs, Timestamp, U512,
 };
 
 use crate::{lmdb_fixture, wasm_utils};
@@ -73,9 +74,7 @@ fn should_call_group_restricted_session() {
     )
     .build();
 
-    builder.exec(exec_request_2).expect_failure();
-
-    builder.assert_error(Error::Exec(ExecError::InvalidContext))
+    builder.exec(exec_request_2).expect_success().commit();
 }
 
 #[ignore]
@@ -110,9 +109,7 @@ fn should_call_group_restricted_session_caller() {
     )
     .build();
 
-    builder.exec(exec_request_2).expect_failure();
-
-    builder.assert_error(Error::Exec(ExecError::InvalidContext));
+    builder.exec(exec_request_2).expect_success().commit();
 }
 
 #[test]
@@ -460,9 +457,7 @@ fn should_call_group_restricted_contract_as_session() {
     )
     .build();
 
-    builder.exec(exec_request_3).expect_failure();
-
-    builder.assert_error(Error::Exec(ExecError::InvalidContext))
+    builder.exec(exec_request_3).expect_success().commit();
 }
 
 #[ignore]
@@ -499,7 +494,7 @@ fn should_call_group_restricted_contract_as_session_from_wrong_account() {
         package_hash
             .into_package_hash()
             .expect("must convert to package hash"),
-        None,
+        Some(CONTRACT_INITIAL_VERSION),
         RESTRICTED_CONTRACT_CALLER_AS_SESSION,
         runtime_args! {
             PACKAGE_HASH_ARG => *package_hash,
@@ -507,7 +502,7 @@ fn should_call_group_restricted_contract_as_session_from_wrong_account() {
     )
     .build();
 
-    builder.exec(exec_request_3).commit();
+    builder.exec(exec_request_3).expect_failure();
 
     let response = builder
         .get_last_exec_result()

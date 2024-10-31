@@ -160,16 +160,15 @@ where
         &self,
         entity_addr: EntityAddr,
     ) -> Result<RuntimeFootprint, Self::Error> {
-        // let key = if self.enable_addressable_entity {
-        //     Key::AddressableEntity(entity_addr)
-        // } else {
-        //     match entity_addr {
-        //         EntityAddr::System(system_hash_addr) => Key::Hash(system_hash_addr),
-        //         EntityAddr::Account(account_hash) =>
-        // Key::Account(AccountHash::new(account_hash)),
-        //         EntityAddr::SmartContract(contract_hash_addr) => Key::Hash(contract_hash_addr),
-        //     }
-        // };
+        let key = if self.enable_addressable_entity {
+            Key::AddressableEntity(entity_addr)
+        } else {
+            match entity_addr {
+                EntityAddr::System(system_hash_addr) => Key::Hash(system_hash_addr),
+                EntityAddr::Account(account_hash) => Key::Account(AccountHash::new(account_hash)),
+                EntityAddr::SmartContract(contract_hash_addr) => Key::Hash(contract_hash_addr),
+            }
+        };
 
         let entity_key = match entity_addr {
             EntityAddr::Account(account_addr) => {
@@ -197,7 +196,6 @@ where
                 let contract_key = Key::Hash(addr);
                 match self.read(&contract_key)? {
                     Some(StoredValue::Contract(contract)) => {
-                        println!("Contract: {:?}", contract);
                         let contract_hash = ContractHash::new(entity_addr.value());
                         let maybe_system_entity_type = {
                             let mut ret = None;

@@ -146,6 +146,7 @@ impl ContractRuntime {
             .with_allow_unrestricted_transfers(chainspec.core_config.allow_unrestricted_transfers)
             .with_refund_handling(chainspec.core_config.refund_handling)
             .with_fee_handling(chainspec.core_config.fee_handling)
+            .with_enable_entity(chainspec.core_config.enable_addressable_entity)
             .with_protocol_version(chainspec.protocol_version())
             .with_storage_costs(chainspec.storage_costs)
             .build();

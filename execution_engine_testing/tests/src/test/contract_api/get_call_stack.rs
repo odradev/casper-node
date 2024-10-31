@@ -1,17 +1,16 @@
 use num_traits::One;
 
 use casper_engine_test_support::{
-    ExecuteRequest, ExecuteRequestBuilder, LmdbWasmTestBuilder, WasmTestBuilder,
-    DEFAULT_ACCOUNT_ADDR, LOCAL_GENESIS_REQUEST,
+    ExecuteRequest, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
+    LOCAL_GENESIS_REQUEST,
 };
 use casper_execution_engine::{engine_state::Error as CoreError, execution::ExecError};
 use casper_types::{
     account::{Account, AccountHash},
     contracts::{ContractHash, ContractPackageHash},
     runtime_args,
-    system::{CallStackElement, Caller, CallerInfo},
-    CLValue, EntityAddr, EntryPointType, HashAddr, Key, PackageHash, RuntimeArgs, StoredValue,
-    U512,
+    system::{Caller, CallerInfo},
+    CLValue, EntityAddr, EntryPointType, HashAddr, Key, PackageHash, StoredValue, U512,
 };
 
 use get_call_stack_recursive_subcall::{
@@ -303,27 +302,6 @@ impl BuilderExt for LmdbWasmTestBuilder {
         }
 
         callers
-        // stack_elements
-        //     .into_iter()
-        //     .map(|elem| match elem {
-        //         CallStackElement::Session { account_hash } => Caller::Initiator { account_hash },
-        //         CallStackElement::StoredSession {
-        //             contract_hash,
-        //             contract_package_hash,
-        //             ..
-        //         } => Caller::Entity {
-        //             package_hash: PackageHash::new(contract_package_hash.value()),
-        //             entity_addr: EntityAddr::SmartContract(contract_hash.value()),
-        //         },
-        //         CallStackElement::StoredContract {
-        //             contract_hash,
-        //             contract_package_hash,
-        //         } => Caller::Entity {
-        //             package_hash: PackageHash::new(contract_package_hash.value()),
-        //             entity_addr: EntityAddr::SmartContract(contract_hash.value()),
-        //         },
-        //     })
-        //     .collect()
     }
 }
 
@@ -482,7 +460,7 @@ fn assert_call_stack_matches_calls(call_stack: Vec<Caller>, calls: &[Call]) {
                     ..
                 }),
                 Caller::SmartContract { contract_hash, .. },
-            ) if *entry_point_type == EntryPointType::Called
+            ) if *entry_point_type == EntryPointType::Caller
                 && contract_hash.value() == current_contract_hash.value() => {}
 
             _ => panic!(
@@ -496,9 +474,7 @@ fn assert_call_stack_matches_calls(call_stack: Vec<Caller>, calls: &[Call]) {
 mod session {
 
     use casper_engine_test_support::{ExecuteRequestBuilder, DEFAULT_ACCOUNT_ADDR};
-    use casper_execution_engine::execution::ExecError;
     use casper_types::{execution::TransformKindV2, runtime_args, system::mint, Key};
-    use num_traits::Zero;
 
     use super::{
         approved_amount, AccountExt, ARG_CALLS, ARG_CURRENT_DEPTH, CONTRACT_CALL_RECURSIVE_SUBCALL,
