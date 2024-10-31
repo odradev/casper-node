@@ -418,8 +418,7 @@ where
         .await
         .unwrap_or_else(|elapsed| {
             panic!(
-                "network did not settle on condition within {:?}, time elapsed: {elapsed:?}",
-                within
+                "network did not settle on condition within {within:?}, time elapsed: {elapsed:?}",
             )
         })
     }
@@ -547,8 +546,7 @@ where
                     }
                     TryCrankOutcome::ShouldExit(exit_code) => {
                         panic!(
-                            "unexpected exit: expected {:?} for node {:?}, got {:?} for node {:?}",
-                            expected, node_id, exit_code, current_node_id
+                            "unexpected exit: expected {expected:?} for node {node_id:?}, got {exit_code:?} for node {current_node_id:?}",
                         )
                     }
                     TryCrankOutcome::Exited => (),
