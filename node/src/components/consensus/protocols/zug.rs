@@ -1523,12 +1523,18 @@ impl<C: Context + 'static> Zug<C> {
     /// Adds a signed message content to the state.
     /// Does not call `update` and does not detect faults.
     fn add_content(&mut self, signed_msg: SignedMessage<C>) -> bool {
-        if self.active[signed_msg.validator_idx].is_none() {
+        if self.active[signed_msg.validator_idx]
+            .as_ref()
+            .map_or(true, |old_msg| old_msg.round_id < signed_msg.round_id)
+        {
+            if self.active[signed_msg.validator_idx].is_none() {
+                // We considered this validator inactive until now, and didn't accept proposals that
+                // didn't have them in the `inactive` field. Mark all relevant rounds as dirty so
+                // that the next `update` call checks all proposals again.
+                self.mark_dirty(self.first_non_finalized_round_id);
+            }
+            // Save the latest signed message for participation tracking purposes.
             self.active[signed_msg.validator_idx] = Some(signed_msg.clone());
-            // We considered this validator inactive until now, and didn't accept proposals that
-            // didn't have them in the `inactive` field. Mark all relevant rounds as dirty so that
-            // the next `update` call checks all proposals again.
-            self.mark_dirty(self.first_non_finalized_round_id);
         }
         let SignedMessage {
             round_id,
