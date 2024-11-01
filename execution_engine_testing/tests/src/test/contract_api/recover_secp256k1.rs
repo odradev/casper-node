@@ -1,9 +1,10 @@
-use std::io::Read;
-
 use casper_engine_test_support::{
     ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, LOCAL_GENESIS_REQUEST,
 };
-use casper_types::{bytesrepr::{Bytes, ToBytes}, runtime_args, PublicKey, SecretKey, Signature};
+use casper_types::{
+    bytesrepr::{Bytes, ToBytes},
+    runtime_args, PublicKey, SecretKey, Signature,
+};
 
 const RECOVER_SECP256K1_WASM: &str = "recover_secp256k1.wasm";
 

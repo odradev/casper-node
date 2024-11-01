@@ -1,9 +1,10 @@
-use std::io::Read;
-
 use casper_engine_test_support::{
     ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, LOCAL_GENESIS_REQUEST,
 };
-use casper_types::{bytesrepr::{Bytes, ToBytes}, runtime_args, PublicKey, SecretKey, Signature};
+use casper_types::{
+    bytesrepr::{Bytes, ToBytes},
+    runtime_args, PublicKey, SecretKey, Signature,
+};
 use ed25519_dalek::Signer;
 
 const VERIFY_SIGNATURE_WASM: &str = "verify_signature.wasm";

@@ -100,10 +100,8 @@ const DEFAULT_MESSAGE_PAYLOAD_SIZE_WEIGHT: u32 = 120_000;
 
 const DEFAULT_GENERIC_HASH_COST: u32 = 300;
 
-/// PIN: Update later
 const DEFAULT_RECOVER_SECP256K1_COST: u32 = 1_300_000;
 
-/// PIN: Update later
 const DEFAULT_VERIFY_SIGNATURE_COST: u32 = 1_300_000;
 
 /// Representation of a host function cost.
@@ -740,9 +738,7 @@ impl Default for HostFunctionCosts {
             ),
             verify_signature: HostFunction::new(
                 DEFAULT_VERIFY_SIGNATURE_COST,
-                [
-                    NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED,
-                ],
+                [NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED],
             ),
         }
     }

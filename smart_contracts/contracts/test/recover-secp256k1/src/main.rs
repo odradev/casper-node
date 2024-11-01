@@ -3,8 +3,14 @@
 
 extern crate alloc;
 use alloc::string::String;
-use casper_contract::{contract_api::{cryptography, runtime}, unwrap_or_revert::UnwrapOrRevert};
-use casper_types::{bytesrepr::{self, Bytes, FromBytes}, PublicKey, Signature};
+use casper_contract::{
+    contract_api::{cryptography, runtime},
+    unwrap_or_revert::UnwrapOrRevert,
+};
+use casper_types::{
+    bytesrepr::{Bytes, FromBytes},
+    PublicKey, Signature,
+};
 
 const ARG_MESSAGE: &str = "message";
 const ARG_SIGNATURE_BYTES: &str = "signature_bytes";
@@ -19,11 +25,8 @@ pub extern "C" fn call() {
     let expected: PublicKey = runtime::get_named_arg(ARG_EXPECTED);
 
     let (signature, _) = Signature::from_bytes(&signature_bytes).unwrap();
-    let recovered_pk = cryptography::recover_secp256k1(
-        message.as_bytes(),
-        &signature,
-        recovery_id
-    ).unwrap_or_revert();
+    let recovered_pk = cryptography::recover_secp256k1(message.as_bytes(), &signature, recovery_id)
+        .unwrap_or_revert();
 
     assert_eq!(recovered_pk, expected, "PublicKey mismatch");
 }
