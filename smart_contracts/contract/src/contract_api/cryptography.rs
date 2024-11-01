@@ -32,7 +32,7 @@ pub fn recover_secp256k1<T: AsRef<[u8]>>(
     recovery_id: u8,
 ) -> Result<PublicKey, ApiError> {
     let mut buffer = [0; U8_SERIALIZED_LENGTH + PublicKey::SECP256K1_LENGTH];
-    let signature_bytes = signature.to_bytes().unwrap();
+    let signature_bytes = signature.to_bytes().unwrap_or_revert();
 
     let result = unsafe {
         ext_ffi::casper_recover_secp256k1(
@@ -56,8 +56,8 @@ pub fn verify_signature<T: AsRef<[u8]>>(
     signature: &Signature,
     public_key: &PublicKey,
 ) -> Result<(), ApiError> {
-    let signature_bytes = signature.to_bytes().unwrap();
-    let public_key_bytes = public_key.to_bytes().unwrap();
+    let signature_bytes = signature.to_bytes().unwrap_or_revert();
+    let public_key_bytes = public_key.to_bytes().unwrap_or_revert();
 
     let result = unsafe {
         ext_ffi::casper_verify_signature(
