@@ -906,7 +906,7 @@ extern "C" {
         out_size: usize,
     ) -> i32;
 
-    /// Attempts to recover a Secp256k1 public key from a signed message
+    /// Recovers a Secp256k1 public key from a signed message
     /// and a signature used in the process of signing.
     ///
     /// # Arguments
@@ -933,7 +933,6 @@ extern "C" {
     ) -> i32;
 
     /// Verifies the signature of the given message against the given public key.
-    /// Writes `1` to `out_ptr` if verification succeeded, and `0` if failed.
     ///
     /// # Arguments
     ///
