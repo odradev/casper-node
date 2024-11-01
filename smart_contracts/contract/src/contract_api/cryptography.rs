@@ -1,8 +1,7 @@
 //! Functions with cryptographic utils.
 
 use casper_types::{
-    api_error, bytesrepr::ToBytes, AsymmetricType, HashAlgorithm, PublicKey, Signature,
-    BLAKE2B_DIGEST_LENGTH,
+    api_error, bytesrepr::{FromBytes, ToBytes, U8_SERIALIZED_LENGTH}, ApiError, AsymmetricType, Error, HashAlgorithm, PublicKey, Signature, BLAKE2B_DIGEST_LENGTH
 };
 
 use crate::{ext_ffi, unwrap_or_revert::UnwrapOrRevert};
@@ -25,8 +24,8 @@ pub fn generic_hash<T: AsRef<[u8]>>(input: T, algo: HashAlgorithm) -> [u8; 32] {
 }
 
 /// Attempts to recover a Secp256k1 [`PublicKey`] from a message and a signature over it.
-pub fn recover_secp256k1<T: AsRef<[u8]>>(data: T, signature: &Signature, v: u8) -> PublicKey {
-    let mut buffer = [0; PublicKey::SECP256K1_LENGTH];
+pub fn recover_secp256k1<T: AsRef<[u8]>>(data: T, signature: &Signature, recovery_id: u8) -> Result<PublicKey, ApiError> {
+    let mut buffer = [0; U8_SERIALIZED_LENGTH + PublicKey::SECP256K1_LENGTH];
     let signature_bytes = signature.to_bytes().unwrap();
 
     let result = unsafe {
@@ -36,13 +35,13 @@ pub fn recover_secp256k1<T: AsRef<[u8]>>(data: T, signature: &Signature, v: u8) 
             signature_bytes.as_ptr(),
             signature_bytes.len(),
             buffer.as_mut_ptr(),
-            v,
+            recovery_id,
         )
     };
 
-    api_error::result_from(result).unwrap_or_revert();
-
-    PublicKey::secp256k1_from_bytes(buffer).unwrap()
+    PublicKey::from_bytes(&buffer)
+        .map(|(key, _)| key)
+        .map_err(|_| ApiError::from(result as u32))
 }
 
 /// Verifies the signature of the given message against the given public key.

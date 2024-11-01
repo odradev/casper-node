@@ -4769,6 +4769,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "recover-secp256k1"
+version = "0.1.0"
+dependencies = [
+ "casper-contract",
+ "casper-types",
+]
+
+[[package]]
 name = "redelegate"
 version = "0.1.0"
 dependencies = [

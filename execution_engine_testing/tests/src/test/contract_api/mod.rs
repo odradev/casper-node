@@ -20,3 +20,4 @@ mod runtime;
 mod subcall;
 mod transfer;
 mod transfer_cached;
+mod recover_secp256k1;
