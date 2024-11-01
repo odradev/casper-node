@@ -798,6 +798,8 @@ impl ToBytes for HostFunctionCosts {
         ret.append(&mut self.cost_increase_per_message.to_bytes()?);
         ret.append(&mut self.get_block_info.to_bytes()?);
         ret.append(&mut self.generic_hash.to_bytes()?);
+        ret.append(&mut self.recover_secp256k1.to_bytes()?);
+        ret.append(&mut self.verify_signature.to_bytes()?);
         Ok(ret)
     }
 
@@ -855,6 +857,8 @@ impl ToBytes for HostFunctionCosts {
             + self.cost_increase_per_message.serialized_length()
             + self.get_block_info.serialized_length()
             + self.generic_hash.serialized_length()
+            + self.recover_secp256k1.serialized_length()
+            + self.verify_signature.serialized_length()
     }
 }
 
