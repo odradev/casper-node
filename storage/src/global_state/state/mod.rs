@@ -35,7 +35,7 @@ use casper_types::{
         AUCTION, HANDLE_PAYMENT, MINT,
     },
     Account, AddressableEntity, BlockGlobalAddr, CLValue, Digest, EntityAddr, HoldsEpoch, Key,
-    KeyTag, Phase, PublicKey, RuntimeArgs, StoredValue, U512,
+    KeyTag, Phase, PublicKey, RuntimeArgs, StoredValue, SystemHashRegistry, U512,
 };
 
 #[cfg(test)]
@@ -664,7 +664,7 @@ pub trait CommitProvider: StateProvider {
 }
 
 /// A trait expressing operations over the trie.
-pub trait StateProvider {
+pub trait StateProvider: Sized {
     /// Associated reader type for `StateProvider`.
     type Reader: StateReader<Key, StoredValue, Error = GlobalStateError>;
 
@@ -1087,116 +1087,25 @@ pub trait StateProvider {
                 return SeigniorageRecipientsResult::Failure(TrackingCopyError::Storage(err))
             }
         };
-
-        let (snapshot_query_request, snapshot_version_query_request) =
-            match tc.get_system_entity_registry() {
-                Ok(scr) => match scr.get(AUCTION).copied() {
-                    Some(auction_hash) => {
-                        let key = if !request.enable_addressable_entity() {
-                            Key::Hash(auction_hash)
-                        } else {
-                            Key::AddressableEntity(EntityAddr::System(auction_hash))
-                        };
-                        (
-                            QueryRequest::new(
-                                state_hash,
-                                key,
-                                vec![SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY.to_string()],
-                            ),
-                            QueryRequest::new(
-                                state_hash,
-                                key,
-                                vec![SEIGNIORAGE_RECIPIENTS_SNAPSHOT_VERSION_KEY.to_string()],
-                            ),
-                        )
+        let scr = match tc.get_system_entity_registry() {
+            Ok(scr) => scr,
+            Err(err) => return SeigniorageRecipientsResult::Failure(err),
+        };
+        let enable_addressable_entity = tc.enable_addressable_entity();
+        match get_snapshot_data(self, &scr, state_hash, enable_addressable_entity) {
+            not_found @ SeigniorageRecipientsResult::ValueNotFound(_) => {
+                if enable_addressable_entity {
+                    //There is a chance that, when looking for rewards data, we are fetching a pre-condor state root hash that will have data stored in the old format
+                    // So we will have another go at fetching the data in the old format
+                    match get_snapshot_data(self, &scr, state_hash, false) {
+                        SeigniorageRecipientsResult::ValueNotFound(_) => not_found,
+                        other @ _ => other,
                     }
-                    None => return SeigniorageRecipientsResult::AuctionNotFound,
-                },
-                Err(err) => return SeigniorageRecipientsResult::Failure(err),
-            };
-
-        // check if snapshot version flag is present
-        let snapshot_version: Option<u8> = match self.query(snapshot_version_query_request) {
-            QueryResult::RootNotFound => return SeigniorageRecipientsResult::RootNotFound,
-            QueryResult::Failure(error) => {
-                error!(?error, "unexpected tracking copy error");
-                return SeigniorageRecipientsResult::Failure(error);
-            }
-            QueryResult::ValueNotFound(_msg) => None,
-            QueryResult::Success { value, proofs: _ } => {
-                let cl_value = match value.into_cl_value() {
-                    Some(snapshot_version_cl_value) => snapshot_version_cl_value,
-                    None => {
-                        error!("unexpected query failure; seigniorage recipients snapshot version is not a CLValue");
-                        return SeigniorageRecipientsResult::Failure(
-                            TrackingCopyError::UnexpectedStoredValueVariant,
-                        );
-                    }
-                };
-
-                match cl_value.into_t() {
-                    Ok(snapshot_version) => Some(snapshot_version),
-                    Err(cve) => {
-                        return SeigniorageRecipientsResult::Failure(TrackingCopyError::CLValue(
-                            cve,
-                        ));
-                    }
+                } else {
+                    not_found
                 }
             }
-        };
-
-        let snapshot = match self.query(snapshot_query_request) {
-            QueryResult::RootNotFound => return SeigniorageRecipientsResult::RootNotFound,
-            QueryResult::Failure(error) => {
-                error!(?error, "unexpected tracking copy error");
-                return SeigniorageRecipientsResult::Failure(error);
-            }
-            QueryResult::ValueNotFound(msg) => {
-                error!(%msg, "value not found");
-                return SeigniorageRecipientsResult::ValueNotFound(msg);
-            }
-            QueryResult::Success { value, proofs: _ } => {
-                let cl_value = match value.into_cl_value() {
-                    Some(snapshot_cl_value) => snapshot_cl_value,
-                    None => {
-                        error!("unexpected query failure; seigniorage recipients snapshot is not a CLValue");
-                        return SeigniorageRecipientsResult::Failure(
-                            TrackingCopyError::UnexpectedStoredValueVariant,
-                        );
-                    }
-                };
-
-                match snapshot_version {
-                    Some(_) => {
-                        let snapshot = match cl_value.into_t() {
-                            Ok(snapshot) => snapshot,
-                            Err(cve) => {
-                                error!("Failed to convert snapshot from CLValue");
-                                return SeigniorageRecipientsResult::Failure(
-                                    TrackingCopyError::CLValue(cve),
-                                );
-                            }
-                        };
-                        SeigniorageRecipientsSnapshot::V2(snapshot)
-                    }
-                    None => {
-                        let snapshot = match cl_value.into_t() {
-                            Ok(snapshot) => snapshot,
-                            Err(cve) => {
-                                error!("Failed to convert snapshot from CLValue");
-                                return SeigniorageRecipientsResult::Failure(
-                                    TrackingCopyError::CLValue(cve),
-                                );
-                            }
-                        };
-                        SeigniorageRecipientsSnapshot::V1(snapshot)
-                    }
-                }
-            }
-        };
-
-        SeigniorageRecipientsResult::Success {
-            seigniorage_recipients: snapshot,
+            other @ _ => other,
         }
     }
 
@@ -1973,45 +1882,25 @@ pub trait StateProvider {
             Ok(None) => return TotalSupplyResult::RootNotFound,
             Err(err) => return TotalSupplyResult::Failure(TrackingCopyError::Storage(err)),
         };
-
-        let query_request = match tc.get_system_entity_registry() {
-            Ok(scr) => match scr.get(MINT).copied() {
-                Some(mint_hash) => {
-                    let key = if !request.enable_addressable_entity() {
-                        Key::Hash(mint_hash)
-                    } else {
-                        Key::AddressableEntity(EntityAddr::System(mint_hash))
-                    };
-                    QueryRequest::new(state_hash, key, vec![TOTAL_SUPPLY_KEY.to_string()])
-                }
-                None => {
-                    error!("unexpected query failure; mint not found");
-                    return TotalSupplyResult::MintNotFound;
-                }
-            },
+        let scr = match tc.get_system_entity_registry() {
+            Ok(scr) => scr,
             Err(err) => return TotalSupplyResult::Failure(err),
         };
-
-        match self.query(query_request) {
-            QueryResult::RootNotFound => TotalSupplyResult::RootNotFound,
-            QueryResult::ValueNotFound(msg) => TotalSupplyResult::ValueNotFound(msg),
-            QueryResult::Failure(tce) => TotalSupplyResult::Failure(tce),
-            QueryResult::Success { value, proofs: _ } => {
-                let cl_value = match value.into_cl_value() {
-                    Some(cl_value) => cl_value,
-                    None => {
-                        error!("unexpected query failure; total supply is not a CLValue");
-                        return TotalSupplyResult::Failure(
-                            TrackingCopyError::UnexpectedStoredValueVariant,
-                        );
+        let enable_addressable_entity = tc.enable_addressable_entity();
+        match get_total_supply_data(self, &scr, state_hash, enable_addressable_entity) {
+            not_found @ TotalSupplyResult::ValueNotFound(_) => {
+                if enable_addressable_entity {
+                    //There is a chance that, when looking for rewards data, we are fetching a pre-condor state root hash that will have data stored in the old format
+                    // So we will have another go at fetching the data in the old format
+                    match get_total_supply_data(self, &scr, state_hash, false) {
+                        TotalSupplyResult::ValueNotFound(_) => not_found,
+                        other @ _ => other,
                     }
-                };
-
-                match cl_value.into_t() {
-                    Ok(total_supply) => TotalSupplyResult::Success { total_supply },
-                    Err(cve) => TotalSupplyResult::Failure(TrackingCopyError::CLValue(cve)),
+                } else {
+                    not_found
                 }
             }
+            other @ _ => other,
         }
     }
 
@@ -2028,51 +1917,25 @@ pub trait StateProvider {
                 return RoundSeigniorageRateResult::Failure(TrackingCopyError::Storage(err));
             }
         };
-
-        let query_request = match tc.get_system_entity_registry() {
-            Ok(scr) => match scr.get(MINT).copied() {
-                Some(mint_hash) => {
-                    let key = if !request.enable_addressable_entity() {
-                        Key::Hash(mint_hash)
-                    } else {
-                        Key::AddressableEntity(EntityAddr::System(mint_hash))
-                    };
-                    QueryRequest::new(
-                        state_hash,
-                        key,
-                        vec![ROUND_SEIGNIORAGE_RATE_KEY.to_string()],
-                    )
-                }
-                None => {
-                    error!("unexpected query failure; mint not found");
-                    return RoundSeigniorageRateResult::MintNotFound;
-                }
-            },
+        let scr = match tc.get_system_entity_registry() {
+            Ok(scr) => scr,
             Err(err) => return RoundSeigniorageRateResult::Failure(err),
         };
-
-        match self.query(query_request) {
-            QueryResult::RootNotFound => RoundSeigniorageRateResult::RootNotFound,
-            QueryResult::ValueNotFound(msg) => RoundSeigniorageRateResult::ValueNotFound(msg),
-            QueryResult::Failure(tce) => RoundSeigniorageRateResult::Failure(tce),
-            QueryResult::Success { value, proofs: _ } => {
-                let cl_value = match value.into_cl_value() {
-                    Some(cl_value) => cl_value,
-                    None => {
-                        error!("unexpected query failure; total supply is not a CLValue");
-                        return RoundSeigniorageRateResult::Failure(
-                            TrackingCopyError::UnexpectedStoredValueVariant,
-                        );
+        let enable_addressable_entity = tc.enable_addressable_entity();
+        match get_round_seigniorage_rate_data(self, &scr, state_hash, enable_addressable_entity) {
+            not_found @ RoundSeigniorageRateResult::ValueNotFound(_) => {
+                if enable_addressable_entity {
+                    //There is a chance that, when looking for rewards data, we are fetching a pre-condor state root hash that will have data stored in the old format
+                    // So we will have another go at fetching the data in the old format
+                    match get_round_seigniorage_rate_data(self, &scr, state_hash, false) {
+                        RoundSeigniorageRateResult::ValueNotFound(_) => not_found,
+                        other @ _ => other,
                     }
-                };
-
-                match cl_value.into_t() {
-                    Ok(rate) => RoundSeigniorageRateResult::Success { rate },
-                    Err(cve) => {
-                        RoundSeigniorageRateResult::Failure(TrackingCopyError::CLValue(cve))
-                    }
+                } else {
+                    not_found
                 }
             }
+            other @ _ => other,
         }
     }
 
@@ -2334,6 +2197,242 @@ pub trait StateProvider {
 
     /// Finds all the children of `trie_raw` which aren't present in the state.
     fn missing_children(&self, trie_raw: &[u8]) -> Result<Vec<Digest>, GlobalStateError>;
+}
+
+fn get_round_seigniorage_rate_data<T: StateProvider>(
+    state_provider: &T,
+    scr: &SystemHashRegistry,
+    state_hash: Digest,
+    enable_addressable_entity: bool,
+) -> RoundSeigniorageRateResult {
+    let query_request = match scr.get(MINT).copied() {
+        Some(mint_hash) => {
+            let key = if !enable_addressable_entity {
+                Key::Hash(mint_hash)
+            } else {
+                Key::AddressableEntity(EntityAddr::System(mint_hash))
+            };
+            QueryRequest::new(
+                state_hash,
+                key,
+                vec![ROUND_SEIGNIORAGE_RATE_KEY.to_string()],
+            )
+        }
+        None => {
+            error!("unexpected query failure; mint not found");
+            return RoundSeigniorageRateResult::MintNotFound;
+        }
+    };
+
+    match state_provider.query(query_request) {
+        QueryResult::RootNotFound => RoundSeigniorageRateResult::RootNotFound,
+        QueryResult::ValueNotFound(msg) => RoundSeigniorageRateResult::ValueNotFound(msg),
+        QueryResult::Failure(tce) => RoundSeigniorageRateResult::Failure(tce),
+        QueryResult::Success { value, proofs: _ } => {
+            let cl_value = match value.into_cl_value() {
+                Some(cl_value) => cl_value,
+                None => {
+                    error!("unexpected query failure; total supply is not a CLValue");
+                    return RoundSeigniorageRateResult::Failure(
+                        TrackingCopyError::UnexpectedStoredValueVariant,
+                    );
+                }
+            };
+
+            match cl_value.into_t() {
+                Ok(rate) => RoundSeigniorageRateResult::Success { rate },
+                Err(cve) => RoundSeigniorageRateResult::Failure(TrackingCopyError::CLValue(cve)),
+            }
+        }
+    }
+}
+
+fn get_total_supply_data<T: StateProvider>(
+    state_provider: &T,
+    scr: &SystemHashRegistry,
+    state_hash: Digest,
+    enable_addressable_entity: bool,
+) -> TotalSupplyResult {
+    let query_request = match scr.get(MINT).copied() {
+        Some(mint_hash) => {
+            let key = if !enable_addressable_entity {
+                Key::Hash(mint_hash)
+            } else {
+                Key::AddressableEntity(EntityAddr::System(mint_hash))
+            };
+            QueryRequest::new(state_hash, key, vec![TOTAL_SUPPLY_KEY.to_string()])
+        }
+        None => {
+            error!("unexpected query failure; mint not found");
+            return TotalSupplyResult::MintNotFound;
+        }
+    };
+    match state_provider.query(query_request) {
+        QueryResult::RootNotFound => TotalSupplyResult::RootNotFound,
+        QueryResult::ValueNotFound(msg) => TotalSupplyResult::ValueNotFound(msg),
+        QueryResult::Failure(tce) => TotalSupplyResult::Failure(tce),
+        QueryResult::Success { value, proofs: _ } => {
+            let cl_value = match value.into_cl_value() {
+                Some(cl_value) => cl_value,
+                None => {
+                    error!("unexpected query failure; total supply is not a CLValue");
+                    return TotalSupplyResult::Failure(
+                        TrackingCopyError::UnexpectedStoredValueVariant,
+                    );
+                }
+            };
+
+            match cl_value.into_t() {
+                Ok(total_supply) => TotalSupplyResult::Success { total_supply },
+                Err(cve) => TotalSupplyResult::Failure(TrackingCopyError::CLValue(cve)),
+            }
+        }
+    }
+}
+
+fn get_snapshot_data<T: StateProvider>(
+    state_provider: &T,
+    scr: &SystemHashRegistry,
+    state_hash: Digest,
+    enable_addressable_entity: bool,
+) -> SeigniorageRecipientsResult {
+    let (snapshot_query_request, snapshot_version_query_request) =
+        match build_query_requests(scr, state_hash, enable_addressable_entity) {
+            Ok(res) => res,
+            Err(res) => return res,
+        };
+
+    // check if snapshot version flag is present
+    let snapshot_version: Option<u8> =
+        match query_snapshot_version(state_provider, snapshot_version_query_request) {
+            Ok(value) => value,
+            Err(value) => return value,
+        };
+
+    let snapshot = match query_snapshot(state_provider, snapshot_version, snapshot_query_request) {
+        Ok(snapshot) => snapshot,
+        Err(value) => return value,
+    };
+
+    SeigniorageRecipientsResult::Success {
+        seigniorage_recipients: snapshot,
+    }
+}
+
+fn query_snapshot<T: StateProvider>(
+    state_provider: &T,
+    snapshot_version: Option<u8>,
+    snapshot_query_request: QueryRequest,
+) -> Result<SeigniorageRecipientsSnapshot, SeigniorageRecipientsResult> {
+    match state_provider.query(snapshot_query_request) {
+        QueryResult::RootNotFound => Err(SeigniorageRecipientsResult::RootNotFound),
+        QueryResult::Failure(error) => {
+            error!(?error, "unexpected tracking copy error");
+            Err(SeigniorageRecipientsResult::Failure(error))
+        }
+        QueryResult::ValueNotFound(msg) => {
+            error!(%msg, "value not found");
+            Err(SeigniorageRecipientsResult::ValueNotFound(msg))
+        }
+        QueryResult::Success { value, proofs: _ } => {
+            let cl_value = match value.into_cl_value() {
+                Some(snapshot_cl_value) => snapshot_cl_value,
+                None => {
+                    error!("unexpected query failure; seigniorage recipients snapshot is not a CLValue");
+                    return Err(SeigniorageRecipientsResult::Failure(
+                        TrackingCopyError::UnexpectedStoredValueVariant,
+                    ));
+                }
+            };
+
+            match snapshot_version {
+                Some(_) => {
+                    let snapshot = match cl_value.into_t() {
+                        Ok(snapshot) => snapshot,
+                        Err(cve) => {
+                            error!("Failed to convert snapshot from CLValue");
+                            return Err(SeigniorageRecipientsResult::Failure(
+                                TrackingCopyError::CLValue(cve),
+                            ));
+                        }
+                    };
+                    Ok(SeigniorageRecipientsSnapshot::V2(snapshot))
+                }
+                None => {
+                    let snapshot = match cl_value.into_t() {
+                        Ok(snapshot) => snapshot,
+                        Err(cve) => {
+                            error!("Failed to convert snapshot from CLValue");
+                            return Err(SeigniorageRecipientsResult::Failure(
+                                TrackingCopyError::CLValue(cve),
+                            ));
+                        }
+                    };
+                    Ok(SeigniorageRecipientsSnapshot::V1(snapshot))
+                }
+            }
+        }
+    }
+}
+
+fn query_snapshot_version<T: StateProvider>(
+    state_provider: &T,
+    snapshot_version_query_request: QueryRequest,
+) -> Result<Option<u8>, SeigniorageRecipientsResult> {
+    match state_provider.query(snapshot_version_query_request) {
+        QueryResult::RootNotFound => Err(SeigniorageRecipientsResult::RootNotFound),
+        QueryResult::Failure(error) => {
+            error!(?error, "unexpected tracking copy error");
+            Err(SeigniorageRecipientsResult::Failure(error))
+        }
+        QueryResult::ValueNotFound(_msg) => Ok(None),
+        QueryResult::Success { value, proofs: _ } => {
+            let cl_value = match value.into_cl_value() {
+                Some(snapshot_version_cl_value) => snapshot_version_cl_value,
+                None => {
+                    error!("unexpected query failure; seigniorage recipients snapshot version is not a CLValue");
+                    return Err(SeigniorageRecipientsResult::Failure(
+                        TrackingCopyError::UnexpectedStoredValueVariant,
+                    ));
+                }
+            };
+            match cl_value.into_t() {
+                Ok(snapshot_version) => Ok(Some(snapshot_version)),
+                Err(cve) => Err(SeigniorageRecipientsResult::Failure(
+                    TrackingCopyError::CLValue(cve),
+                )),
+            }
+        }
+    }
+}
+
+fn build_query_requests(
+    scr: &SystemHashRegistry,
+    state_hash: Digest,
+    enable_addressable_entity: bool,
+) -> Result<(QueryRequest, QueryRequest), SeigniorageRecipientsResult> {
+    match scr.get(AUCTION).copied() {
+        Some(auction_hash) => {
+            let key = if !enable_addressable_entity {
+                Key::Hash(auction_hash)
+            } else {
+                Key::AddressableEntity(EntityAddr::System(auction_hash))
+            };
+            Ok((
+                QueryRequest::new(
+                    state_hash,
+                    key,
+                    vec![SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY.to_string()],
+                ),
+                QueryRequest::new(
+                    state_hash,
+                    key,
+                    vec![SEIGNIORAGE_RECIPIENTS_SNAPSHOT_VERSION_KEY.to_string()],
+                ),
+            ))
+        }
+        None => return Err(SeigniorageRecipientsResult::AuctionNotFound),
+    }
 }
 
 /// Write multiple key/stored value pairs to the store in a single rw transaction.
