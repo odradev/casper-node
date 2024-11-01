@@ -101,10 +101,10 @@ const DEFAULT_MESSAGE_PAYLOAD_SIZE_WEIGHT: u32 = 120_000;
 const DEFAULT_GENERIC_HASH_COST: u32 = 300;
 
 /// PIN: Update later
-const DEFAULT_RECOVER_SECP256K1_COST: u32 = 600_000;
+const DEFAULT_RECOVER_SECP256K1_COST: u32 = 1_300_000;
 
 /// PIN: Update later
-const DEFAULT_VERIFY_SIGNATURE_COST: u32 = 600_000;
+const DEFAULT_VERIFY_SIGNATURE_COST: u32 = 1_300_000;
 
 /// Representation of a host function cost.
 ///
@@ -355,7 +355,7 @@ pub struct HostFunctionCosts {
     /// Cost of calling the 'recover_secp256k1' host function.
     pub recover_secp256k1: HostFunction<[Cost; 6]>,
     /// Cost of calling the 'recover_secp256k1' host function.
-    pub verify_signature: HostFunction<[Cost; 7]>,
+    pub verify_signature: HostFunction<[Cost; 6]>,
 }
 
 impl Zero for HostFunctionCosts {
@@ -741,7 +741,7 @@ impl Default for HostFunctionCosts {
             verify_signature: HostFunction::new(
                 DEFAULT_VERIFY_SIGNATURE_COST,
                 [
-                    NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED,
+                    NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED,
                 ],
             ),
         }

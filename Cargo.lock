@@ -572,6 +572,7 @@ dependencies = [
  "criterion 0.3.6",
  "dictionary",
  "dictionary-call",
+ "ed25519-dalek",
  "fs_extra",
  "get-call-stack-recursive-subcall",
  "gh-1470-regression",
@@ -6527,6 +6528,14 @@ dependencies = [
  "gix",
  "rustversion",
  "time",
+]
+
+[[package]]
+name = "verify-signature"
+version = "0.1.0"
+dependencies = [
+ "casper-contract",
+ "casper-types",
 ]
 
 [[package]]

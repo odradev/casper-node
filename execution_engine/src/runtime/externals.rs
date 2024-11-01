@@ -1494,7 +1494,6 @@ where
                 // args(3) = length of signature bytes
                 // args(4) = pointer to public key bytes in memory
                 // args(5) = length of public key bytes
-                // args(6) = pointer to a boolean value in wasm
                 let (
                     message_ptr,
                     message_size,
@@ -1502,7 +1501,6 @@ where
                     signature_size,
                     public_key_ptr,
                     public_key_size,
-                    out_ptr,
                 ) = Args::parse(args)?;
 
                 self.charge_host_function_call(
@@ -1514,7 +1512,6 @@ where
                         signature_size,
                         public_key_ptr,
                         public_key_size,
-                        out_ptr,
                     ],
                 )?;
 
@@ -1522,23 +1519,9 @@ where
                 let signature: Signature = self.t_from_mem(signature_ptr, signature_size)?;
                 let public_key: PublicKey = self.t_from_mem(public_key_ptr, public_key_size)?;
 
-                let Ok(result_bytes) =
-                    casper_types::crypto::verify(message, &signature, &public_key)
-                        .is_ok()
-                        .to_bytes()
-                else {
+                if casper_types::crypto::verify(message, &signature, &public_key).is_err() {
                     return Ok(Some(RuntimeValue::I32(
-                        u32::from(ApiError::OutOfMemory) as i32
-                    )));
-                };
-
-                if self
-                    .try_get_memory()?
-                    .set(out_ptr, result_bytes.as_ref())
-                    .is_err()
-                {
-                    return Ok(Some(RuntimeValue::I32(
-                        u32::from(ApiError::HostBufferEmpty) as i32,
+                        u32::from(ApiError::InvalidArgument) as i32,
                     )));
                 }
 

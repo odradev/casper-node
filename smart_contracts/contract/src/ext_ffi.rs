@@ -943,7 +943,6 @@ extern "C" {
     /// * `signature_size` - length of the byte-encoded signature
     /// * `public_key_ptr` - pointer to byte-encoded public key
     /// * `public_key_size` - length of the byte-encoded public key
-    /// * `out_ptr` - pointer to a single output byte
     pub fn casper_verify_signature(
         message_ptr: *const u8,
         message_size: usize,
@@ -951,6 +950,5 @@ extern "C" {
         signature_size: usize,
         public_key_ptr: *const u8,
         public_key_size: usize,
-        out_ptr: *const u8,
     ) -> i32;
 }

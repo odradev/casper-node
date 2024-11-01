@@ -21,3 +21,4 @@ mod subcall;
 mod transfer;
 mod transfer_cached;
 mod recover_secp256k1;
+mod verify_signature;

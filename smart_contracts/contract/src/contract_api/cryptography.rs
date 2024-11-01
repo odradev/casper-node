@@ -49,8 +49,7 @@ pub fn verify_signature<T: AsRef<[u8]>>(
     data: T,
     signature: &Signature,
     public_key: &PublicKey,
-) -> bool {
-    let mut buffer = [0u8];
+) -> Result<(), ApiError> {
     let signature_bytes = signature.to_bytes().unwrap();
     let public_key_bytes = public_key.to_bytes().unwrap();
 
@@ -61,12 +60,9 @@ pub fn verify_signature<T: AsRef<[u8]>>(
             signature_bytes.as_ptr(),
             signature_bytes.len(),
             public_key_bytes.as_ptr(),
-            public_key_bytes.len(),
-            buffer.as_mut_ptr(),
+            public_key_bytes.len()
         )
     };
 
-    api_error::result_from(result).unwrap_or_revert();
-
-    buffer[0] != 0
+    api_error::result_from(result)
 }
