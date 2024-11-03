@@ -82,10 +82,8 @@ fn execute_and_assert_result(
         assert!(matches!(
             error,
             // Call chains have stored contract trying to call stored session which we don't
-            // support and is an actual error. Due to variable opcode costs such
-            // execution may end up in a success (and fail with InvalidContext) or GasLimit when
-            // executing longer chains.
-            CoreError::Exec(ExecError::InvalidContext) | CoreError::Exec(ExecError::GasLimit)
+            // support and is an actual error.
+            CoreError::Exec(ExecError::InvalidContext)
         ));
     }
 }
