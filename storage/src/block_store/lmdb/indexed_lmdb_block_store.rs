@@ -895,6 +895,9 @@ impl<'t> DataReader<(DbTableId, Vec<u8>), DbRawBytesSpec>
         &self,
         (id, key): (DbTableId, Vec<u8>),
     ) -> Result<Option<DbRawBytesSpec>, BlockStoreError> {
+        if key.is_empty() {
+            return Ok(None);
+        }
         let store = &self.block_store.block_store;
         let res = match id {
             DbTableId::BlockHeader => store.block_header_dbs.get_raw(&self.txn, &key),

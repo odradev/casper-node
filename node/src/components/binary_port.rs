@@ -247,6 +247,9 @@ where
             key,
         } if RecordId::try_from(record_type_tag) == Ok(RecordId::Transfer) => {
             metrics.binary_port_get_record_count.inc();
+            if key.is_empty() {
+                return BinaryResponse::new_empty(protocol_version);
+            }
             let Ok(block_hash) = bytesrepr::deserialize_from_slice(&key) else {
                 debug!("received an incorrectly serialized key for a transfer record");
                 return BinaryResponse::new_error(ErrorCode::BadRequest, protocol_version);
@@ -267,6 +270,9 @@ where
             key,
         } => {
             metrics.binary_port_get_record_count.inc();
+            if key.is_empty() {
+                return BinaryResponse::new_empty(protocol_version);
+            }
             match RecordId::try_from(record_type_tag) {
                 Ok(record_id) => {
                     let Some(db_bytes) = effect_builder.get_raw_data(record_id, key).await else {
