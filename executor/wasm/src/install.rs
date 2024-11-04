@@ -4,7 +4,10 @@ use bytes::Bytes;
 use casper_executor_wasm_interface::{executor::ExecuteError, GasUsage, HostError};
 use casper_storage::{global_state::error::Error as GlobalStateError, AddressGenerator};
 use casper_types::{
-    account::AccountHash, contracts::{ContractHash, ContractPackageHash}, execution::Effects, BlockHash, BlockTime, Digest, TransactionHash
+    account::AccountHash,
+    contracts::{ContractHash, ContractPackageHash},
+    execution::Effects,
+    BlockHash, BlockTime, Digest, TransactionHash,
 };
 use parking_lot::RwLock;
 use thiserror::Error;
@@ -41,7 +44,6 @@ pub struct InstallContractRequest {
     pub(crate) block_height: u64,
     /// Seed used for smart contract hash computation.
     pub(crate) seed: Option<[u8; 32]>,
-
 }
 
 #[derive(Default)]
@@ -171,7 +173,6 @@ impl InstallContractRequestBuilder {
             state_hash,
             parent_block_hash,
             block_height,
-
         })
     }
 }

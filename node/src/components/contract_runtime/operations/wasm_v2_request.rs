@@ -20,7 +20,8 @@ use casper_storage::{
     AddressGeneratorBuilder,
 };
 use casper_types::{
-    execution::Effects, BlockHash, Digest, EntityAddr, Gas, Key, TransactionEntryPoint, TransactionInvocationTarget, TransactionTarget, U512
+    execution::Effects, BlockHash, Digest, EntityAddr, Gas, Key, TransactionEntryPoint,
+    TransactionInvocationTarget, TransactionTarget, U512,
 };
 use thiserror::Error;
 use tracing::info;

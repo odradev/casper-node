@@ -8,8 +8,8 @@ use crate::{
 };
 #[cfg(any(feature = "testing", test))]
 use crate::{
-    PublicKey, TransactionInvocationTarget, TransactionRuntime, TransferTarget, AUCTION_LANE_ID,
-    INSTALL_UPGRADE_LANE_ID, MINT_LANE_ID, RuntimeArgs,
+    PublicKey, RuntimeArgs, TransactionInvocationTarget, TransactionRuntime, TransferTarget,
+    AUCTION_LANE_ID, INSTALL_UPGRADE_LANE_ID, MINT_LANE_ID,
 };
 #[cfg(any(feature = "std", feature = "testing", test))]
 use alloc::collections::BTreeMap;

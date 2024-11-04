@@ -68,6 +68,7 @@ use rand::Rng;
 /// ## Phantom Data
 /// - `_phantom_data`: Ensures the correct lifetime `'a` is respected for the builder, helping with
 ///   proper borrowing and memory safety.
+#[derive(Debug)]
 pub struct TransactionV1Builder<'a> {
     /// Arguments passed to the transaction's runtime.
     args: TransactionArgs,
