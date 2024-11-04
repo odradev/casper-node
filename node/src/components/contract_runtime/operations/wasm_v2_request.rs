@@ -68,6 +68,20 @@ impl WasmV2Result {
             WasmV2Result::Execute(result) => result.effects(),
         }
     }
+
+    pub(crate) fn contract_hash(&self) -> Option<&[u8]> {
+        match self {
+            WasmV2Result::Install(result) => Some(result.contract_hash().as_bytes()),
+            WasmV2Result::Execute(_) => None,
+        }
+    }
+
+    pub(crate) fn post_state_hash(&self) -> Digest {
+        match self {
+            WasmV2Result::Install(result) => result.post_state_hash(),
+            WasmV2Result::Execute(result) => result.post_state_hash(),
+        }
+    }
 }
 
 #[derive(Error, Debug)]
