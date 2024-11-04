@@ -4,12 +4,12 @@ use crate::testing::TestRng;
 use crate::{
     bytesrepr::{Bytes, ToBytes},
     transaction::transaction_v1::*,
-    RuntimeArgs, TransactionEntryPoint, TransactionScheduling, TransactionTarget,
+    TransactionEntryPoint, TransactionScheduling, TransactionTarget,
 };
 #[cfg(any(feature = "testing", test))]
 use crate::{
     PublicKey, TransactionInvocationTarget, TransactionRuntime, TransferTarget, AUCTION_LANE_ID,
-    INSTALL_UPGRADE_LANE_ID, MINT_LANE_ID,
+    INSTALL_UPGRADE_LANE_ID, MINT_LANE_ID, RuntimeArgs,
 };
 #[cfg(any(feature = "std", feature = "testing", test))]
 use alloc::collections::BTreeMap;

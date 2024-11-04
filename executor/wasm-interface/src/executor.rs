@@ -167,6 +167,24 @@ impl ExecuteRequestBuilder {
         self
     }
 
+    /// Set the state hash.
+    pub fn with_state_hash(mut self, state_hash: Digest) -> Self {
+        self.state_hash = Some(state_hash);
+        self
+    }
+
+    /// Set the parent block hash.
+    pub fn with_parent_block_hash(mut self, parent_block_hash: BlockHash) -> Self {
+        self.parent_block_hash = Some(parent_block_hash);
+        self
+    }
+
+    /// Set the block height.
+    pub fn with_block_height(mut self, block_height: u64) -> Self {
+        self.block_height = Some(block_height);
+        self
+    }
+
     /// Build the `ExecuteRequest`.
     pub fn build(self) -> Result<ExecuteRequest, &'static str> {
         let initiator = self.initiator.ok_or("Initiator is not set")?;

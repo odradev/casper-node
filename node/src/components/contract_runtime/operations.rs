@@ -438,6 +438,9 @@ pub fn execute_finalized_block(
                 _ if is_v2_wasm => match WasmV2Request::new(
                     gas_limit,
                     chainspec.network_config.name.clone(),
+                    state_root_hash,
+                    parent_block_hash,
+                    block_height,
                     &transaction,
                 ) {
                     Ok(wasm_v2_request) => {

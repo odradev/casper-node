@@ -4,10 +4,7 @@ use bytes::Bytes;
 use casper_executor_wasm_interface::{executor::ExecuteError, GasUsage, HostError};
 use casper_storage::{global_state::error::Error as GlobalStateError, AddressGenerator};
 use casper_types::{
-    account::AccountHash,
-    contracts::{ContractHash, ContractPackageHash},
-    execution::Effects,
-    BlockTime, Digest, TransactionHash,
+    account::AccountHash, contracts::{ContractHash, ContractPackageHash}, execution::Effects, BlockHash, BlockTime, Digest, TransactionHash
 };
 use parking_lot::RwLock;
 use thiserror::Error;
@@ -36,8 +33,15 @@ pub struct InstallContractRequest {
     pub(crate) chain_name: Arc<str>,
     /// Block time.
     pub(crate) block_time: BlockTime,
+    /// State hash.
+    pub(crate) state_hash: Digest,
+    /// Parent block hash.
+    pub(crate) parent_block_hash: BlockHash,
+    /// Block height.
+    pub(crate) block_height: u64,
     /// Seed used for smart contract hash computation.
     pub(crate) seed: Option<[u8; 32]>,
+
 }
 
 #[derive(Default)]
@@ -52,6 +56,9 @@ pub struct InstallContractRequestBuilder {
     address_generator: Option<Arc<RwLock<AddressGenerator>>>,
     chain_name: Option<Arc<str>>,
     block_time: Option<BlockTime>,
+    state_hash: Option<Digest>,
+    parent_block_hash: Option<BlockHash>,
+    block_height: Option<u64>,
     seed: Option<[u8; 32]>,
 }
 
@@ -119,6 +126,21 @@ impl InstallContractRequestBuilder {
         self
     }
 
+    pub fn with_state_hash(mut self, state_hash: Digest) -> Self {
+        self.state_hash = Some(state_hash);
+        self
+    }
+
+    pub fn with_parent_block_hash(mut self, parent_block_hash: BlockHash) -> Self {
+        self.parent_block_hash = Some(parent_block_hash);
+        self
+    }
+
+    pub fn with_block_height(mut self, block_height: u64) -> Self {
+        self.block_height = Some(block_height);
+        self
+    }
+
     pub fn build(self) -> Result<InstallContractRequest, &'static str> {
         let initiator = self.initiator.ok_or("Initiator not set")?;
         let gas_limit = self.gas_limit.ok_or("Gas limit not set")?;
@@ -131,6 +153,9 @@ impl InstallContractRequestBuilder {
         let chain_name = self.chain_name.ok_or("Chain name not set")?;
         let block_time = self.block_time.ok_or("Block time not set")?;
         let seed = self.seed;
+        let state_hash = self.state_hash.ok_or("State hash not set")?;
+        let parent_block_hash = self.parent_block_hash.ok_or("Parent block hash not set")?;
+        let block_height = self.block_height.ok_or("Block height not set")?;
         Ok(InstallContractRequest {
             initiator,
             gas_limit,
@@ -143,6 +168,10 @@ impl InstallContractRequestBuilder {
             chain_name,
             block_time,
             seed,
+            state_hash,
+            parent_block_hash,
+            block_height,
+
         })
     }
 }

@@ -573,6 +573,12 @@ impl<'a> TransactionV1Builder<'a> {
         self
     }
 
+    /// Sets the entry point for the transaction.
+    pub fn with_entry_point(mut self, entry_point: TransactionEntryPoint) -> Self {
+        self.entry_point = entry_point;
+        self
+    }
+
     /// Sets the secret key to `None`, meaning the transaction can still be built but will be
     /// unsigned and will be invalid until subsequently signed.
     #[cfg(any(all(feature = "std", feature = "testing"), test))]

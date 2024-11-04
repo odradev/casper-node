@@ -143,6 +143,9 @@ impl ExecutorV2 {
             chain_name,
             block_time,
             seed,
+            state_hash,
+            parent_block_hash,
+            block_height,
         } = install_request;
 
         let caller_key = Key::Account(initiator);
@@ -245,6 +248,9 @@ impl ExecutorV2 {
                     .with_shared_address_generator(address_generator)
                     .with_chain_name(chain_name)
                     .with_block_time(block_time)
+                    .with_state_hash(state_hash)
+                    .with_parent_block_hash(parent_block_hash)
+                    .with_block_height(block_height)
                     .build()
                     .expect("should build");
 

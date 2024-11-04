@@ -20,8 +20,7 @@ use casper_storage::{
     AddressGeneratorBuilder,
 };
 use casper_types::{
-    execution::Effects, Digest, EntityAddr, Gas, Key, TransactionEntryPoint,
-    TransactionInvocationTarget, TransactionTarget, U512,
+    execution::Effects, BlockHash, Digest, EntityAddr, Gas, Key, TransactionEntryPoint, TransactionInvocationTarget, TransactionTarget, U512
 };
 use thiserror::Error;
 use tracing::info;
@@ -94,6 +93,9 @@ impl WasmV2Request {
     pub(crate) fn new(
         gas_limit: Gas,
         network_name: impl Into<Arc<str>>,
+        state_root_hash: Digest,
+        parent_block_hash: BlockHash,
+        block_height: u64,
         transaction: &MetaTransaction,
     ) -> Result<Self, InvalidRequest> {
         let transaction_hash = transaction.hash();
@@ -205,6 +207,9 @@ impl WasmV2Request {
                     .with_transferred_value(value.into()) // TODO: Replace u128 to u64
                     .with_chain_name(network_name)
                     .with_block_time(transaction.timestamp().into())
+                    .with_state_hash(state_root_hash)
+                    .with_parent_block_hash(parent_block_hash)
+                    .with_block_height(block_height)
                     .build()
                     .expect("should build");
 
@@ -229,7 +234,10 @@ impl WasmV2Request {
                     .with_chain_name(network_name)
                     .with_transferred_value(value.into()) // TODO: Remove u128 internally
                     .with_block_time(transaction.timestamp().into())
-                    .with_input(input_data.clone().take_inner().into());
+                    .with_input(input_data.clone().take_inner().into())
+                    .with_state_hash(state_root_hash)
+                    .with_parent_block_hash(parent_block_hash)
+                    .with_block_height(block_height);
                 let execution_kind = match target {
                     Target::Session { module_bytes } => ExecutionKind::SessionBytes(module_bytes),
                     Target::Stored {
