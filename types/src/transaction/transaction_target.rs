@@ -330,13 +330,6 @@ impl Display for TransactionTarget {
     }
 }
 
-struct BytesLen(usize);
-impl Debug for BytesLen {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{} bytes", self.0)
-    }
-}
-
 impl Debug for TransactionTarget {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         match self {
@@ -380,7 +373,6 @@ impl Debug for TransactionTarget {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::{bytesrepr, gens::transaction_target_arb};
     use proptest::prelude::*;
 

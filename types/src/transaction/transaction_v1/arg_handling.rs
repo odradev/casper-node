@@ -4,11 +4,10 @@ use core::marker::PhantomData;
 #[cfg(any(all(feature = "std", feature = "testing"), test))]
 use tracing::debug;
 
-use super::TransactionArgs;
 #[cfg(any(all(feature = "std", feature = "testing"), test))]
 use crate::{
     account::AccountHash, bytesrepr::FromBytes, system::auction::ARG_VALIDATOR, CLType, CLValue,
-    InvalidTransactionV1,
+    InvalidTransactionV1, TransactionArgs,
 };
 use crate::{
     bytesrepr::ToBytes, CLTyped, CLValueError, PublicKey, RuntimeArgs, TransferTarget, URef, U512,
@@ -389,7 +388,7 @@ mod tests {
     use rand::Rng;
 
     use super::*;
-    use crate::{runtime_args, testing::TestRng, CLType};
+    use crate::{runtime_args, testing::TestRng, CLType, TransactionArgs};
 
     #[test]
     fn should_validate_transfer_args() {

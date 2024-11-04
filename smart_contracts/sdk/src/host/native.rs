@@ -668,7 +668,10 @@ fn handle_ret_with<T>(value: Result<T, NativeTrap>, ret: impl FnOnce() -> T) -> 
     }
 }
 
-fn dispatch_export_call(func: impl FnOnce() -> () + Send + UnwindSafe) -> Result<(), NativeTrap> {
+fn dispatch_export_call<F>(func: F) -> Result<(), NativeTrap>
+where
+    F: FnOnce() + Send + UnwindSafe,
+{
     let call_result = panic::catch_unwind(|| {
         func();
     });

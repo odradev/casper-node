@@ -312,7 +312,7 @@ mod proptests {
         #[test]
         fn construction_roundtrip(transaction in legal_transaction_arb()) {
             let maybe_transaction = MetaTransaction::from_transaction(&transaction, &TransactionConfig::default());
-            prop_assert!(matches!(maybe_transaction, Ok(_)), "{:?}", maybe_transaction);
+            prop_assert!(maybe_transaction.is_ok(), "{:?}", maybe_transaction);
         }
     }
 }

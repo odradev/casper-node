@@ -413,22 +413,6 @@ impl Entity {
             Entity::Contract(addr) => addr,
         }
     }
-
-    /// Get the address of the entity.
-    pub(crate) fn as_ptr(&self) -> *const u8 {
-        match self {
-            Entity::Account(addr) => addr.as_ptr(),
-            Entity::Contract(addr) => addr.as_ptr(),
-        }
-    }
-
-    /// Get the length of the address of the entity.
-    pub(crate) fn len(&self) -> usize {
-        match self {
-            Entity::Account(addr) => addr.len(),
-            Entity::Contract(addr) => addr.len(),
-        }
-    }
 }
 
 impl CasperABI for Entity {

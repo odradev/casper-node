@@ -427,7 +427,7 @@ impl Display for PricingMode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{bytesrepr, testing::TestRng};
+    use crate::bytesrepr;
 
     #[test]
     fn test_to_bytes_and_from_bytes() {

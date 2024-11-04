@@ -1174,7 +1174,7 @@ fn add_should_work() {
 
     let (global_state, root_hash, _tempdir) = state::lmdb::make_temporary_global_state(pairs);
 
-    let effects = {
+    let (effects, cache) = {
         let view = global_state.checkout(root_hash).unwrap().unwrap();
         let mut tracking_copy = TrackingCopy::new(view, DEFAULT_MAX_QUERY_DEPTH);
         assert!(
@@ -1186,7 +1186,7 @@ fn add_should_work() {
         assert!(
             matches!(tracking_copy.get(&key), Ok(Some(StoredValue::CLValue(initial_value))) if initial_value.clone().into_t::<i32>().unwrap() == 2)
         );
-        tracking_copy.effects()
+        (tracking_copy.effects(), tracking_copy.cache())
     };
 
     let view = global_state.checkout(root_hash).unwrap().unwrap();
@@ -1194,7 +1194,7 @@ fn add_should_work() {
     assert!(
         matches!(tc.get(&key), Ok(Some(StoredValue::CLValue(initial_value))) if initial_value.clone().into_t::<i32>().unwrap() == 1)
     );
-    tc.apply_changes(effects).unwrap();
+    tc.apply_changes(effects, cache);
     assert!(
         matches!(tc.get(&key), Ok(Some(StoredValue::CLValue(initial_value))) if initial_value.clone().into_t::<i32>().unwrap() == 2)
     );
