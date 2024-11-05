@@ -9,6 +9,7 @@
 #![warn(missing_docs)]
 
 mod chainspec_config;
+pub mod deploy_item;
 mod deploy_item_builder;
 mod execute_request_builder;
 mod step_request_builder;
@@ -145,7 +146,7 @@ pub static DEFAULT_WASM_CONFIG: Lazy<WasmConfig> = Lazy::new(WasmConfig::default
 pub static DEFAULT_WASM_V1_CONFIG: Lazy<WasmV1Config> = Lazy::new(WasmV1Config::default);
 /// Default [`SystemConfig`].
 pub static DEFAULT_SYSTEM_CONFIG: Lazy<SystemConfig> = Lazy::new(SystemConfig::default);
-/// Default [`StorageConfig`].
+/// Default [`StorageCosts`].
 pub static DEFAULT_STORAGE_COSTS: Lazy<StorageCosts> = Lazy::new(StorageCosts::default);
 
 /// Default [`GenesisConfig`].

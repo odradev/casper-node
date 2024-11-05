@@ -6,10 +6,11 @@ use casper_types::{
     account::AccountHash,
     bytesrepr::{FromBytes, ToBytes},
     system::auction::{
-        BidAddr, BidKind, Delegator, DelegatorBids, Error, SeigniorageAllocation,
-        SeigniorageRecipient, SeigniorageRecipients, SeigniorageRecipientsSnapshot, UnbondingPurse,
-        UnbondingPurses, ValidatorBid, ValidatorBids, ValidatorCredit, ValidatorCredits,
-        AUCTION_DELAY_KEY, ERA_END_TIMESTAMP_MILLIS_KEY, ERA_ID_KEY,
+        BidAddr, BidKind, Delegator, DelegatorBids, Error, Reservation, Reservations,
+        SeigniorageAllocation, SeigniorageRecipientV2, SeigniorageRecipientsSnapshotV1,
+        SeigniorageRecipientsSnapshotV2, SeigniorageRecipientsV2, UnbondingPurse, UnbondingPurses,
+        ValidatorBid, ValidatorBids, ValidatorCredit, ValidatorCredits, AUCTION_DELAY_KEY,
+        DELEGATION_RATE_DENOMINATOR, ERA_END_TIMESTAMP_MILLIS_KEY, ERA_ID_KEY,
         SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY, UNBONDING_DELAY_KEY, VALIDATOR_SLOTS_KEY,
     },
     ApiError, CLTyped, EraId, Key, KeyTag, PublicKey, URef, U512,
@@ -57,6 +58,7 @@ pub struct ValidatorBidsDetail {
     validator_bids: ValidatorBids,
     validator_credits: ValidatorCredits,
     delegator_bids: DelegatorBids,
+    reservations: Reservations,
 }
 
 impl ValidatorBidsDetail {
@@ -66,6 +68,7 @@ impl ValidatorBidsDetail {
             validator_bids: BTreeMap::new(),
             validator_credits: BTreeMap::new(),
             delegator_bids: BTreeMap::new(),
+            reservations: BTreeMap::new(),
         }
     }
 
@@ -75,8 +78,10 @@ impl ValidatorBidsDetail {
         validator: PublicKey,
         validator_bid: Box<ValidatorBid>,
         delegators: Vec<Box<Delegator>>,
+        reservations: Vec<Box<Reservation>>,
     ) -> Option<Box<ValidatorBid>> {
         self.delegator_bids.insert(validator.clone(), delegators);
+        self.reservations.insert(validator.clone(), reservations);
         self.validator_bids.insert(validator, validator_bid)
     }
 
@@ -186,11 +191,12 @@ impl ValidatorBidsDetail {
     }
 
     /// Consume self into in underlying collections.
-    pub fn destructure(self) -> (ValidatorBids, ValidatorCredits, DelegatorBids) {
+    pub fn destructure(self) -> (ValidatorBids, ValidatorCredits, DelegatorBids, Reservations) {
         (
             self.validator_bids,
             self.validator_credits,
             self.delegator_bids,
+            self.reservations,
         )
     }
 }
@@ -226,7 +232,13 @@ where
             Some(BidKind::Validator(validator_bid)) => {
                 let validator_public_key = validator_bid.validator_public_key();
                 let delegator_bids = delegators(provider, validator_public_key)?;
-                ret.insert_bid(validator_public_key.clone(), validator_bid, delegator_bids);
+                let reservations = reservations(provider, validator_public_key)?;
+                ret.insert_bid(
+                    validator_public_key.clone(),
+                    validator_bid,
+                    delegator_bids,
+                    reservations,
+                );
             }
             Some(BidKind::Credit(credit)) => {
                 ret.insert_credit(credit.validator_public_key().clone(), era_id, credit);
@@ -327,20 +339,30 @@ where
     )
 }
 
-/// Returns seigniorage recipients snapshot.  
+/// Returns seigniorage recipients snapshot.
 pub fn get_seigniorage_recipients_snapshot<P>(
     provider: &mut P,
-) -> Result<SeigniorageRecipientsSnapshot, Error>
+) -> Result<SeigniorageRecipientsSnapshotV2, Error>
 where
     P: StorageProvider + RuntimeProvider + ?Sized,
 {
     read_from(provider, SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY)
 }
 
-/// Set seigniorage recipients snapshot.
+/// Returns seigniorage recipients snapshot in legacy format.
+pub fn get_legacy_seigniorage_recipients_snapshot<P>(
+    provider: &mut P,
+) -> Result<SeigniorageRecipientsSnapshotV1, Error>
+where
+    P: StorageProvider + RuntimeProvider + ?Sized,
+{
+    read_from(provider, SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY)
+}
+
+/// Sets the setigniorage recipients snapshot.
 pub fn set_seigniorage_recipients_snapshot<P>(
     provider: &mut P,
-    snapshot: SeigniorageRecipientsSnapshot,
+    snapshot: SeigniorageRecipientsSnapshotV2,
 ) -> Result<(), Error>
 where
     P: StorageProvider + RuntimeProvider + ?Sized,
@@ -713,6 +735,27 @@ where
     }
 }
 
+/// Checks if a reservation for a given delegator exists.
+fn has_reservation<P>(
+    provider: &mut P,
+    delegator: &PublicKey,
+    validator: &PublicKey,
+) -> Result<bool, Error>
+where
+    P: RuntimeProvider + StorageProvider + ?Sized,
+{
+    let reservation_bid_key = BidAddr::Reservation {
+        validator: AccountHash::from(validator),
+        delegator: AccountHash::from(delegator),
+    }
+    .into();
+    if let Some(BidKind::Reservation(_)) = provider.read_bid(&reservation_bid_key)? {
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
 /// If specified validator exists, and if validator is not yet at max delegators count, processes
 /// delegation. For a new delegation a delegator bid record will be created to track the delegation,
 /// otherwise the existing tracking record will be updated.
@@ -752,13 +795,20 @@ where
         delegator_bid.increase_stake(amount)?;
         (*delegator_bid.bonding_purse(), delegator_bid)
     } else {
-        // is this validator over the delegator limit?
+        // is this validator over the delegator limit
+        // or is there a reservation for given delegator public key?
         let delegator_count = provider.delegator_count(&validator_bid_addr)?;
-        if delegator_count >= max_delegators_per_validator as usize {
+        let reserved_slots_count = validator_bid.reserved_slots();
+        let reservation_count = provider.reservation_count(&validator_bid_addr)?;
+        let has_reservation =
+            has_reservation(provider, &delegator_public_key, &validator_public_key)?;
+        if delegator_count >= (max_delegators_per_validator - reserved_slots_count) as usize
+            && !has_reservation
+        {
             warn!(
-                %delegator_count, %max_delegators_per_validator,
-                "delegator_count {}, max_delegators_per_validator {}",
-                delegator_count, max_delegators_per_validator
+                %delegator_count, %max_delegators_per_validator, %reservation_count, %has_reservation,
+                "delegator_count {}, max_delegators_per_validator {}, reservation_count {}, has_reservation {}",
+                delegator_count, max_delegators_per_validator, reservation_count, has_reservation
             );
             return Err(Error::ExceededDelegatorSizeLimit.into());
         }
@@ -794,6 +844,98 @@ where
     provider.write_bid(delegator_bid_key, BidKind::Delegator(delegator_bid))?;
 
     Ok(updated_amount)
+}
+
+/// If specified validator exists, and if validator is not yet at max reservations count, processes
+/// reservation. For a new reservation a bid record will be created to track the reservation,
+/// otherwise the existing tracking record will be updated.
+#[allow(clippy::too_many_arguments)]
+pub fn handle_add_reservation<P>(provider: &mut P, reservation: Reservation) -> Result<(), Error>
+where
+    P: StorageProvider + MintProvider + RuntimeProvider,
+{
+    // is there such a validator?
+    let validator_bid_addr = BidAddr::from(reservation.validator_public_key().clone());
+    let bid = read_validator_bid(provider, &validator_bid_addr.into())?;
+
+    // is there already a record for this delegator?
+    let reservation_bid_key = BidAddr::Reservation {
+        validator: AccountHash::from(reservation.validator_public_key()),
+        delegator: AccountHash::from(reservation.delegator_public_key()),
+    }
+    .into();
+    if provider.read_bid(&reservation_bid_key)?.is_none() {
+        // ensure reservation list has capacity to create a new reservation
+        let reservation_count = provider.reservation_count(&validator_bid_addr)?;
+        let reserved_slots = bid.reserved_slots() as usize;
+        if reservation_count >= reserved_slots {
+            warn!(
+                %reservation_count, %reserved_slots,
+                "reservation_count {}, reserved_slots {}",
+                reservation_count, reserved_slots
+            );
+            return Err(Error::ExceededReservationsLimit);
+        }
+    };
+
+    // validate specified delegation rate
+    if reservation.delegation_rate() > &DELEGATION_RATE_DENOMINATOR {
+        return Err(Error::DelegationRateTooLarge);
+    }
+
+    provider.write_bid(
+        reservation_bid_key,
+        BidKind::Reservation(Box::new(reservation)),
+    )?;
+
+    Ok(())
+}
+
+/// Attempts to remove a reservation if one exists. If not it returns an error.
+///
+/// If there is already a delegator bid associated with a given reservation it validates that
+/// there are free public slots available. If not, it returns an error since the delegator
+/// cannot be "downgraded".
+pub fn handle_cancel_reservation<P>(
+    provider: &mut P,
+    validator: PublicKey,
+    delegator: PublicKey,
+    max_delegators_per_validator: u32,
+) -> Result<(), Error>
+where
+    P: StorageProvider + MintProvider + RuntimeProvider,
+{
+    // is there such a validator?
+    let validator_bid_addr = BidAddr::from(validator.clone());
+    let validator_bid = read_validator_bid(provider, &validator_bid_addr.into())?;
+
+    // is there a reservation for this delegator?
+    let reservation_bid_addr = BidAddr::Reservation {
+        validator: AccountHash::from(&validator),
+        delegator: AccountHash::from(&delegator),
+    };
+    if provider.read_bid(&reservation_bid_addr.into())?.is_none() {
+        return Err(Error::ReservationNotFound);
+    }
+
+    // is there such a delegator?
+    let delegator_bid_addr = BidAddr::new_from_public_keys(&validator, Some(&delegator));
+    if read_delegator_bid(provider, &delegator_bid_addr.into()).is_ok() {
+        // is there a free public slot
+        let reserved_slots = validator_bid.reserved_slots();
+        let delegator_count = provider.delegator_count(&validator_bid_addr)?;
+        let used_reservation_count = provider.used_reservation_count(&validator_bid_addr)?;
+        let normal_delegators = delegator_count - used_reservation_count;
+        let public_slots = max_delegators_per_validator - reserved_slots;
+
+        // cannot "downgrade" a delegator if there are no free public slots available
+        if public_slots == normal_delegators as u32 {
+            return Err(Error::ExceededDelegatorSizeLimit);
+        }
+    }
+
+    provider.prune_bid(reservation_bid_addr);
+    Ok(())
 }
 
 /// Returns validator bid by key.
@@ -879,13 +1021,52 @@ where
     }
 }
 
+/// Returns all delegator slot reservations for given validator.
+pub fn read_reservation_bids<P>(
+    provider: &mut P,
+    validator_public_key: &PublicKey,
+) -> Result<Vec<Reservation>, Error>
+where
+    P: RuntimeProvider + StorageProvider + ?Sized,
+{
+    let mut ret = vec![];
+    let bid_addr = BidAddr::from(validator_public_key.clone());
+    let reservation_bid_keys = provider.get_keys_by_prefix(
+        &bid_addr
+            .reservation_prefix()
+            .map_err(|_| Error::Serialization)?,
+    )?;
+    for reservation_bid_key in reservation_bid_keys {
+        let reservation_bid = read_reservation_bid(provider, &reservation_bid_key)?;
+        ret.push(*reservation_bid);
+    }
+
+    Ok(ret)
+}
+
+/// Returns delegator slot reservation bid by key.
+pub fn read_reservation_bid<P>(provider: &mut P, bid_key: &Key) -> Result<Box<Reservation>, Error>
+where
+    P: RuntimeProvider + ?Sized + StorageProvider,
+{
+    if !bid_key.is_bid_addr_key() {
+        return Err(Error::InvalidKeyVariant);
+    }
+    if let Some(BidKind::Reservation(reservation_bid)) = provider.read_bid(bid_key)? {
+        Ok(reservation_bid)
+    } else {
+        Err(Error::ReservationNotFound)
+    }
+}
+
 /// Applies seigniorage recipient changes.
 pub fn seigniorage_recipients(
     validator_weights: &ValidatorWeights,
     validator_bids: &ValidatorBids,
     delegator_bids: &DelegatorBids,
-) -> Result<SeigniorageRecipients, Error> {
-    let mut recipients = SeigniorageRecipients::new();
+    reservations: &Reservations,
+) -> Result<SeigniorageRecipientsV2, Error> {
+    let mut recipients = SeigniorageRecipientsV2::new();
     for (validator_public_key, validator_total_weight) in validator_weights {
         // check if validator bid exists before processing.
         let validator_bid = validator_bids
@@ -893,7 +1074,7 @@ pub fn seigniorage_recipients(
             .ok_or(Error::ValidatorNotFound)?;
         // calculate delegator portion(s), if any
         let mut delegators_weight = U512::zero();
-        let mut delegators_stake: BTreeMap<PublicKey, U512> = BTreeMap::new();
+        let mut delegators_stake = BTreeMap::new();
         if let Some(delegators) = delegator_bids.get(validator_public_key) {
             for delegator_bid in delegators {
                 if delegator_bid.staked_amount().is_zero() {
@@ -908,12 +1089,23 @@ pub fn seigniorage_recipients(
             }
         }
 
+        let mut reservation_delegation_rates = BTreeMap::new();
+        if let Some(reservations) = reservations.get(validator_public_key) {
+            for reservation in reservations {
+                reservation_delegation_rates.insert(
+                    reservation.delegator_public_key().clone(),
+                    *reservation.delegation_rate(),
+                );
+            }
+        }
+
         // determine validator's personal stake (total weight - sum of delegators weight)
         let validator_stake = validator_total_weight.saturating_sub(delegators_weight);
-        let seigniorage_recipient = SeigniorageRecipient::new(
+        let seigniorage_recipient = SeigniorageRecipientV2::new(
             validator_stake,
             *validator_bid.delegation_rate(),
             delegators_stake,
+            reservation_delegation_rates,
         );
         recipients.insert(validator_public_key.clone(), seigniorage_recipient);
     }
@@ -924,7 +1116,23 @@ pub fn seigniorage_recipients(
 ///
 /// This is `pub` as it is used not just in the relevant auction entry point, but also by the
 /// engine state while directly querying for the era validators.
-pub fn era_validators_from_snapshot(snapshot: SeigniorageRecipientsSnapshot) -> EraValidators {
+pub fn era_validators_from_snapshot(snapshot: SeigniorageRecipientsSnapshotV2) -> EraValidators {
+    snapshot
+        .into_iter()
+        .map(|(era_id, recipients)| {
+            let validator_weights = recipients
+                .into_iter()
+                .filter_map(|(public_key, bid)| bid.total_stake().map(|stake| (public_key, stake)))
+                .collect::<ValidatorWeights>();
+            (era_id, validator_weights)
+        })
+        .collect()
+}
+
+/// Returns the era validators from a legacy snapshot.
+pub(crate) fn era_validators_from_legacy_snapshot(
+    snapshot: SeigniorageRecipientsSnapshotV1,
+) -> EraValidators {
     snapshot
         .into_iter()
         .map(|(era_id, recipients)| {
@@ -1009,6 +1217,30 @@ where
     for delegator_bid_key in delegator_bid_keys {
         let delegator = read_delegator_bid(provider, &delegator_bid_key)?;
         ret.push(delegator);
+    }
+
+    Ok(ret)
+}
+
+/// Returns all delegator slot reservations for given validator.
+pub fn reservations<P>(
+    provider: &mut P,
+    validator_public_key: &PublicKey,
+) -> Result<Vec<Box<Reservation>>, Error>
+where
+    P: RuntimeProvider + ?Sized + StorageProvider,
+{
+    let mut ret = vec![];
+    let bid_addr = BidAddr::from(validator_public_key.clone());
+    let reservation_bid_keys = provider.get_keys_by_prefix(
+        &bid_addr
+            .reservation_prefix()
+            .map_err(|_| Error::Serialization)?,
+    )?;
+
+    for reservation_bid_key in reservation_bid_keys {
+        let reservation = read_reservation_bid(provider, &reservation_bid_key)?;
+        ret.push(reservation);
     }
 
     Ok(ret)

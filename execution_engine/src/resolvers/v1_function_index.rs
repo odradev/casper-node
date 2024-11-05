@@ -37,6 +37,7 @@ pub(crate) enum FunctionIndex {
     ReadHostBufferIndex,
     CreateContractPackageAtHash,
     AddContractVersion,
+    AddContractVersionWithMessageTopics,
     AddPackageVersion,
     DisableContractVersion,
     CallVersionedContract,
@@ -61,6 +62,7 @@ pub(crate) enum FunctionIndex {
     EmitMessage,
     LoadCallerInformation,
     GetBlockInfoIndex,
+    GenericHash,
 }
 
 impl From<FunctionIndex> for usize {

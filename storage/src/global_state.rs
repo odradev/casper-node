@@ -29,3 +29,5 @@ impl<R: state::StateReader<casper_types::Key, casper_types::StoredValue, Error =
     GlobalStateReader for R
 {
 }
+
+pub(crate) const DEFAULT_ENABLE_ENTITY: bool = false;

@@ -321,11 +321,11 @@ allow_request_speculative_exec = false
 max_message_size_bytes = 4_194_304
 
 # Maximum number of connections to the server.
-max_connections = 16
+max_connections = 5
 
 # The global max rate of requests (per second) before they are limited.
 # The implementation uses a sliding window algorithm.
-qps_limit = 100
+qps_limit = 110
 
 # ==============================================
 # Configuration options for the REST HTTP server

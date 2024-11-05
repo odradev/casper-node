@@ -6,8 +6,10 @@ use tracing::debug;
 
 #[cfg(any(all(feature = "std", feature = "testing"), test))]
 use crate::{
-    account::AccountHash, bytesrepr::FromBytes, system::auction::ARG_VALIDATOR, CLType, CLValue,
-    InvalidTransactionV1, TransactionArgs,
+    account::AccountHash,
+    bytesrepr::FromBytes,
+    system::auction::{Reservation, ARG_VALIDATOR},
+    CLType, CLValue, InvalidTransactionV1, TransactionArgs,
 };
 use crate::{
     bytesrepr::ToBytes, CLTyped, CLValueError, PublicKey, RuntimeArgs, TransferTarget, URef, U512,
@@ -52,6 +54,16 @@ const CHANGE_BID_PUBLIC_KEY_ARG_PUBLIC_KEY: RequiredArg<PublicKey> = RequiredArg
 #[cfg(any(all(feature = "std", feature = "testing"), test))]
 const CHANGE_BID_PUBLIC_KEY_ARG_NEW_PUBLIC_KEY: RequiredArg<PublicKey> =
     RequiredArg::new("new_public_key");
+
+#[cfg(any(all(feature = "std", feature = "testing"), test))]
+const ADD_RESERVATIONS_ARG_RESERVATIONS: RequiredArg<Vec<Reservation>> =
+    RequiredArg::new("reservations");
+
+#[cfg(any(all(feature = "std", feature = "testing"), test))]
+const CANCEL_RESERVATIONS_ARG_VALIDATOR: RequiredArg<PublicKey> = RequiredArg::new("validator");
+#[cfg(any(all(feature = "std", feature = "testing"), test))]
+const CANCEL_RESERVATIONS_ARG_DELEGATORS: RequiredArg<Vec<PublicKey>> =
+    RequiredArg::new("delegators");
 
 struct RequiredArg<T> {
     name: &'static str,
@@ -370,7 +382,6 @@ pub fn has_valid_activate_bid_args(args: &TransactionArgs) -> Result<(), Invalid
 }
 
 /// Checks the given `RuntimeArgs` are suitable for use in a change bid public key transaction.
-#[allow(dead_code)]
 #[cfg(any(all(feature = "std", feature = "testing"), test))]
 pub fn has_valid_change_bid_public_key_args(
     args: &TransactionArgs,
@@ -380,6 +391,29 @@ pub fn has_valid_change_bid_public_key_args(
         .ok_or(InvalidTransactionV1::ExpectedNamedArguments)?;
     let _public_key = CHANGE_BID_PUBLIC_KEY_ARG_PUBLIC_KEY.get(args)?;
     let _new_public_key = CHANGE_BID_PUBLIC_KEY_ARG_NEW_PUBLIC_KEY.get(args)?;
+    Ok(())
+}
+
+/// Checks the given `TransactionArgs` are suitable for use in a add reservations transaction.
+#[cfg(any(all(feature = "std", feature = "testing"), test))]
+pub fn has_valid_add_reservations_args(args: &TransactionArgs) -> Result<(), InvalidTransactionV1> {
+    let args = args
+        .as_named()
+        .ok_or(InvalidTransactionV1::ExpectedNamedArguments)?;
+    let _reservations = ADD_RESERVATIONS_ARG_RESERVATIONS.get(args)?;
+    Ok(())
+}
+
+/// Checks the given `TransactionArgs` are suitable for use in a add reservations transaction.
+#[cfg(any(all(feature = "std", feature = "testing"), test))]
+pub fn has_valid_cancel_reservations_args(
+    args: &TransactionArgs,
+) -> Result<(), InvalidTransactionV1> {
+    let args = args
+        .as_named()
+        .ok_or(InvalidTransactionV1::ExpectedNamedArguments)?;
+    let _validator = CANCEL_RESERVATIONS_ARG_VALIDATOR.get(args)?;
+    let _delegators = CANCEL_RESERVATIONS_ARG_DELEGATORS.get(args)?;
     Ok(())
 }
 

@@ -11,7 +11,6 @@ use casper_storage::{
 use casper_types::{
     account::AccountHash,
     bytesrepr::{FromBytes, ToBytes},
-    crypto,
     system::{
         auction::{BidAddr, BidKind, EraInfo, Error, UnbondingPurse},
         mint,
@@ -19,7 +18,7 @@ use casper_types::{
     CLTyped, CLValue, Key, KeyTag, PublicKey, RuntimeArgs, StoredValue, URef, U512,
 };
 
-use super::Runtime;
+use super::{cryptography, Runtime};
 use crate::execution::ExecError;
 
 impl From<ExecError> for Option<Error> {
@@ -150,7 +149,7 @@ where
     R: StateReader<Key, StoredValue, Error = GlobalStateError>,
 {
     fn get_caller(&self) -> AccountHash {
-        self.context.get_caller()
+        self.context.get_initiator()
     }
 
     fn is_allowed_session_caller(&self, account_hash: &AccountHash) -> bool {
@@ -189,6 +188,60 @@ where
         Ok(keys.len())
     }
 
+    fn reservation_count(&mut self, bid_addr: &BidAddr) -> Result<usize, Error> {
+        let reservation_prefix = bid_addr.reservation_prefix()?;
+        let reservation_keys = self
+            .context
+            .get_keys_with_prefix(&reservation_prefix)
+            .map_err(|exec_error| {
+                error!("RuntimeProvider::reservation_count {:?}", exec_error);
+                <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
+            })?;
+        Ok(reservation_keys.len())
+    }
+
+    fn used_reservation_count(&mut self, bid_addr: &BidAddr) -> Result<usize, Error> {
+        let delegator_prefix = bid_addr.delegators_prefix()?;
+        let delegator_keys = self
+            .context
+            .get_keys_with_prefix(&delegator_prefix)
+            .map_err(|exec_error| {
+                error!("RuntimeProvider::used_reservation_count {:?}", exec_error);
+                <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
+            })?;
+        let delegator_account_hashes: Vec<AccountHash> = delegator_keys
+            .into_iter()
+            .filter_map(|key| {
+                if let Key::BidAddr(BidAddr::Delegator { delegator, .. }) = key {
+                    Some(delegator)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let reservation_prefix = bid_addr.reservation_prefix()?;
+        let reservation_keys = self
+            .context
+            .get_keys_with_prefix(&reservation_prefix)
+            .map_err(|exec_error| {
+                error!("RuntimeProvider::reservation_count {:?}", exec_error);
+                <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
+            })?;
+
+        let used_reservations_count = reservation_keys
+            .iter()
+            .filter(|reservation| {
+                if let Key::BidAddr(BidAddr::Reservation { delegator, .. }) = reservation {
+                    delegator_account_hashes.contains(delegator)
+                } else {
+                    false
+                }
+            })
+            .count();
+        Ok(used_reservations_count)
+    }
+
     fn vesting_schedule_period_millis(&self) -> u64 {
         self.context
             .engine_config()
@@ -209,8 +262,11 @@ where
     R: StateReader<Key, StoredValue, Error = GlobalStateError>,
 {
     fn unbond(&mut self, unbonding_purse: &UnbondingPurse) -> Result<(), Error> {
-        let account_hash =
-            AccountHash::from_public_key(unbonding_purse.unbonder_public_key(), crypto::blake2b);
+        let account_hash = AccountHash::from_public_key(
+            unbonding_purse.unbonder_public_key(),
+            cryptography::blake2b,
+        );
+
         let maybe_value = self
             .context
             .read_gs_unsafe(&Key::Account(account_hash))
@@ -220,6 +276,18 @@ where
             })?;
 
         let contract_key: Key = match maybe_value {
+            Some(StoredValue::Account(account)) => {
+                self.mint_transfer_direct(
+                    Some(account_hash),
+                    *unbonding_purse.bonding_purse(),
+                    account.main_purse(),
+                    *unbonding_purse.amount(),
+                    None,
+                )
+                .map_err(|_| Error::Transfer)?
+                .map_err(|_| Error::Transfer)?;
+                return Ok(());
+            }
             Some(StoredValue::CLValue(cl_value)) => {
                 let contract_key: Key = cl_value.into_t().map_err(|_| Error::CLValue)?;
                 contract_key
@@ -265,8 +333,14 @@ where
         amount: U512,
         id: Option<u64>,
     ) -> Result<Result<(), mint::Error>, Error> {
-        if !(self.context.entity().main_purse().addr() == source.addr()
-            || self.context.get_caller() == PublicKey::System.to_account_hash())
+        if !(self
+            .context
+            .runtime_footprint()
+            .main_purse()
+            .expect("didnt have purse")
+            .addr()
+            == source.addr()
+            || self.context.get_initiator() == PublicKey::System.to_account_hash())
         {
             return Err(Error::InvalidCaller);
         }
@@ -286,12 +360,12 @@ where
         self.context
             .access_rights_extend(&[source, target.into_add()]);
 
-        let mint_contract_hash = self.get_mint_contract().map_err(|exec_error| {
+        let mint_hash = self.get_mint_hash().map_err(|exec_error| {
             <Option<Error>>::from(exec_error).unwrap_or(Error::MissingValue)
         })?;
 
         let cl_value = self
-            .call_contract(mint_contract_hash, mint::METHOD_TRANSFER, args_values)
+            .call_contract(mint_hash, mint::METHOD_TRANSFER, args_values)
             .map_err(|exec_error| <Option<Error>>::from(exec_error).unwrap_or(Error::Transfer))?;
 
         self.set_gas_counter(gas_counter);
@@ -303,7 +377,7 @@ where
         amount: U512,
         existing_purse: URef,
     ) -> Result<(), Error> {
-        if self.context.get_caller() != PublicKey::System.to_account_hash() {
+        if self.context.get_initiator() != PublicKey::System.to_account_hash() {
             return Err(Error::InvalidCaller);
         }
 
@@ -316,13 +390,13 @@ where
 
         let gas_counter = self.gas_counter();
 
-        let mint_contract_hash = self.get_mint_contract().map_err(|exec_error| {
+        let mint_hash = self.get_mint_hash().map_err(|exec_error| {
             <Option<Error>>::from(exec_error).unwrap_or(Error::MissingValue)
         })?;
 
         let cl_value = self
             .call_contract(
-                mint_contract_hash,
+                mint_hash,
                 mint::METHOD_MINT_INTO_EXISTING_PURSE,
                 args_values,
             )
@@ -346,26 +420,26 @@ where
     }
 
     fn read_base_round_reward(&mut self) -> Result<U512, Error> {
-        let mint_contract = self.get_mint_contract().map_err(|exec_error| {
+        let mint_hash = self.get_mint_hash().map_err(|exec_error| {
             <Option<Error>>::from(exec_error).unwrap_or(Error::MissingValue)
         })?;
-        self.mint_read_base_round_reward(mint_contract)
+        self.mint_read_base_round_reward(mint_hash)
             .map_err(|exec_error| <Option<Error>>::from(exec_error).unwrap_or(Error::MissingValue))
     }
 
     fn mint(&mut self, amount: U512) -> Result<URef, Error> {
-        let mint_contract = self
-            .get_mint_contract()
+        let mint_hash = self
+            .get_mint_hash()
             .map_err(|exec_error| <Option<Error>>::from(exec_error).unwrap_or(Error::MintReward))?;
-        self.mint_mint(mint_contract, amount)
+        self.mint_mint(mint_hash, amount)
             .map_err(|exec_error| <Option<Error>>::from(exec_error).unwrap_or(Error::MintReward))
     }
 
     fn reduce_total_supply(&mut self, amount: U512) -> Result<(), Error> {
-        let mint_contract = self
-            .get_mint_contract()
+        let mint_hash = self
+            .get_mint_hash()
             .map_err(|exec_error| <Option<Error>>::from(exec_error).unwrap_or(Error::MintReward))?;
-        self.mint_reduce_total_supply(mint_contract, amount)
+        self.mint_reduce_total_supply(mint_hash, amount)
             .map_err(|exec_error| <Option<Error>>::from(exec_error).unwrap_or(Error::MintReward))
     }
 }
@@ -377,7 +451,10 @@ where
     fn get_main_purse(&self) -> Result<URef, Error> {
         // NOTE: this is used by the system and is not (and should not be made to be) accessible
         // from userland.
-        Ok(Runtime::context(self).entity().main_purse())
+        Runtime::context(self)
+            .runtime_footprint()
+            .main_purse()
+            .ok_or(Error::InvalidContext)
     }
 }
 

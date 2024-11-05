@@ -19,13 +19,17 @@ use std::{
 use tracing::{debug, error, info, warn};
 
 use casper_types::{
-    addressable_entity::{EntityKindTag, NamedKeys},
+    account::AccountHash,
+    addressable_entity::NamedKeys,
     bytesrepr::{self, ToBytes},
     execution::{Effects, TransformError, TransformInstruction, TransformKindV2, TransformV2},
     global_state::TrieMerkleProof,
     system::{
         self,
-        auction::{ERA_END_TIMESTAMP_MILLIS_KEY, ERA_ID_KEY, SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY},
+        auction::{
+            SeigniorageRecipientsSnapshot, ERA_END_TIMESTAMP_MILLIS_KEY, ERA_ID_KEY,
+            SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY, SEIGNIORAGE_RECIPIENTS_SNAPSHOT_VERSION_KEY,
+        },
         mint::{
             BalanceHoldAddr, BalanceHoldAddrTag, ARG_AMOUNT, ROUND_SEIGNIORAGE_RATE_KEY,
             TOTAL_SUPPLY_KEY,
@@ -58,14 +62,14 @@ use crate::{
         BlockRewardsResult, EntryPointsRequest, EntryPointsResult, EraValidatorsRequest,
         ExecutionResultsChecksumRequest, ExecutionResultsChecksumResult, FeeError, FeeRequest,
         FeeResult, FlushRequest, FlushResult, GenesisRequest, GenesisResult, HandleRefundMode,
-        HandleRefundRequest, HandleRefundResult, InsufficientBalanceHandling, ProofHandling,
-        ProofsResult, ProtocolUpgradeRequest, ProtocolUpgradeResult, PruneRequest, PruneResult,
-        PutTrieRequest, PutTrieResult, QueryRequest, QueryResult, RoundSeigniorageRateRequest,
-        RoundSeigniorageRateResult, SeigniorageRecipientsRequest, SeigniorageRecipientsResult,
-        StepError, StepRequest, StepResult, SystemEntityRegistryPayload,
-        SystemEntityRegistryRequest, SystemEntityRegistryResult, SystemEntityRegistrySelector,
-        TotalSupplyRequest, TotalSupplyResult, TrieRequest, TrieResult,
-        EXECUTION_RESULTS_CHECKSUM_NAME,
+        HandleRefundRequest, HandleRefundResult, InsufficientBalanceHandling, MessageTopicsRequest,
+        MessageTopicsResult, ProofHandling, ProofsResult, ProtocolUpgradeRequest,
+        ProtocolUpgradeResult, PruneRequest, PruneResult, PutTrieRequest, PutTrieResult,
+        QueryRequest, QueryResult, RoundSeigniorageRateRequest, RoundSeigniorageRateResult,
+        SeigniorageRecipientsRequest, SeigniorageRecipientsResult, StepError, StepRequest,
+        StepResult, SystemEntityRegistryPayload, SystemEntityRegistryRequest,
+        SystemEntityRegistryResult, SystemEntityRegistrySelector, TotalSupplyRequest,
+        TotalSupplyResult, TrieRequest, TrieResult, EXECUTION_RESULTS_CHECKSUM_NAME,
     },
     global_state::{
         error::Error as GlobalStateError,
@@ -707,6 +711,20 @@ pub trait StateProvider: Send + Sync {
         }
     }
 
+    /// Message topics request.
+    fn message_topics(&self, message_topics_request: MessageTopicsRequest) -> MessageTopicsResult {
+        let tc = match self.tracking_copy(message_topics_request.state_hash()) {
+            Ok(Some(tracking_copy)) => tracking_copy,
+            Ok(None) => return MessageTopicsResult::RootNotFound,
+            Err(err) => return MessageTopicsResult::Failure(err.into()),
+        };
+
+        match tc.get_message_topics(message_topics_request.hash_addr()) {
+            Ok(message_topics) => MessageTopicsResult::Success { message_topics },
+            Err(tce) => MessageTopicsResult::Failure(tce),
+        }
+    }
+
     /// Balance inquiry.
     fn balance(&self, request: BalanceRequest) -> BalanceResult {
         let mut tc = match self.tracking_copy(request.state_hash()) {
@@ -1059,8 +1077,14 @@ pub trait StateProvider: Send + Sync {
             SeigniorageRecipientsResult::Success {
                 seigniorage_recipients,
             } => {
-                let era_validators =
-                    auction::detail::era_validators_from_snapshot(seigniorage_recipients);
+                let era_validators = match seigniorage_recipients {
+                    SeigniorageRecipientsSnapshot::V1(snapshot) => {
+                        auction::detail::era_validators_from_legacy_snapshot(snapshot)
+                    }
+                    SeigniorageRecipientsSnapshot::V2(snapshot) => {
+                        auction::detail::era_validators_from_snapshot(snapshot)
+                    }
+                };
                 EraValidatorsResult::Success { era_validators }
             }
         }
@@ -1080,26 +1104,64 @@ pub trait StateProvider: Send + Sync {
             }
         };
 
-        let query_request = match tc.get_system_entity_registry() {
-            Ok(scr) => match scr.get(AUCTION).copied() {
-                Some(auction_hash) => {
-                    let key = if request.protocol_version().value().major < 2 {
-                        Key::Hash(auction_hash.value())
-                    } else {
-                        Key::addressable_entity_key(EntityKindTag::System, auction_hash)
-                    };
-                    QueryRequest::new(
-                        state_hash,
-                        key,
-                        vec![SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY.to_string()],
-                    )
+        let (snapshot_query_request, snapshot_version_query_request) =
+            match tc.get_system_entity_registry() {
+                Ok(scr) => match scr.get(AUCTION).copied() {
+                    Some(auction_hash) => {
+                        let key = if !request.enable_addressable_entity() {
+                            Key::Hash(auction_hash)
+                        } else {
+                            Key::AddressableEntity(EntityAddr::System(auction_hash))
+                        };
+                        (
+                            QueryRequest::new(
+                                state_hash,
+                                key,
+                                vec![SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY.to_string()],
+                            ),
+                            QueryRequest::new(
+                                state_hash,
+                                key,
+                                vec![SEIGNIORAGE_RECIPIENTS_SNAPSHOT_VERSION_KEY.to_string()],
+                            ),
+                        )
+                    }
+                    None => return SeigniorageRecipientsResult::AuctionNotFound,
+                },
+                Err(err) => return SeigniorageRecipientsResult::Failure(err),
+            };
+
+        // check if snapshot version flag is present
+        let snapshot_version: Option<u8> = match self.query(snapshot_version_query_request) {
+            QueryResult::RootNotFound => return SeigniorageRecipientsResult::RootNotFound,
+            QueryResult::Failure(error) => {
+                error!(?error, "unexpected tracking copy error");
+                return SeigniorageRecipientsResult::Failure(error);
+            }
+            QueryResult::ValueNotFound(_msg) => None,
+            QueryResult::Success { value, proofs: _ } => {
+                let cl_value = match value.into_cl_value() {
+                    Some(snapshot_version_cl_value) => snapshot_version_cl_value,
+                    None => {
+                        error!("unexpected query failure; seigniorage recipients snapshot version is not a CLValue");
+                        return SeigniorageRecipientsResult::Failure(
+                            TrackingCopyError::UnexpectedStoredValueVariant,
+                        );
+                    }
+                };
+
+                match cl_value.into_t() {
+                    Ok(snapshot_version) => Some(snapshot_version),
+                    Err(cve) => {
+                        return SeigniorageRecipientsResult::Failure(TrackingCopyError::CLValue(
+                            cve,
+                        ));
+                    }
                 }
-                None => return SeigniorageRecipientsResult::AuctionNotFound,
-            },
-            Err(err) => return SeigniorageRecipientsResult::Failure(err),
+            }
         };
 
-        let snapshot = match self.query(query_request) {
+        let snapshot = match self.query(snapshot_query_request) {
             QueryResult::RootNotFound => return SeigniorageRecipientsResult::RootNotFound,
             QueryResult::Failure(error) => {
                 error!(?error, "unexpected tracking copy error");
@@ -1120,12 +1182,30 @@ pub trait StateProvider: Send + Sync {
                     }
                 };
 
-                match cl_value.into_t() {
-                    Ok(snapshot) => snapshot,
-                    Err(cve) => {
-                        return SeigniorageRecipientsResult::Failure(TrackingCopyError::CLValue(
-                            cve,
-                        ));
+                match snapshot_version {
+                    Some(_) => {
+                        let snapshot = match cl_value.into_t() {
+                            Ok(snapshot) => snapshot,
+                            Err(cve) => {
+                                error!("Failed to convert snapshot from CLValue");
+                                return SeigniorageRecipientsResult::Failure(
+                                    TrackingCopyError::CLValue(cve),
+                                );
+                            }
+                        };
+                        SeigniorageRecipientsSnapshot::V2(snapshot)
+                    }
+                    None => {
+                        let snapshot = match cl_value.into_t() {
+                            Ok(snapshot) => snapshot,
+                            Err(cve) => {
+                                error!("Failed to convert snapshot from CLValue");
+                                return SeigniorageRecipientsResult::Failure(
+                                    TrackingCopyError::CLValue(cve),
+                                );
+                            }
+                        };
+                        SeigniorageRecipientsSnapshot::V1(snapshot)
                     }
                 }
             }
@@ -1190,24 +1270,25 @@ pub trait StateProvider: Send + Sync {
         };
 
         let source_account_hash = initiator.account_hash();
-        let (entity_addr, entity, mut entity_named_keys, mut entity_access_rights) =
-            match tc.borrow_mut().resolved_entity(
+        let (entity_addr, mut footprint, mut entity_access_rights) = match tc
+            .borrow_mut()
+            .authorized_runtime_footprint_with_access_rights(
                 protocol_version,
                 source_account_hash,
                 &authorization_keys,
                 &BTreeSet::default(),
             ) {
-                Ok(ret) => ret,
-                Err(tce) => {
-                    return BiddingResult::Failure(tce);
-                }
-            };
+            Ok(ret) => ret,
+            Err(tce) => {
+                return BiddingResult::Failure(tce);
+            }
+        };
         let entity_key = Key::AddressableEntity(entity_addr);
 
         // extend named keys with era end timestamp
         match tc
             .borrow_mut()
-            .get_system_contract_named_key(AUCTION, ERA_END_TIMESTAMP_MILLIS_KEY)
+            .system_contract_named_key(AUCTION, ERA_END_TIMESTAMP_MILLIS_KEY)
         {
             Ok(Some(k)) => {
                 match k.as_uref() {
@@ -1216,7 +1297,7 @@ pub trait StateProvider: Send + Sync {
                         return BiddingResult::Failure(TrackingCopyError::UnexpectedKeyVariant(k));
                     }
                 }
-                entity_named_keys.insert(ERA_END_TIMESTAMP_MILLIS_KEY.into(), k);
+                footprint.insert_into_named_keys(ERA_END_TIMESTAMP_MILLIS_KEY.into(), k);
             }
             Ok(None) => {
                 return BiddingResult::Failure(TrackingCopyError::NamedKeyNotFound(
@@ -1230,7 +1311,7 @@ pub trait StateProvider: Send + Sync {
         // extend named keys with era id
         match tc
             .borrow_mut()
-            .get_system_contract_named_key(AUCTION, ERA_ID_KEY)
+            .system_contract_named_key(AUCTION, ERA_ID_KEY)
         {
             Ok(Some(k)) => {
                 match k.as_uref() {
@@ -1239,7 +1320,7 @@ pub trait StateProvider: Send + Sync {
                         return BiddingResult::Failure(TrackingCopyError::UnexpectedKeyVariant(k));
                     }
                 }
-                entity_named_keys.insert(ERA_ID_KEY.into(), k);
+                footprint.insert_into_named_keys(ERA_ID_KEY.into(), k);
             }
             Ok(None) => {
                 return BiddingResult::Failure(TrackingCopyError::NamedKeyNotFound(
@@ -1254,6 +1335,8 @@ pub trait StateProvider: Send + Sync {
         let phase = Phase::Session;
         let id = Id::Transaction(transaction_hash);
         let address_generator = AddressGenerator::new(&id.seed(), phase);
+        let max_delegators_per_validator = config.max_delegators_per_validator();
+
         let mut runtime = RuntimeNative::new(
             config,
             protocol_version,
@@ -1262,8 +1345,7 @@ pub trait StateProvider: Send + Sync {
             Rc::clone(&tc),
             source_account_hash,
             entity_key,
-            entity,
-            entity_named_keys,
+            footprint,
             entity_access_rights,
             U512::MAX,
             phase,
@@ -1291,6 +1373,7 @@ pub trait StateProvider: Send + Sync {
                     minimum_delegation_amount,
                     maximum_delegation_amount,
                     minimum_bid_amount,
+                    max_delegators_per_validator,
                     0,
                 )
                 .map(AuctionMethodRet::UpdatedAmount)
@@ -1340,6 +1423,22 @@ pub trait StateProvider: Send + Sync {
                 new_public_key,
             } => runtime
                 .change_bid_public_key(public_key, new_public_key)
+                .map(|_| AuctionMethodRet::Unit)
+                .map_err(|auc_err| {
+                    TrackingCopyError::SystemContract(system::Error::Auction(auc_err))
+                }),
+            AuctionMethod::AddReservations { reservations } => runtime
+                .add_reservations(reservations)
+                .map(|_| AuctionMethodRet::Unit)
+                .map_err(|auc_err| {
+                    TrackingCopyError::SystemContract(system::Error::Auction(auc_err))
+                }),
+            AuctionMethod::CancelReservations {
+                validator,
+                delegators,
+                max_delegators_per_validator,
+            } => runtime
+                .cancel_reservations(validator, delegators, max_delegators_per_validator)
                 .map(|_| AuctionMethodRet::Unit)
                 .map_err(|auc_err| {
                     TrackingCopyError::SystemContract(system::Error::Auction(auc_err))
@@ -1664,6 +1763,7 @@ pub trait StateProvider: Send + Sync {
                     Ok(value) => value,
                     Err(tce) => return HandleFeeResult::Failure(tce),
                 };
+                println!("source: {source_purse}");
                 let target_purse = match target.purse_uref(&mut tc.borrow_mut(), protocol_version) {
                     Ok(value) => value,
                     Err(tce) => return HandleFeeResult::Failure(tce),
@@ -1855,10 +1955,10 @@ pub trait StateProvider: Send + Sync {
             },
             SystemEntityRegistrySelector::ByName(name) => match reg.get(name).copied() {
                 Some(entity_hash) => {
-                    let key = if request.protocol_version().value().major < 2 {
-                        Key::Hash(entity_hash.value())
+                    let key = if !request.enable_addressable_entity() {
+                        Key::Hash(entity_hash)
                     } else {
-                        Key::addressable_entity_key(EntityKindTag::System, entity_hash)
+                        Key::AddressableEntity(EntityAddr::System(entity_hash))
                     };
                     SystemEntityRegistryResult::Success {
                         selected: selector.clone(),
@@ -1907,10 +2007,10 @@ pub trait StateProvider: Send + Sync {
         let query_request = match tc.get_system_entity_registry() {
             Ok(scr) => match scr.get(MINT).copied() {
                 Some(mint_hash) => {
-                    let key = if request.protocol_version().value().major < 2 {
-                        Key::Hash(mint_hash.value())
+                    let key = if !request.enable_addressable_entity() {
+                        Key::Hash(mint_hash)
                     } else {
-                        Key::addressable_entity_key(EntityKindTag::System, mint_hash)
+                        Key::AddressableEntity(EntityAddr::System(mint_hash))
                     };
                     QueryRequest::new(state_hash, key, vec![TOTAL_SUPPLY_KEY.to_string()])
                 }
@@ -1962,10 +2062,10 @@ pub trait StateProvider: Send + Sync {
         let query_request = match tc.get_system_entity_registry() {
             Ok(scr) => match scr.get(MINT).copied() {
                 Some(mint_hash) => {
-                    let key = if request.protocol_version().value().major < 2 {
-                        Key::Hash(mint_hash.value())
+                    let key = if !request.enable_addressable_entity() {
+                        Key::Hash(mint_hash)
                     } else {
-                        Key::addressable_entity_key(EntityKindTag::System, mint_hash)
+                        Key::AddressableEntity(EntityAddr::System(mint_hash))
                     };
                     QueryRequest::new(
                         state_hash,
@@ -2114,19 +2214,27 @@ pub trait StateProvider: Send + Sync {
             }
         }
 
-        let (entity_addr, entity, entity_named_keys, entity_access_rights) =
-            match tc.borrow_mut().resolved_entity(
+        let (entity_addr, runtime_footprint, entity_access_rights) = match tc
+            .borrow_mut()
+            .authorized_runtime_footprint_with_access_rights(
                 protocol_version,
                 source_account_hash,
                 authorization_keys,
                 &administrative_accounts,
             ) {
-                Ok(ret) => ret,
-                Err(tce) => {
-                    return TransferResult::Failure(TransferError::TrackingCopy(tce));
-                }
-            };
-        let entity_key = Key::AddressableEntity(entity_addr);
+            Ok(ret) => ret,
+            Err(tce) => {
+                return TransferResult::Failure(TransferError::TrackingCopy(tce));
+            }
+        };
+        let entity_key = if config.enable_addressable_entity() {
+            Key::AddressableEntity(entity_addr)
+        } else {
+            match entity_addr {
+                EntityAddr::System(hash) | EntityAddr::SmartContract(hash) => Key::Hash(hash),
+                EntityAddr::Account(hash) => Key::Account(AccountHash::new(hash)),
+            }
+        };
         let id = Id::Transaction(request.transaction_hash());
         let phase = Phase::Session;
         let address_generator = AddressGenerator::new(&id.seed(), phase);
@@ -2139,8 +2247,7 @@ pub trait StateProvider: Send + Sync {
             Rc::clone(&tc),
             source_account_hash,
             entity_key,
-            entity.clone(),
-            entity_named_keys.clone(),
+            runtime_footprint.clone(),
             entity_access_rights,
             remaining_spending_limit,
             phase,
@@ -2169,8 +2276,7 @@ pub trait StateProvider: Send + Sync {
             }
         }
         let transfer_args = match runtime_args_builder.build(
-            &entity,
-            entity_named_keys,
+            &runtime_footprint,
             protocol_version,
             Rc::clone(&tc),
         ) {
@@ -2266,6 +2372,8 @@ pub trait StateProvider: Send + Sync {
 
     /// Finds all the children of `trie_raw` which aren't present in the state.
     fn missing_children(&self, trie_raw: &[u8]) -> Result<Vec<Digest>, GlobalStateError>;
+
+    fn enable_entity(&self) -> bool;
 }
 
 /// Write multiple key/stored value pairs to the store in a single rw transaction.

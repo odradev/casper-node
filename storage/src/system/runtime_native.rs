@@ -4,9 +4,9 @@ use crate::{
     AddressGenerator, TrackingCopy,
 };
 use casper_types::{
-    account::AccountHash, addressable_entity::NamedKeys, AddressableEntity, Chainspec,
-    ContextAccessRights, FeeHandling, Key, Phase, ProtocolVersion, PublicKey, RefundHandling,
-    StoredValue, TransactionHash, Transfer, URef, U512,
+    account::AccountHash, addressable_entity::NamedKeys, Chainspec, ContextAccessRights,
+    EntityAddr, FeeHandling, Key, Phase, ProtocolVersion, PublicKey, RefundHandling,
+    RuntimeFootprint, StoredValue, TransactionHash, Transfer, URef, U512,
 };
 use num_rational::Ratio;
 use parking_lot::RwLock;
@@ -27,6 +27,8 @@ pub struct Config {
     balance_hold_interval: u64,
     include_credits: bool,
     credit_cap: Ratio<U512>,
+    enable_addressable_entity: bool,
+    native_transfer_cost: u32,
 }
 
 impl Config {
@@ -44,6 +46,8 @@ impl Config {
         balance_hold_interval: u64,
         include_credits: bool,
         credit_cap: Ratio<U512>,
+        enable_addressable_entity: bool,
+        native_transfer_cost: u32,
     ) -> Self {
         Config {
             transfer_config,
@@ -57,6 +61,8 @@ impl Config {
             balance_hold_interval,
             include_credits,
             credit_cap,
+            enable_addressable_entity,
+            native_transfer_cost,
         }
     }
 
@@ -76,6 +82,8 @@ impl Config {
             U512::from(*chainspec.core_config.validator_credit_cap.numer()),
             U512::from(*chainspec.core_config.validator_credit_cap.denom()),
         );
+        let enable_addressable_entity = chainspec.core_config.enable_addressable_entity;
+        let native_transfer_cost = chainspec.system_costs_config.mint_costs().transfer;
         Config::new(
             transfer_config,
             fee_handling,
@@ -88,6 +96,8 @@ impl Config {
             balance_hold_interval,
             include_credits,
             credit_cap,
+            enable_addressable_entity,
+            native_transfer_cost,
         )
     }
 
@@ -146,6 +156,11 @@ impl Config {
         self.credit_cap
     }
 
+    /// Enable the addressable entity and migrate accounts/contracts to entities.
+    pub fn enable_addressable_entity(&self) -> bool {
+        self.enable_addressable_entity
+    }
+
     /// Changes the transfer config.
     pub fn set_transfer_config(self, transfer_config: TransferConfig) -> Self {
         Config {
@@ -160,6 +175,8 @@ impl Config {
             balance_hold_interval: self.balance_hold_interval,
             include_credits: self.include_credits,
             credit_cap: self.credit_cap,
+            enable_addressable_entity: self.enable_addressable_entity,
+            native_transfer_cost: self.native_transfer_cost,
         }
     }
 }
@@ -284,9 +301,8 @@ pub struct RuntimeNative<S> {
 
     tracking_copy: Rc<RefCell<TrackingCopy<S>>>,
     address: AccountHash,
-    entity_key: Key,
-    addressable_entity: AddressableEntity,
-    named_keys: NamedKeys,
+    context_key: Key,
+    runtime_footprint: RuntimeFootprint,
     access_rights: ContextAccessRights,
     remaining_spending_limit: U512,
     transfers: Vec<Transfer>,
@@ -306,9 +322,8 @@ where
         address_generator: Arc<RwLock<AddressGenerator>>,
         tracking_copy: Rc<RefCell<TrackingCopy<S>>>,
         address: AccountHash,
-        entity_key: Key,
-        addressable_entity: AddressableEntity,
-        named_keys: NamedKeys,
+        context_key: Key,
+        runtime_footprint: RuntimeFootprint,
         access_rights: ContextAccessRights,
         remaining_spending_limit: U512,
         phase: Phase,
@@ -323,9 +338,8 @@ where
 
             tracking_copy,
             address,
-            entity_key,
-            addressable_entity,
-            named_keys,
+            context_key,
+            runtime_footprint,
             access_rights,
             remaining_spending_limit,
             transfers,
@@ -343,10 +357,15 @@ where
         phase: Phase,
     ) -> Result<Self, TrackingCopyError> {
         let transfers = vec![];
-        let (entity_addr, addressable_entity, named_keys, access_rights) =
-            tracking_copy.borrow_mut().system_entity(protocol_version)?;
+        let (entity_addr, runtime_footprint, access_rights) = tracking_copy
+            .borrow_mut()
+            .system_entity_runtime_footprint(protocol_version)?;
         let address = PublicKey::System.to_account_hash();
-        let entity_key = Key::AddressableEntity(entity_addr);
+        let context_key = if config.enable_addressable_entity {
+            Key::AddressableEntity(entity_addr)
+        } else {
+            Key::Hash(entity_addr.value())
+        };
         let remaining_spending_limit = U512::MAX; // system has no spending limit
         Ok(RuntimeNative {
             config,
@@ -356,9 +375,8 @@ where
 
             tracking_copy,
             address,
-            entity_key,
-            addressable_entity,
-            named_keys,
+            context_key,
+            runtime_footprint,
             access_rights,
             remaining_spending_limit,
             transfers,
@@ -388,14 +406,16 @@ where
                 ));
             }
         };
-        let addressable_entity = tracking_copy
+        let context_key = if config.enable_addressable_entity {
+            Key::AddressableEntity(EntityAddr::System(hash))
+        } else {
+            Key::Hash(hash)
+        };
+        let runtime_footprint = tracking_copy
             .borrow_mut()
-            .get_addressable_entity_by_hash(hash)?;
-        let entity_addr = addressable_entity.entity_addr(hash);
-        let entity_key = Key::AddressableEntity(entity_addr);
-        let named_keys = tracking_copy.borrow().get_named_keys(entity_addr)?;
-        let access_rights = addressable_entity.extract_access_rights(hash, &named_keys);
-
+            .runtime_footprint_by_hash_addr(hash)?;
+        let access_rights =
+            runtime_footprint.extract_access_rights(hash, runtime_footprint.named_keys());
         let address = PublicKey::System.to_account_hash();
         let remaining_spending_limit = U512::MAX; // system has no spending limit
         Ok(RuntimeNative {
@@ -406,9 +426,8 @@ where
 
             tracking_copy,
             address,
-            entity_key,
-            addressable_entity,
-            named_keys,
+            context_key,
+            runtime_footprint,
             access_rights,
             remaining_spending_limit,
             transfers,
@@ -451,29 +470,29 @@ where
         self.address = account_hash;
     }
 
-    /// Returns the entity key being used by this instance.
-    pub fn entity_key(&self) -> &Key {
-        &self.entity_key
+    /// Returns the context key being used by this instance.
+    pub fn context_key(&self) -> &Key {
+        &self.context_key
     }
 
     /// Returns the addressable entity being used by this instance.
-    pub fn addressable_entity(&self) -> &AddressableEntity {
-        &self.addressable_entity
+    pub fn runtime_footprint(&self) -> &RuntimeFootprint {
+        &self.runtime_footprint
     }
 
     /// Changes the addressable entity being used by this instance.
-    pub fn with_addressable_entity(&mut self, entity: AddressableEntity) {
-        self.addressable_entity = entity;
+    pub fn with_addressable_entity(&mut self, runtime_footprint: RuntimeFootprint) {
+        self.runtime_footprint = runtime_footprint;
     }
 
     /// Returns a reference to the named keys being used by this instance.
     pub fn named_keys(&self) -> &NamedKeys {
-        &self.named_keys
+        self.runtime_footprint().named_keys()
     }
 
     /// Returns a mutable reference to the named keys being used by this instance.
     pub fn named_keys_mut(&mut self) -> &mut NamedKeys {
-        &mut self.named_keys
+        self.runtime_footprint.named_keys_mut()
     }
 
     /// Returns a reference to the access rights being used by this instance.
@@ -539,5 +558,9 @@ where
     /// Extracts transfer items.
     pub fn into_transfers(self) -> Vec<Transfer> {
         self.transfers
+    }
+
+    pub(crate) fn native_transfer_cost(&self) -> u32 {
+        self.config.native_transfer_cost
     }
 }

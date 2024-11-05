@@ -18,7 +18,8 @@ use super::Deploy;
 use crate::{
     addressable_entity::DEFAULT_ENTRY_POINT_NAME,
     bytesrepr::{self, Bytes, FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
-    package::{EntityVersion, PackageHash},
+    contracts::{ContractHash, ContractPackageHash, ContractVersion},
+    package::PackageHash,
     runtime_args, serde_helpers,
     system::mint::ARG_AMOUNT,
     transaction::{RuntimeArgs, TransferTarget},
@@ -80,11 +81,11 @@ pub enum ExecutableDeployItem {
             feature = "json-schema",
             schemars(
                 // this attribute is necessary due to a bug: https://github.com/GREsau/schemars/issues/89
-                with = "AddressableEntityHash",
+                with = "ContractHash",
                 description = "Hex-encoded contract hash."
             )
         )]
-        hash: AddressableEntityHash,
+        hash: ContractHash,
         /// Name of an entry point.
         entry_point: String,
         /// Runtime arguments.
@@ -109,14 +110,14 @@ pub enum ExecutableDeployItem {
             feature = "json-schema",
             schemars(
                 // this attribute is necessary due to a bug: https://github.com/GREsau/schemars/issues/89
-                with = "PackageHash",
+                with = "ContractPackageHash",
                 description = "Hex-encoded contract package hash."
             )
         )]
-        hash: PackageHash,
+        hash: ContractPackageHash,
         /// An optional version of the contract to call. It will default to the highest enabled
         /// version if no value is specified.
-        version: Option<EntityVersion>,
+        version: Option<ContractVersion>,
         /// Entry point name.
         entry_point: String,
         /// Runtime arguments.
@@ -129,7 +130,7 @@ pub enum ExecutableDeployItem {
         name: String,
         /// An optional version of the contract to call. It will default to the highest enabled
         /// version if no value is specified.
-        version: Option<EntityVersion>,
+        version: Option<ContractVersion>,
         /// Entry point name.
         entry_point: String,
         /// Runtime arguments.
@@ -161,7 +162,7 @@ impl ExecutableDeployItem {
 
     /// Returns a new `ExecutableDeployItem::StoredContractByHash`.
     pub fn new_stored_contract_by_hash(
-        hash: AddressableEntityHash,
+        hash: ContractHash,
         entry_point: String,
         args: RuntimeArgs,
     ) -> Self {
@@ -187,8 +188,8 @@ impl ExecutableDeployItem {
 
     /// Returns a new `ExecutableDeployItem::StoredVersionedContractByHash`.
     pub fn new_stored_versioned_contract_by_hash(
-        hash: PackageHash,
-        version: Option<EntityVersion>,
+        hash: ContractPackageHash,
+        version: Option<ContractVersion>,
         entry_point: String,
         args: RuntimeArgs,
     ) -> Self {
@@ -203,7 +204,7 @@ impl ExecutableDeployItem {
     /// Returns a new `ExecutableDeployItem::StoredVersionedContractByName`.
     pub fn new_stored_versioned_contract_by_name(
         name: String,
-        version: Option<EntityVersion>,
+        version: Option<ContractVersion>,
         entry_point: String,
         args: RuntimeArgs,
     ) -> Self {
@@ -270,7 +271,7 @@ impl ExecutableDeployItem {
             ExecutableDeployItem::ModuleBytes { .. } => ExecutableDeployItemIdentifier::Module,
             ExecutableDeployItem::StoredContractByHash { hash, .. } => {
                 ExecutableDeployItemIdentifier::AddressableEntity(
-                    AddressableEntityIdentifier::Hash(*hash),
+                    AddressableEntityIdentifier::Hash(AddressableEntityHash::new(hash.value())),
                 )
             }
             ExecutableDeployItem::StoredContractByName { name, .. } => {
@@ -280,7 +281,7 @@ impl ExecutableDeployItem {
             }
             ExecutableDeployItem::StoredVersionedContractByHash { hash, version, .. } => {
                 ExecutableDeployItemIdentifier::Package(PackageIdentifier::Hash {
-                    package_hash: *hash,
+                    package_hash: PackageHash::new(hash.value()),
                     version: *version,
                 })
             }
@@ -301,9 +302,9 @@ impl ExecutableDeployItem {
             | ExecutableDeployItem::StoredVersionedContractByHash { .. }
             | ExecutableDeployItem::StoredVersionedContractByName { .. }
             | ExecutableDeployItem::Transfer { .. } => None,
-            ExecutableDeployItem::StoredContractByHash { hash, .. } => {
-                Some(AddressableEntityIdentifier::Hash(*hash))
-            }
+            ExecutableDeployItem::StoredContractByHash { hash, .. } => Some(
+                AddressableEntityIdentifier::Hash(AddressableEntityHash::new(hash.value())),
+            ),
             ExecutableDeployItem::StoredContractByName { name, .. } => {
                 Some(AddressableEntityIdentifier::Name(name.clone()))
             }
@@ -320,7 +321,7 @@ impl ExecutableDeployItem {
 
             ExecutableDeployItem::StoredVersionedContractByHash { hash, version, .. } => {
                 Some(PackageIdentifier::Hash {
-                    package_hash: *hash,
+                    package_hash: PackageHash::new(hash.value()),
                     version: *version,
                 })
             }
@@ -553,7 +554,7 @@ impl FromBytes for ExecutableDeployItem {
                 ))
             }
             STORED_CONTRACT_BY_HASH_TAG => {
-                let (hash, remainder) = AddressableEntityHash::from_bytes(remainder)?;
+                let (hash, remainder) = ContractHash::from_bytes(remainder)?;
                 let (entry_point, remainder) = String::from_bytes(remainder)?;
                 let (args, remainder) = RuntimeArgs::from_bytes(remainder)?;
                 Ok((
@@ -579,8 +580,8 @@ impl FromBytes for ExecutableDeployItem {
                 ))
             }
             STORED_VERSIONED_CONTRACT_BY_HASH_TAG => {
-                let (hash, remainder) = PackageHash::from_bytes(remainder)?;
-                let (version, remainder) = Option::<EntityVersion>::from_bytes(remainder)?;
+                let (hash, remainder) = ContractPackageHash::from_bytes(remainder)?;
+                let (version, remainder) = Option::<ContractVersion>::from_bytes(remainder)?;
                 let (entry_point, remainder) = String::from_bytes(remainder)?;
                 let (args, remainder) = RuntimeArgs::from_bytes(remainder)?;
                 Ok((
@@ -595,7 +596,7 @@ impl FromBytes for ExecutableDeployItem {
             }
             STORED_VERSIONED_CONTRACT_BY_NAME_TAG => {
                 let (name, remainder) = String::from_bytes(remainder)?;
-                let (version, remainder) = Option::<EntityVersion>::from_bytes(remainder)?;
+                let (version, remainder) = Option::<ContractVersion>::from_bytes(remainder)?;
                 let (entry_point, remainder) = String::from_bytes(remainder)?;
                 let (args, remainder) = RuntimeArgs::from_bytes(remainder)?;
                 Ok((
@@ -764,7 +765,7 @@ impl Distribution<ExecutableDeployItem> for Standard {
                 args,
             },
             1 => ExecutableDeployItem::StoredContractByHash {
-                hash: AddressableEntityHash::new(rng.gen()),
+                hash: ContractHash::new(rng.gen()),
                 entry_point: random_string(rng),
                 args,
             },
@@ -774,7 +775,7 @@ impl Distribution<ExecutableDeployItem> for Standard {
                 args,
             },
             3 => ExecutableDeployItem::StoredVersionedContractByHash {
-                hash: PackageHash::new(rng.gen()),
+                hash: ContractPackageHash::new(rng.gen()),
                 version: rng.gen(),
                 entry_point: random_string(rng),
                 args,

@@ -32,7 +32,7 @@ use crate::{
         AddKeyFailure, NamedKeys, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
     },
     bytesrepr::{self, FromBytes, ToBytes},
-    crypto, AccessRights, Key, URef, BLAKE2B_DIGEST_LENGTH,
+    AccessRights, Key, URef,
 };
 #[cfg(feature = "json-schema")]
 use crate::{PublicKey, SecretKey};
@@ -116,6 +116,11 @@ impl Account {
     /// Returns named keys.
     pub fn named_keys(&self) -> &NamedKeys {
         &self.named_keys
+    }
+
+    /// Returns a mutable reference to named keys.
+    pub fn named_keys_mut(&mut self) -> &mut NamedKeys {
+        &mut self.named_keys
     }
 
     /// Removes the key under the given name from named keys.
@@ -220,6 +225,21 @@ impl Account {
             }
         }
         self.associated_keys.update_key(account_hash, weight)
+    }
+
+    /// Sets a new action threshold for a given action type for the account without checking against
+    /// the total weight of the associated keys.
+    ///
+    /// This should only be called when authorized by an administrator account.
+    ///
+    /// Returns an error if setting the action would cause the `ActionType::Deployment` threshold to
+    /// be greater than any of the other action types.
+    pub fn set_action_threshold_unchecked(
+        &mut self,
+        action_type: ActionType,
+        threshold: Weight,
+    ) -> Result<(), SetThresholdFailure> {
+        self.action_thresholds.set_threshold(action_type, threshold)
     }
 
     /// Sets a new action threshold for a given action type for the account.
@@ -330,15 +350,6 @@ impl FromBytes for Account {
             rem,
         ))
     }
-}
-
-#[doc(hidden)]
-#[deprecated(
-    since = "1.4.4",
-    note = "function moved to casper_types::crypto::blake2b"
-)]
-pub fn blake2b<T: AsRef<[u8]>>(data: T) -> [u8; BLAKE2B_DIGEST_LENGTH] {
-    crypto::blake2b(data)
 }
 
 #[doc(hidden)]

@@ -9,6 +9,7 @@ use std::fmt::{Display, Formatter};
 pub struct SeigniorageRecipientsRequest {
     state_hash: Digest,
     protocol_version: ProtocolVersion,
+    enable_addressable_entity: bool,
 }
 
 impl SeigniorageRecipientsRequest {
@@ -17,6 +18,7 @@ impl SeigniorageRecipientsRequest {
         SeigniorageRecipientsRequest {
             state_hash,
             protocol_version,
+            enable_addressable_entity: false,
         }
     }
 
@@ -29,9 +31,14 @@ impl SeigniorageRecipientsRequest {
     pub fn protocol_version(&self) -> ProtocolVersion {
         self.protocol_version
     }
+
+    /// Enable the addressable entity and migrate accounts/contracts to entities.
+    pub fn enable_addressable_entity(&self) -> bool {
+        self.enable_addressable_entity
+    }
 }
 
-/// Result enum that represents all possible outcomes of a balance request.
+/// Result enum that represents all possible outcomes of a seignorage recipients request.
 #[derive(Debug)]
 pub enum SeigniorageRecipientsResult {
     /// Returned if auction is not found. This is a catastrophic outcome.

@@ -9,7 +9,7 @@ use casper_types::{
         AssociatedKeys as AccountAssociatedKeys, Weight as AccountWeight,
     },
     addressable_entity::{
-        ActionThresholds, AddressableEntity, AssociatedKeys, EntityKind, MessageTopics, NamedKeys,
+        ActionThresholds, AddressableEntity, AssociatedKeys, EntityKind, NamedKeys,
     },
     system::{
         auction::{
@@ -123,6 +123,7 @@ pub fn make_abi_test_fixtures() -> Result<TestFixtures, Error> {
         u64::MAX,
         0,
         u64::MAX,
+        0,
     );
     let validator_bid_kind = BidKind::Validator(Box::new(validator_bid));
     let delegator_public_key = PublicKey::from(&delegator_secret_key);
@@ -381,7 +382,6 @@ pub fn make_abi_test_fixtures() -> Result<TestFixtures, Error> {
             URef::default(),
             AssociatedKeys::default(),
             ActionThresholds::default(),
-            MessageTopics::default(),
             EntityKind::SmartContract(TransactionRuntime::VmCasperV1),
         );
         stored_value.insert(

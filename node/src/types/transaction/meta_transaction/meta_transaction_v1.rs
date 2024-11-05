@@ -1,10 +1,10 @@
 use super::transaction_lane::{calculate_transaction_lane, TransactionLane};
 use casper_types::{
     arg_handling, bytesrepr::ToBytes, crypto, Approval, Chainspec, Digest, DisplayIter, Gas,
-    InitiatorAddr, InvalidTransaction, InvalidTransactionV1, PricingHandling, PricingMode,
-    TimeDiff, Timestamp, TransactionArgs, TransactionConfig, TransactionEntryPoint,
-    TransactionRuntime, TransactionScheduling, TransactionTarget, TransactionV1,
-    TransactionV1ExcessiveSizeError, TransactionV1Hash, U512,
+    HashAddr, InitiatorAddr, InvalidTransaction, InvalidTransactionV1, PricingHandling,
+    PricingMode, RuntimeArgs, TimeDiff, Timestamp, TransactionArgs, TransactionConfig,
+    TransactionEntryPoint, TransactionRuntime, TransactionScheduling, TransactionTarget,
+    TransactionV1, TransactionV1ExcessiveSizeError, TransactionV1Hash, U512,
 };
 use core::fmt::{self, Debug, Display, Formatter};
 #[cfg(feature = "datasize")]
@@ -240,6 +240,19 @@ impl MetaTransactionV1 {
     /// Returns the entry point of the transaction.
     pub fn entry_point(&self) -> &TransactionEntryPoint {
         &self.entry_point
+    }
+
+    /// Returns the hash_addr and entry point name of a smart contract, if applicable.
+    pub fn contract_direct_address(&self) -> Option<(HashAddr, String)> {
+        let hash_addr = match self.target().contract_hash_addr() {
+            Some(hash_addr) => hash_addr,
+            None => return None,
+        };
+        let entry_point = match self.entry_point.custom_entry_point() {
+            Some(entry_point) => entry_point,
+            None => return None,
+        };
+        Some((hash_addr, entry_point))
     }
 
     /// Returns the transaction lane.
@@ -528,10 +541,10 @@ impl MetaTransactionV1 {
                     arg_handling::has_valid_change_bid_public_key_args(&self.args)
                 }
                 TransactionEntryPoint::AddReservations => {
-                    todo!()
+                    arg_handling::has_valid_add_reservations_args(&self.args)
                 }
                 TransactionEntryPoint::CancelReservations => {
-                    todo!()
+                    arg_handling::has_valid_cancel_reservations_args(&self.args)
                 }
             },
             TransactionTarget::Stored { .. } => match &self.entry_point {

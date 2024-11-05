@@ -7,7 +7,7 @@ use casper_macros::casper;
 use casper_sdk::{
     casper_executor_wasm_common::{
         entry_point::{
-            ENTRY_POINT_PAYMENT_CALLER, ENTRY_POINT_PAYMENT_SELF_ONLY,
+            ENTRY_POINT_PAYMENT_CALLER, ENTRY_POINT_PAYMENT_DIRECT_INVOCATION_ONLY,
             ENTRY_POINT_PAYMENT_SELF_ONWARD,
         },
         error::Error,
@@ -100,7 +100,7 @@ impl Harness {
         {
             for payment_info in [
                 ENTRY_POINT_PAYMENT_CALLER,
-                ENTRY_POINT_PAYMENT_SELF_ONLY,
+                ENTRY_POINT_PAYMENT_DIRECT_INVOCATION_ONLY,
                 ENTRY_POINT_PAYMENT_SELF_ONWARD,
             ] {
                 host::casper_write(Keyspace::PaymentInfo("counter"), &[payment_info]).unwrap();

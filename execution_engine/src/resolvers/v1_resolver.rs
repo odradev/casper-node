@@ -164,6 +164,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 10][..], Some(ValueType::I32)),
                 FunctionIndex::AddContractVersion.into(),
             ),
+            "casper_add_contract_version_with_message_topics" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 11][..], Some(ValueType::I32)),
+                FunctionIndex::AddContractVersionWithMessageTopics.into(),
+            ),
             "casper_add_package_version" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 11][..], Some(ValueType::I32)),
                 FunctionIndex::AddPackageVersion.into(),
@@ -256,6 +260,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             "casper_get_block_info" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], None),
                 FunctionIndex::GetBlockInfoIndex.into(),
+            ),
+            "casper_generic_hash" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 5][..], Some(ValueType::I32)),
+                FunctionIndex::GenericHash.into(),
             ),
             _ => {
                 return Err(InterpreterError::Function(format!(

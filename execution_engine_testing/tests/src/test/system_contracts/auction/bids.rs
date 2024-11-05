@@ -27,7 +27,6 @@ use casper_storage::data_access_layer::{GenesisRequest, HandleFeeMode};
 use casper_types::{
     self,
     account::AccountHash,
-    addressable_entity::EntityKindTag,
     api_error::ApiError,
     runtime_args,
     system::{
@@ -472,13 +471,13 @@ fn should_run_delegate_and_undelegate() {
     );
     assert_eq!(*active_bid.delegation_rate(), ADD_BID_DELEGATION_RATE_1);
 
-    let auction_key = Key::addressable_entity_key(EntityKindTag::System, auction_hash);
+    let auction_key = Key::Hash(auction_hash.value());
 
     let auction_stored_value = builder
         .query(None, auction_key, &[])
         .expect("should query auction hash");
     let _auction = auction_stored_value
-        .as_addressable_entity()
+        .as_contract()
         .expect("should be contract");
 
     //
@@ -824,8 +823,7 @@ fn should_forcibly_undelegate_after_setting_validator_limits() {
     builder.forced_undelegate(None, DEFAULT_PROTOCOL_VERSION, DEFAULT_BLOCK_TIME);
 
     let bids = builder.get_bids();
-    // The undelegation itself doesn't remove bids, only process_unbond does.
-    assert_eq!(bids.len(), 3);
+    assert_eq!(bids.len(), 2);
 
     assert!(builder.get_validator_weights(new_era + 1).is_none());
 

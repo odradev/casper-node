@@ -465,7 +465,7 @@ extern "C" {
         existing_urefs_size: usize,
         output_size_ptr: *mut usize,
     ) -> i32;
-    /// Adds new contract version to a contract package.
+    /// Adds new contract version to a contract package without message topics.
     ///
     /// # Arguments
     ///
@@ -491,6 +491,35 @@ extern "C" {
         output_ptr: *mut u8,
         output_size: usize,
         bytes_written_ptr: *mut usize,
+    ) -> i32;
+    /// Adds a new version to a contract package with message topics.
+    ///
+    /// # Arguments
+    ///
+    /// * `contract_package_hash_ptr` - pointer to serialized package hash.
+    /// * `contract_package_hash_size` - size of package hash in serialized form.
+    /// * `version_ptr` - output parameter where new version assigned by host is set
+    /// * `entry_points_ptr` - pointer to serialized [`casper_types::EntryPoints`]
+    /// * `entry_points_size` - size of serialized [`casper_types::EntryPoints`]
+    /// * `named_keys_ptr` - pointer to serialized [`casper_types::addressable_entity::NamedKeys`]
+    /// * `named_keys_size` - size of serialized [`casper_types::addressable_entity::NamedKeys`]
+    /// * `message_topics_ptr` - pointer to serialized BTreeMap<String, MessageTopicOperation>
+    ///   containing message topic names and the operation to pe performed on each one.
+    /// * `message_topics_size` - size of serialized BTreeMap<String, MessageTopicOperation>
+    /// * `output_ptr` - pointer to a memory where host assigned contract hash is set to
+    /// * `output_size` - expected width of output (currently 32)
+    pub fn casper_add_contract_version_with_message_topics(
+        contract_package_hash_ptr: *const u8,
+        contract_package_hash_size: usize,
+        version_ptr: *const u32,
+        entry_points_ptr: *const u8,
+        entry_points_size: usize,
+        named_keys_ptr: *const u8,
+        named_keys_size: usize,
+        message_topics_ptr: *const u8,
+        message_topics_size: usize,
+        output_ptr: *mut u8,
+        output_size: usize,
     ) -> i32;
     /// Adds a new version to a package.
     ///
@@ -687,6 +716,7 @@ extern "C" {
     /// * `in_size` - length of bytes
     /// * `out_ptr` - pointer to the location where argument bytes will be copied from the host side
     /// * `out_size` - size of output pointer
+    #[deprecated(note = "Superseded by ext_ffi::casper_generic_hash")]
     pub fn casper_blake2b(
         in_ptr: *const u8,
         in_size: usize,
@@ -858,4 +888,21 @@ extern "C" {
     /// * 3 => state hash
     /// * `dest_ptr` => pointer in wasm memory where to write the result
     pub fn casper_get_block_info(field_idx: u8, dest_ptr: *const u8);
+
+    /// Computes digest hash, using provided algorithm type.
+    ///
+    /// # Arguments
+    ///
+    /// * `in_ptr` - pointer to the location where argument bytes will be copied from the host side
+    /// * `in_size` - size of output pointer
+    /// * `hash_algo_type` - integer representation of HashAlgorithm enum variant
+    /// * `out_ptr` - pointer to the location where argument bytes will be copied to the host side
+    /// * `out_size` - size of output pointer
+    pub fn casper_generic_hash(
+        in_ptr: *const u8,
+        in_size: usize,
+        hash_algo_type: u8,
+        out_ptr: *const u8,
+        out_size: usize,
+    ) -> i32;
 }

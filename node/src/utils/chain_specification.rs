@@ -234,6 +234,10 @@ mod tests {
             create_contract_package_at_hash: HostFunction::new(106, [0, 1]),
             create_contract_user_group: HostFunction::new(107, [0, 1, 2, 3, 4, 5, 6, 7]),
             add_contract_version: HostFunction::new(102, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+            add_contract_version_with_message_topics: HostFunction::new(
+                102,
+                [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            ),
             add_package_version: HostFunction::new(102, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
             disable_contract_version: HostFunction::new(109, [0, 1, 2, 3]),
             call_contract: HostFunction::new(104, [0, 1, 2, 3, 4, 5, 6]),
@@ -247,6 +251,7 @@ mod tests {
             blake2b: HostFunction::new(133, [0, 1, 2, 3]),
             random_bytes: HostFunction::new(123, [0, 1]),
             enable_contract_version: HostFunction::new(142, [0, 1, 2, 3]),
+            generic_hash: HostFunction::new(152, [0, 1, 2, 3, 4]),
             manage_message_topic: HostFunction::new(100, [0, 1, 2, 4]),
             emit_message: HostFunction::new(100, [0, 1, 2, 3]),
             cost_increase_per_message: 50,

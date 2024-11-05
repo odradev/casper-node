@@ -100,7 +100,7 @@ pub enum StoredValue {
     Contract(Contract),
     /// A contract package.
     ContractPackage(ContractPackage),
-    /// A version 1 (legacy) transfer.
+    /// A version 1 transfer.
     LegacyTransfer(TransferV1),
     /// Info about a deploy.
     DeployInfo(DeployInfo),
@@ -156,6 +156,13 @@ impl StoredValue {
     pub fn as_byte_code(&self) -> Option<&ByteCode> {
         match self {
             StoredValue::ByteCode(byte_code) => Some(byte_code),
+            _ => None,
+        }
+    }
+
+    pub fn as_contract_wasm(&self) -> Option<&ContractWasm> {
+        match self {
+            StoredValue::ContractWasm(contract_wasm) => Some(contract_wasm),
             _ => None,
         }
     }
@@ -625,6 +632,7 @@ impl TryFrom<StoredValue> for Package {
     fn try_from(stored_value: StoredValue) -> Result<Self, Self::Error> {
         match stored_value {
             StoredValue::Package(contract_package) => Ok(contract_package),
+            StoredValue::ContractPackage(contract_package) => Ok(contract_package.into()),
             _ => Err(TypeMismatch::new(
                 "ContractPackage".to_string(),
                 stored_value.type_name(),

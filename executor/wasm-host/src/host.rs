@@ -6,7 +6,8 @@ use crate::{abi::CreateResult, context::Context};
 use bytes::Bytes;
 use casper_executor_wasm_common::{
     entry_point::{
-        ENTRY_POINT_PAYMENT_CALLER, ENTRY_POINT_PAYMENT_SELF_ONLY, ENTRY_POINT_PAYMENT_SELF_ONWARD,
+        ENTRY_POINT_PAYMENT_CALLER, ENTRY_POINT_PAYMENT_DIRECT_INVOCATION_ONLY,
+        ENTRY_POINT_PAYMENT_SELF_ONWARD,
     },
     error::{HOST_ERROR_INVALID_DATA, HOST_ERROR_INVALID_INPUT, HOST_ERROR_NOT_FOUND},
     flags::ReturnFlags,
@@ -106,7 +107,9 @@ pub fn casper_write<S: GlobalStateReader, E: Executor>(
         Keyspace::PaymentInfo(_) => {
             let entry_point_payment = match value.as_slice() {
                 [ENTRY_POINT_PAYMENT_CALLER] => EntryPointPayment::Caller,
-                [ENTRY_POINT_PAYMENT_SELF_ONLY] => EntryPointPayment::SelfOnly,
+                [ENTRY_POINT_PAYMENT_DIRECT_INVOCATION_ONLY] => {
+                    EntryPointPayment::DirectInvocationOnly
+                }
                 [ENTRY_POINT_PAYMENT_SELF_ONWARD] => EntryPointPayment::SelfOnward,
                 _ => {
                     // Invalid entry point payment variant
@@ -210,7 +213,9 @@ pub fn casper_read<S: GlobalStateReader, E: Executor>(
         Ok(Some(StoredValue::EntryPoint(EntryPointValue::V1CasperVm(entry_point)))) => {
             match entry_point.entry_point_payment() {
                 EntryPointPayment::Caller => Cow::Borrowed(&[ENTRY_POINT_PAYMENT_CALLER]),
-                EntryPointPayment::SelfOnly => Cow::Borrowed(&[ENTRY_POINT_PAYMENT_SELF_ONLY]),
+                EntryPointPayment::DirectInvocationOnly => {
+                    Cow::Borrowed(&[ENTRY_POINT_PAYMENT_DIRECT_INVOCATION_ONLY])
+                }
                 EntryPointPayment::SelfOnward => Cow::Borrowed(&[ENTRY_POINT_PAYMENT_SELF_ONWARD]),
             }
         }
@@ -480,119 +485,120 @@ pub fn casper_create<S: GlobalStateReader + 'static, E: Executor + 'static>(
         }
     };
 
-    let addressable_entity = AddressableEntity::new(
-        PackageHash::new(package_hash_bytes),
-        ByteCodeHash::new(bytecode_hash.value()),
-        ProtocolVersion::V2_0_0,
-        main_purse,
-        AssociatedKeys::default(),
-        ActionThresholds::default(),
-        MessageTopics::default(),
-        EntityKind::SmartContract(TransactionRuntime::VmCasperV2),
-    );
+    // let addressable_entity = AddressableEntity::new(
+    //     PackageHash::new(package_hash_bytes),
+    //     ByteCodeHash::new(bytecode_hash.value()),
+    //     ProtocolVersion::V2_0_0,
+    //     main_purse,
+    //     AssociatedKeys::default(),
+    //     ActionThresholds::default(),
+    //     MessageTopics::default(),
+    //     EntityKind::SmartContract(TransactionRuntime::VmCasperV2),
+    // );
+    todo!("casper_create");
 
-    caller.context_mut().tracking_copy.write(
-        addressable_entity_key,
-        StoredValue::AddressableEntity(addressable_entity),
-    );
+    // caller.context_mut().tracking_copy.write(
+    //     addressable_entity_key,
+    //     StoredValue::AddressableEntity(addressable_entity),
+    // );
 
-    let _initial_state = match constructor_entry_point {
-        Some(entry_point_name) => {
-            // Take the gas spent so far and use it as a limit for the new VM.
-            let gas_limit = caller
-                .gas_consumed()
-                .try_into_remaining()
-                .expect("should be remaining");
+    // let _initial_state = match constructor_entry_point {
+    //     Some(entry_point_name) => {
+    //         // Take the gas spent so far and use it as a limit for the new VM.
+    //         let gas_limit = caller
+    //             .gas_consumed()
+    //             .try_into_remaining()
+    //             .expect("should be remaining");
 
-            let execute_request = ExecuteRequestBuilder::default()
-                .with_initiator(caller.context().initiator)
-                .with_caller_key(caller.context().callee)
-                .with_callee_key(addressable_entity_key)
-                .with_gas_limit(gas_limit)
-                .with_target(ExecutionKind::Stored {
-                    address: entity_addr,
-                    entry_point: entry_point_name, //Some(Selector::new(selector)),
-                })
-                .with_input(input_data.unwrap_or_default())
-                .with_transferred_value(value)
-                .with_transaction_hash(caller.context().transaction_hash)
-                // We're using shared address generator there as we need to preserve and advance the
-                // state of deterministic address generator across chain of calls.
-                .with_shared_address_generator(Arc::clone(&caller.context().address_generator))
-                .with_chain_name(caller.context().chain_name.clone())
-                .with_block_time(caller.context().block_time)
-                .build()
-                .expect("should build");
+    //         let execute_request = ExecuteRequestBuilder::default()
+    //             .with_initiator(caller.context().initiator)
+    //             .with_caller_key(caller.context().callee)
+    //             .with_callee_key(addressable_entity_key)
+    //             .with_gas_limit(gas_limit)
+    //             .with_target(ExecutionKind::Stored {
+    //                 address: entity_addr,
+    //                 entry_point: entry_point_name, //Some(Selector::new(selector)),
+    //             })
+    //             .with_input(input_data.unwrap_or_default())
+    //             .with_transferred_value(value)
+    //             .with_transaction_hash(caller.context().transaction_hash)
+    //             // We're using shared address generator there as we need to preserve and advance
+    // the             // state of deterministic address generator across chain of calls.
+    //             .with_shared_address_generator(Arc::clone(&caller.context().address_generator))
+    //             .with_chain_name(caller.context().chain_name.clone())
+    //             .with_block_time(caller.context().block_time)
+    //             .build()
+    //             .expect("should build");
 
-            let tracking_copy_for_ctor = caller.context().tracking_copy.fork2();
+    //         let tracking_copy_for_ctor = caller.context().tracking_copy.fork2();
 
-            match caller
-                .context()
-                .executor
-                .execute(tracking_copy_for_ctor, execute_request)
-            {
-                Ok(ExecuteResult {
-                    host_error,
-                    output,
-                    gas_usage,
-                    effects,
-                    cache,
-                }) => {
-                    // output
+    //         match caller
+    //             .context()
+    //             .executor
+    //             .execute(tracking_copy_for_ctor, execute_request)
+    //         {
+    //             Ok(ExecuteResult {
+    //                 host_error,
+    //                 output,
+    //                 gas_usage,
+    //                 effects,
+    //                 cache,
+    //             }) => {
+    //                 // output
 
-                    caller.consume_gas(gas_usage.gas_spent());
+    //                 caller.consume_gas(gas_usage.gas_spent());
 
-                    if let Some(host_error) = host_error {
-                        return Ok(Err(host_error));
-                    }
+    //                 if let Some(host_error) = host_error {
+    //                     return Ok(Err(host_error));
+    //                 }
 
-                    caller
-                        .context_mut()
-                        .tracking_copy
-                        .apply_changes(effects, cache);
+    //                 caller
+    //                     .context_mut()
+    //                     .tracking_copy
+    //                     .apply_changes(effects, cache);
 
-                    output
-                }
-                Err(ExecuteError::WasmPreparation(_preparation_error)) => {
-                    // This is a bug in the EE, as it should have been caught during the preparation
-                    // phase when the contract was stored in the global state.
-                    todo!()
-                }
-            }
-        }
-        None => None,
-    };
+    //                 output
+    //             }
+    //             Err(ExecuteError::WasmPreparation(_preparation_error)) => {
+    //                 // This is a bug in the EE, as it should have been caught during the
+    // preparation                 // phase when the contract was stored in the global state.
+    //                 todo!()
+    //             }
+    //         }
+    //     }
+    //     None => None,
+    // };
 
-    // if let Some(state) = initial_state {
-    //     eprintln!(
-    //         "Write initial state {}bytes under {contract_hash:?}",
-    //         state.len()
-    //     );
-    //     let smart_contract_addr = EntityAddr::SmartContract(contract_hash);
-    //     let key = Key::State(smart_contract_addr);
-    //     caller
-    //         .context_mut()
-    //         .tracking_copy
-    //         .write(key, StoredValue::RawBytes(state.into()));
-    // }
+    // // if let Some(state) = initial_state {
+    // //     eprintln!(
+    // //         "Write initial state {}bytes under {contract_hash:?}",
+    // //         state.len()
+    // //     );
+    // //     let smart_contract_addr = EntityAddr::SmartContract(contract_hash);
+    // //     let key = Key::State(smart_contract_addr);
+    // //     caller
+    // //         .context_mut()
+    // //         .tracking_copy
+    // //         .write(key, StoredValue::RawBytes(state.into()));
+    // // }
 
-    let create_result = CreateResult {
-        package_address: package_hash_bytes,
-        contract_address: contract_hash,
-        version: 1,
-    };
+    // let create_result = CreateResult {
+    //     package_address: package_hash_bytes,
+    //     contract_address: contract_hash,
+    //     version: 1,
+    // };
 
-    let create_result_bytes = safe_transmute::transmute_one_to_bytes(&create_result);
+    // let create_result_bytes = safe_transmute::transmute_one_to_bytes(&create_result);
 
-    debug_assert_eq!(
-        safe_transmute::transmute_one(create_result_bytes),
-        Ok(create_result),
-        "Sanity check", // NOTE: Remove these guards with sufficient test coverage
-    );
+    // debug_assert_eq!(
+    //     safe_transmute::transmute_one(create_result_bytes),
+    //     Ok(create_result),
+    //     "Sanity check", // NOTE: Remove these guards with sufficient test coverage
+    // );
 
-    caller.memory_write(result_ptr, create_result_bytes)?;
+    // caller.memory_write(result_ptr, create_result_bytes)?;
 
-    Ok(Ok(()))
+    // Ok(Ok(()))
 }
 
 #[allow(clippy::too_many_arguments)]

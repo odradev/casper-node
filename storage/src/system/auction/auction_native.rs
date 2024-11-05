@@ -13,7 +13,6 @@ use crate::{
 use casper_types::{
     account::AccountHash,
     bytesrepr::{FromBytes, ToBytes},
-    crypto,
     system::{
         auction::{BidAddr, BidKind, EraInfo, Error, UnbondingPurse},
         mint,
@@ -71,6 +70,55 @@ where
             Error::Storage
         })?;
         Ok(keys.len())
+    }
+
+    fn reservation_count(&mut self, bid_addr: &BidAddr) -> Result<usize, Error> {
+        let reservation_prefix = bid_addr.reservation_prefix()?;
+        let reservation_keys = self
+            .get_keys_by_prefix(&reservation_prefix)
+            .map_err(|err| {
+                error!("RuntimeProvider::reservation_count {:?}", err);
+                Error::Storage
+            })?;
+        Ok(reservation_keys.len())
+    }
+
+    fn used_reservation_count(&mut self, bid_addr: &BidAddr) -> Result<usize, Error> {
+        let delegator_prefix = bid_addr.delegators_prefix()?;
+        let delegator_keys = self.get_keys_by_prefix(&delegator_prefix).map_err(|err| {
+            error!("RuntimeProvider::used_reservation_count {:?}", err);
+            Error::Storage
+        })?;
+        let delegator_account_hashes: Vec<AccountHash> = delegator_keys
+            .into_iter()
+            .filter_map(|key| {
+                if let Key::BidAddr(BidAddr::Delegator { delegator, .. }) = key {
+                    Some(delegator)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let reservation_prefix = bid_addr.reservation_prefix()?;
+        let reservation_keys = self
+            .get_keys_by_prefix(&reservation_prefix)
+            .map_err(|err| {
+                error!("RuntimeProvider::delegator_count {:?}", err);
+                Error::Storage
+            })?;
+
+        let used_reservations_count = reservation_keys
+            .iter()
+            .filter(|reservation| {
+                if let Key::BidAddr(BidAddr::Reservation { delegator, .. }) = reservation {
+                    delegator_account_hashes.contains(delegator)
+                } else {
+                    false
+                }
+            })
+            .count();
+        Ok(used_reservations_count)
     }
 
     fn vesting_schedule_period_millis(&self) -> u64 {
@@ -212,8 +260,8 @@ where
     S: StateReader<Key, StoredValue, Error = GlobalStateError>,
 {
     fn unbond(&mut self, unbonding_purse: &UnbondingPurse) -> Result<(), Error> {
-        let account_hash =
-            AccountHash::from_public_key(unbonding_purse.unbonder_public_key(), crypto::blake2b);
+        let unbonder_key = unbonding_purse.unbonder_public_key();
+        let account_hash = AccountHash::from(unbonder_key);
 
         // Do a migration if the account hasn't been migrated yet. This is just a read if it has
         // been migrated already.
@@ -238,6 +286,18 @@ where
             })?;
 
         let contract_key: Key = match maybe_value {
+            Some(StoredValue::Account(account)) => {
+                self.mint_transfer_direct(
+                    Some(account_hash),
+                    *unbonding_purse.bonding_purse(),
+                    account.main_purse(),
+                    *unbonding_purse.amount(),
+                    None,
+                )
+                .map_err(|_| Error::Transfer)?
+                .map_err(|_| Error::Transfer)?;
+                return Ok(());
+            }
             Some(StoredValue::CLValue(cl_value)) => {
                 let contract_key: Key = cl_value.into_t().map_err(|_| Error::CLValue)?;
                 contract_key
@@ -281,9 +341,12 @@ where
         amount: U512,
         id: Option<u64>,
     ) -> Result<Result<(), mint::Error>, Error> {
-        if !(self.addressable_entity().main_purse().addr() == source.addr()
-            || self.get_caller() == PublicKey::System.to_account_hash())
-        {
+        let addr = if let Some(uref) = self.runtime_footprint().main_purse() {
+            uref.addr()
+        } else {
+            return Err(Error::InvalidContext);
+        };
+        if !(addr == source.addr() || self.get_caller() == PublicKey::System.to_account_hash()) {
             return Err(Error::InvalidCaller);
         }
 
@@ -379,7 +442,10 @@ where
     fn get_main_purse(&self) -> Result<URef, Error> {
         // NOTE: this is used by the system and is not (and should not be made to be) accessible
         // from userland.
-        Ok(self.addressable_entity().main_purse())
+        return self
+            .runtime_footprint()
+            .main_purse()
+            .ok_or(Error::InvalidContext);
     }
 }
 

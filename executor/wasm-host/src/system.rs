@@ -16,12 +16,12 @@ use casper_storage::{
         mint::Mint,
         runtime_native::{Config, Id, RuntimeNative},
     },
-    tracking_copy::{TrackingCopyError, TrackingCopyExt},
+    tracking_copy::{TrackingCopyEntityExt, TrackingCopyError, TrackingCopyExt},
     AddressGenerator, TrackingCopy,
 };
 use casper_types::{
     account::AccountHash, CLValueError, ContextAccessRights, EntityAddr, Key, Phase,
-    ProtocolVersion, PublicKey, StoredValue, StoredValueTag, SystemEntityRegistry, TransactionHash,
+    ProtocolVersion, PublicKey, StoredValue, StoredValueTag, SystemHashRegistry, TransactionHash,
     URef, U512,
 };
 use parking_lot::RwLock;
@@ -37,16 +37,11 @@ enum DispatchError {
     #[error("Registry not found")]
     RegistryNotFound,
     #[error("Missing addressable entity")]
-    MissingAddressableEntity,
+    MissingRuntimeFootprint(TrackingCopyError),
     #[error("Missing system contract: {0}")]
     MissingSystemContract(&'static str),
     #[error("Error getting named keys")]
     GetNamedKeys(TrackingCopyError),
-    #[error("Invalid key variant")]
-    InvalidStoredValueVariant {
-        expected: StoredValueTag,
-        actual: StoredValue,
-    },
 }
 
 fn dispatch_system_contract<R: GlobalStateReader, Ret>(
@@ -63,34 +58,23 @@ fn dispatch_system_contract<R: GlobalStateReader, Ret>(
         stored_value
             .into_cl_value()
             .expect("should convert stored value into CLValue")
-            .into_t::<SystemEntityRegistry>()
+            .into_t::<SystemHashRegistry>()
             .map_err(DispatchError::CLValue)?
     };
     let system_entity_addr = system_entity_registry
         .get(system_contract)
         .ok_or(DispatchError::MissingSystemContract(system_contract))?;
-    let entity_addr = EntityAddr::new_system(system_entity_addr.value());
-    let addressable_entity_stored_value = tracking_copy
-        .read(&Key::AddressableEntity(entity_addr))?
-        .ok_or(DispatchError::MissingAddressableEntity)?;
+    let entity_addr = EntityAddr::new_system(*system_entity_addr);
 
-    let addressable_entity = addressable_entity_stored_value
-        .clone()
-        .into_addressable_entity()
-        .ok_or(DispatchError::InvalidStoredValueVariant {
-            expected: StoredValueTag::AddressableEntity,
-            actual: addressable_entity_stored_value,
-        })?;
+    let runtime_footprint = tracking_copy
+        .runtime_footprint_by_entity_addr(entity_addr)
+        .map_err(DispatchError::MissingRuntimeFootprint)?;
 
     let config = Config::default();
     let protocol_version = ProtocolVersion::V1_0_0;
 
     let access_rights = ContextAccessRights::new(*system_entity_addr, []);
     let address = PublicKey::System.to_account_hash();
-
-    let named_keys = tracking_copy
-        .get_named_keys(entity_addr)
-        .map_err(DispatchError::GetNamedKeys)?;
 
     let forked_tracking_copy = Rc::new(RefCell::new(tracking_copy.fork2()));
 
@@ -106,8 +90,7 @@ fn dispatch_system_contract<R: GlobalStateReader, Ret>(
             Rc::clone(&forked_tracking_copy),
             address,
             Key::AddressableEntity(entity_addr),
-            addressable_entity,
-            named_keys,
+            runtime_footprint,
             access_rights,
             remaining_spending_limit,
             phase,
