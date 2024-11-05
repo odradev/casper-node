@@ -50,6 +50,9 @@ pub(crate) enum ControlAnnouncement {
     /// The node should shut down with exit code 0 in readiness for the next binary to start.
     ShutdownForUpgrade,
 
+    /// The node started in catch up and shutdown mode has caught up to tip and can now exit.
+    ShutdownAfterCatchingUp,
+
     /// The component has encountered a fatal error and cannot continue.
     ///
     /// This usually triggers a shutdown of the application.
@@ -78,6 +81,7 @@ impl Debug for ControlAnnouncement {
         match self {
             ControlAnnouncement::ShutdownDueToUserRequest => write!(f, "ShutdownDueToUserRequest"),
             ControlAnnouncement::ShutdownForUpgrade => write!(f, "ShutdownForUpgrade"),
+            ControlAnnouncement::ShutdownAfterCatchingUp => write!(f, "ShutdownAfterCatchingUp"),
             ControlAnnouncement::FatalError { file, line, msg } => f
                 .debug_struct("FatalError")
                 .field("file", file)
@@ -102,6 +106,7 @@ impl Display for ControlAnnouncement {
                 write!(f, "shutdown due to user request")
             }
             ControlAnnouncement::ShutdownForUpgrade => write!(f, "shutdown for upgrade"),
+            ControlAnnouncement::ShutdownAfterCatchingUp => write!(f, "shutdown after catching up"),
             ControlAnnouncement::FatalError { file, line, msg } => {
                 write!(f, "fatal error [{}:{}]: {}", file, line, msg)
             }

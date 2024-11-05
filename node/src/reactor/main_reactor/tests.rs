@@ -1268,6 +1268,73 @@ async fn should_not_historical_sync_no_sync_node() {
 }
 
 #[tokio::test]
+async fn should_catch_up_and_shutdown() {
+    let initial_stakes = InitialStakes::Random { count: 5 };
+    let spec_override = ConfigsOverride {
+        minimum_block_time: "4seconds".parse().unwrap(),
+        minimum_era_height: 2,
+        ..Default::default()
+    };
+    let mut fixture = TestFixture::new(initial_stakes, Some(spec_override)).await;
+
+    // Wait for all nodes to complete block 1.
+    fixture.run_until_block_height(1, ONE_MIN).await;
+
+    // Create a joiner node.
+    let highest_block = fixture.highest_complete_block();
+    let trusted_hash = *highest_block.hash();
+    let trusted_height = highest_block.height();
+    assert!(
+        trusted_height > 0,
+        "trusted height must be non-zero to allow for checking that the joiner doesn't do \
+        historical syncing"
+    );
+
+    info!("joining node using block {trusted_height} {trusted_hash}");
+    let secret_key = SecretKey::random(&mut fixture.rng);
+    let (mut config, storage_dir) = fixture.create_node_config(&secret_key, Some(trusted_hash), 1);
+    config.node.sync_handling = SyncHandling::CompleteBlock;
+    let joiner_id = fixture
+        .add_node(Arc::new(secret_key), config, storage_dir)
+        .await;
+
+    let joiner_avail_range = |nodes: &Nodes| {
+        nodes
+            .get(&joiner_id)
+            .expect("should have joiner")
+            .main_reactor()
+            .storage()
+            .get_available_block_range()
+    };
+
+    // Run until the joiner shuts down after catching up
+    fixture
+        .network
+        .settle_on_node_exit(
+            &mut fixture.rng,
+            &joiner_id,
+            ExitCode::CleanExitDontRestart,
+            ONE_MIN,
+        )
+        .await;
+
+    let available_block_range = joiner_avail_range(fixture.network.nodes());
+
+    let low = available_block_range.low();
+    assert!(
+        low >= trusted_height,
+        "should not have acquired a block earlier than trusted hash block {low} {trusted_hash}",
+    );
+
+    let highest_block_height = fixture.highest_complete_block().height();
+    let high = available_block_range.high();
+    assert!(
+        low < high && high <= highest_block_height,
+        "should have acquired more recent blocks before shutting down {low} {high} {highest_block_height}",
+    );
+}
+
+#[tokio::test]
 async fn run_equivocator_network() {
     let mut rng = crate::new_rng();
 
