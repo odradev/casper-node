@@ -335,6 +335,13 @@
           "enum": [
             "ShutdownForUpgrade"
           ]
+        },
+        {
+          "description": "Node should shut down after catching up.",
+          "type": "string",
+          "enum": [
+            "ShutdownAfterCatchingUp"
+          ]
         }
       ]
     },
