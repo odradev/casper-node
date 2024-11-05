@@ -11,7 +11,7 @@ use crate::{
         contract_runtime::ExecutionPreState,
         diagnostics_port, event_stream_server, network, rest_server, upgrade_watcher,
     },
-    effect::{EffectBuilder, EffectExt, Effects},
+    effect::{announcements::ControlAnnouncement, EffectBuilder, EffectExt, Effects},
     fatal,
     reactor::main_reactor::{
         catch_up::CatchUpInstruction, genesis_instruction::GenesisInstruction,
@@ -137,11 +137,19 @@ impl MainReactor {
                     if let Err(msg) = self.refresh_contract_runtime() {
                         return (Duration::ZERO, fatal!(effect_builder, "{}", msg).ignore());
                     }
-                    // purge to avoid polluting the status endpoints w/ stale state
-                    info!("CatchUp: switch to KeepUp");
-                    self.block_synchronizer.purge();
-                    self.state = ReactorState::KeepUp;
-                    (Duration::ZERO, Effects::new())
+                    // shut down instead of switching to KeepUp if catch up and shutdown mode is
+                    // enabled
+                    if self.sync_handling.is_complete_block() {
+                        info!("CatchUp: immediate shutdown after catching up");
+                        self.state = ReactorState::ShutdownAfterCatchingUp;
+                        (Duration::ZERO, Effects::new())
+                    } else {
+                        // purge to avoid polluting the status endpoints w/ stale state
+                        info!("CatchUp: switch to KeepUp");
+                        self.block_synchronizer.purge();
+                        self.state = ReactorState::KeepUp;
+                        (Duration::ZERO, Effects::new())
+                    }
                 }
             },
             ReactorState::KeepUp => match self.keep_up_instruction(effect_builder, rng) {
@@ -225,6 +233,12 @@ impl MainReactor {
                         (wait, effects)
                     }
                 }
+            }
+            ReactorState::ShutdownAfterCatchingUp => {
+                let effects = effect_builder.immediately().event(|()| {
+                    MainEvent::ControlAnnouncement(ControlAnnouncement::ShutdownAfterCatchingUp)
+                });
+                (Duration::ZERO, effects)
             }
         }
     }
