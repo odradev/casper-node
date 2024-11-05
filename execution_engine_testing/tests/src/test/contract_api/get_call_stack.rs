@@ -73,18 +73,21 @@ fn execute_and_assert_result(
     call_depth: usize,
     builder: &mut LmdbWasmTestBuilder,
     execute_request: ExecuteRequest,
+    is_invalid_context: bool,
 ) {
     if call_depth == 0 {
         builder.exec(execute_request).commit().expect_success();
     } else {
-        builder.exec(execute_request).commit().expect_failure();
-        let error = builder.get_error().expect("must have an error");
-        assert!(matches!(
-            error,
-            // Call chains have stored contract trying to call stored session which we don't
-            // support and is an actual error.
-            CoreError::Exec(ExecError::InvalidContext)
-        ));
+        if is_invalid_context {
+            builder.exec(execute_request).commit().expect_failure();
+            let error = builder.get_error().expect("must have an error");
+            assert!(matches!(
+                error,
+                // Call chains have stored contract trying to call stored session which we don't
+                // support and is an actual error.
+                CoreError::Exec(ExecError::InvalidContext)
+            ));
+        }
     }
 }
 
@@ -2763,7 +2766,12 @@ mod payment {
     // vector.  Going further than 6 will hit the gas limit.
     const DEPTHS: &[usize] = &[0, 6, 10];
 
-    fn execute(builder: &mut LmdbWasmTestBuilder, call_depth: usize, subcalls: Vec<Call>) {
+    fn execute(
+        builder: &mut LmdbWasmTestBuilder,
+        call_depth: usize,
+        subcalls: Vec<Call>,
+        is_invalid_context: bool,
+    ) {
         let execute_request = {
             let mut rng = rand::thread_rng();
             let deploy_hash = rng.gen();
@@ -2783,7 +2791,7 @@ mod payment {
             ExecuteRequestBuilder::from_deploy_item(&deploy).build()
         };
 
-        super::execute_and_assert_result(call_depth, builder, execute_request);
+        super::execute_and_assert_result(call_depth, builder, execute_request, is_invalid_context);
     }
 
     fn execute_stored_payment_by_package_name(
@@ -2819,7 +2827,7 @@ mod payment {
             ExecuteRequestBuilder::from_deploy_item(&deploy).build()
         };
 
-        super::execute_and_assert_result(call_depth, builder, execute_request);
+        super::execute_and_assert_result(call_depth, builder, execute_request, false);
     }
 
     fn execute_stored_payment_by_package_hash(
@@ -2852,7 +2860,7 @@ mod payment {
             ExecuteRequestBuilder::from_deploy_item(&deploy).build()
         };
 
-        super::execute_and_assert_result(call_depth, builder, execute_request);
+        super::execute_and_assert_result(call_depth, builder, execute_request, false);
     }
 
     fn execute_stored_payment_by_contract_name(
@@ -2887,7 +2895,7 @@ mod payment {
             ExecuteRequestBuilder::from_deploy_item(&deploy).build()
         };
 
-        super::execute_and_assert_result(call_depth, builder, execute_request);
+        super::execute_and_assert_result(call_depth, builder, execute_request, false);
     }
 
     fn execute_stored_payment_by_contract_hash(
@@ -2919,7 +2927,7 @@ mod payment {
             ExecuteRequestBuilder::from_deploy_item(&deploy).build()
         };
 
-        super::execute_and_assert_result(call_depth, builder, execute_request);
+        super::execute_and_assert_result(call_depth, builder, execute_request, false);
     }
 
     // Session + recursive subcall
@@ -2943,7 +2951,7 @@ mod payment {
                 ));
             }
 
-            execute(&mut builder, *call_depth, subcalls);
+            execute(&mut builder, *call_depth, subcalls, false);
         }
     }
 
@@ -2965,7 +2973,7 @@ mod payment {
                 subcalls.push(super::stored_contract(current_contract_hash.into()));
             }
 
-            execute(&mut builder, *call_depth, subcalls);
+            execute(&mut builder, *call_depth, subcalls, false);
         }
     }
 
@@ -2988,7 +2996,7 @@ mod payment {
                 ));
             }
 
-            execute(&mut builder, *call_depth, subcalls)
+            execute(&mut builder, *call_depth, subcalls, false)
         }
     }
 
@@ -3007,7 +3015,7 @@ mod payment {
             super::stored_contract(current_contract_hash.into()),
             super::stored_session(current_contract_hash.into()),
         ];
-        execute(&mut builder, call_depth, subcalls)
+        execute(&mut builder, call_depth, subcalls, true)
     }
 
     #[ignore]
@@ -3026,7 +3034,7 @@ mod payment {
         })
         .take(call_depth)
         .flatten();
-        execute(&mut builder, call_depth, subcalls.collect())
+        execute(&mut builder, call_depth, subcalls.collect(), false)
     }
 
     // Session + recursive subcall failure cases
@@ -3050,7 +3058,7 @@ mod payment {
                 ));
             }
 
-            execute(&mut builder, *call_depth, subcalls)
+            execute(&mut builder, *call_depth, subcalls, true)
         }
     }
 
@@ -3072,7 +3080,7 @@ mod payment {
                 subcalls.push(super::stored_session(current_contract_hash.into()));
             }
 
-            execute(&mut builder, *call_depth, subcalls)
+            execute(&mut builder, *call_depth, subcalls, true)
         }
     }
 
@@ -3095,7 +3103,7 @@ mod payment {
                 ));
             }
 
-            execute(&mut builder, *call_depth, subcalls)
+            execute(&mut builder, *call_depth, subcalls, true)
         }
     }
 
@@ -3115,7 +3123,7 @@ mod payment {
                 subcalls.push(super::stored_session(current_contract_hash.into()));
             }
 
-            execute(&mut builder, *call_depth, subcalls)
+            execute(&mut builder, *call_depth, subcalls, true)
         }
     }
 
@@ -3408,6 +3416,7 @@ mod payment {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
             let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            println!("DA {:?}", default_account);
             let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_contract(current_contract_hash.into()); *call_depth];

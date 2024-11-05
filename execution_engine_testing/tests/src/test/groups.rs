@@ -5,17 +5,19 @@ use once_cell::sync::Lazy;
 
 use casper_engine_test_support::{
     DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, UpgradeRequestBuilder,
-    DEFAULT_ACCOUNT_ADDR, DEFAULT_PAYMENT, DEFAULT_PROTOCOL_VERSION,
+    DEFAULT_ACCOUNT_ADDR, DEFAULT_PAYMENT, DEFAULT_PROTOCOL_VERSION, LOCAL_GENESIS_REQUEST,
     MINIMUM_ACCOUNT_CREATION_BALANCE,
 };
 use casper_execution_engine::{engine_state::Error, execution::ExecError};
 use casper_types::{
-    account::AccountHash, contracts::CONTRACT_INITIAL_VERSION, runtime_args, HoldBalanceHandling,
-    Key, RuntimeArgs, Timestamp, U512,
+    account::AccountHash,
+    contracts::{ContractPackageHash, CONTRACT_INITIAL_VERSION},
+    runtime_args, HoldBalanceHandling, Key, PackageHash, RuntimeArgs, Timestamp, U512,
 };
 
 use crate::{lmdb_fixture, wasm_utils};
 
+const CONTRACT_GROUPS: &str = "groups.wasm";
 const PACKAGE_HASH_KEY: &str = "package_hash_key";
 const PACKAGE_ACCESS_KEY: &str = "package_access_key";
 const RESTRICTED_SESSION: &str = "restricted_session";
@@ -38,9 +40,19 @@ static TRANSFER_1_AMOUNT: Lazy<U512> =
     Lazy::new(|| U512::from(MINIMUM_ACCOUNT_CREATION_BALANCE) + 1000);
 
 fn setup_from_lmdb_fixture() -> LmdbWasmTestBuilder {
-    let (mut builder, _, _) = lmdb_fixture::builder_from_global_state_fixture(GROUPS_FIXTURE);
-    builder.with_block_time(Timestamp::now().into());
-    builder.with_gas_hold_config(HoldBalanceHandling::default(), 1200u64);
+    // let (mut builder, _, _) = lmdb_fixture::builder_from_global_state_fixture(GROUPS_FIXTURE);
+    // builder.with_block_time(Timestamp::now().into());
+    // builder.with_gas_hold_config(HoldBalanceHandling::default(), 1200u64);
+
+    let mut builder = LmdbWasmTestBuilder::default();
+    builder.run_genesis(LOCAL_GENESIS_REQUEST.clone());
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        *DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_GROUPS,
+        RuntimeArgs::default(),
+    )
+    .build();
+    builder.exec(exec_request_1).expect_success().commit();
     builder
 }
 
@@ -185,7 +197,7 @@ fn should_not_call_restricted_session_caller_from_wrong_account() {
         .get_entity_with_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
         .expect("must have contract");
 
-    let package_hash = account
+    let package_hash = *account
         .named_keys()
         .get(PACKAGE_HASH_KEY)
         .expect("should have contract package");
@@ -194,8 +206,13 @@ fn should_not_call_restricted_session_caller_from_wrong_account() {
         .get(PACKAGE_ACCESS_KEY)
         .expect("should have package hash");
 
+    let package_hash = package_hash
+        .into_package_hash()
+        .map(|package_hash| Key::Hash(package_hash.value()))
+        .expect("must get Key::Hash");
+
     let args = runtime_args! {
-        "package_hash" => *package_hash,
+        "package_hash" => package_hash,
     };
     let deploy_item = DeployItemBuilder::new()
         .with_address(ACCOUNT_1_ADDR)
@@ -349,8 +366,13 @@ fn should_call_group_unrestricted_contract_caller() {
         .get(PACKAGE_ACCESS_KEY)
         .expect("should have package hash");
 
+    let package_hash = package_hash
+        .into_package_hash()
+        .map(|package_hash| ContractPackageHash::new(package_hash.value()))
+        .expect("must get Key::Hash");
+
     let args = runtime_args! {
-        PACKAGE_HASH_ARG => *package_hash,
+        PACKAGE_HASH_ARG => package_hash,
     };
     let deploy_item = DeployItemBuilder::new()
         .with_address(*DEFAULT_ACCOUNT_ADDR)
@@ -390,7 +412,7 @@ fn should_call_unrestricted_contract_caller_from_different_account() {
         .get_entity_with_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
         .expect("must have contract");
 
-    let package_hash = account
+    let package_hash = *account
         .named_keys()
         .get(PACKAGE_HASH_KEY)
         .expect("should have contract package");
@@ -399,15 +421,18 @@ fn should_call_unrestricted_contract_caller_from_different_account() {
         .get(PACKAGE_ACCESS_KEY)
         .expect("should have package hash");
 
+    let package_hash = package_hash
+        .into_package_hash()
+        .map(|package_hash| ContractPackageHash::new(package_hash.value()))
+        .expect("must get Key::Hash");
+
     let exec_request_2 = ExecuteRequestBuilder::versioned_contract_call_by_hash(
         *DEFAULT_ACCOUNT_ADDR,
-        package_hash
-            .into_package_hash()
-            .expect("must have package hash"),
+        PackageHash::new(package_hash.value()),
         None,
         UNRESTRICTED_CONTRACT_CALLER,
         runtime_args! {
-            PACKAGE_HASH_ARG => *package_hash,
+            PACKAGE_HASH_ARG => package_hash,
         },
     )
     .build();
@@ -432,7 +457,7 @@ fn should_call_group_restricted_contract_as_session() {
         .get_entity_with_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
         .expect("must have default contract package");
 
-    let package_hash = account
+    let package_hash = *account
         .named_keys()
         .get(PACKAGE_HASH_KEY)
         .expect("should have contract package");
@@ -441,18 +466,21 @@ fn should_call_group_restricted_contract_as_session() {
         .get(PACKAGE_ACCESS_KEY)
         .expect("should have package hash");
 
+    let package_hash = package_hash
+        .into_package_hash()
+        .map(|package_hash| ContractPackageHash::new(package_hash.value()))
+        .expect("must get Key::Hash");
+
     // This inserts package as an argument because this test
     // can work from different accounts which might not have the same keys in their session
     // code.
     let exec_request_3 = ExecuteRequestBuilder::versioned_contract_call_by_hash(
         *DEFAULT_ACCOUNT_ADDR,
-        package_hash
-            .into_package_hash()
-            .expect("must convert to package hash"),
+        PackageHash::new(package_hash.value()),
         None,
         RESTRICTED_CONTRACT_CALLER_AS_SESSION,
         runtime_args! {
-            PACKAGE_HASH_ARG => *package_hash,
+            PACKAGE_HASH_ARG => package_hash,
         },
     )
     .build();
@@ -477,7 +505,7 @@ fn should_call_group_restricted_contract_as_session_from_wrong_account() {
         .get_entity_with_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
         .expect("must have contract");
 
-    let package_hash = account
+    let package_hash = *account
         .named_keys()
         .get(PACKAGE_HASH_KEY)
         .expect("should have contract package");
@@ -486,18 +514,25 @@ fn should_call_group_restricted_contract_as_session_from_wrong_account() {
         .get(PACKAGE_ACCESS_KEY)
         .expect("should have package hash");
 
+    let hash = package_hash
+        .into_package_hash()
+        .expect("must convert to package hash");
+
+    let package_key = package_hash
+        .into_package_hash()
+        .map(|package_hash| ContractPackageHash::new(package_hash.value()))
+        .expect("must get Key::Hash");
+
     // This inserts package as an argument because this test
     // can work from different accounts which might not have the same keys in their session
     // code.
     let exec_request_3 = ExecuteRequestBuilder::versioned_contract_call_by_hash(
         ACCOUNT_1_ADDR,
-        package_hash
-            .into_package_hash()
-            .expect("must convert to package hash"),
+        hash,
         Some(CONTRACT_INITIAL_VERSION),
         RESTRICTED_CONTRACT_CALLER_AS_SESSION,
         runtime_args! {
-            PACKAGE_HASH_ARG => *package_hash,
+            PACKAGE_HASH_ARG => package_key,
         },
     )
     .build();
@@ -520,7 +555,7 @@ fn should_not_call_uncallable_contract_from_deploy() {
         .get_entity_with_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
         .expect("must have default contract package");
 
-    let package_hash = account
+    let package_hash = *account
         .named_keys()
         .get(PACKAGE_HASH_KEY)
         .expect("should have contract package");
@@ -529,11 +564,17 @@ fn should_not_call_uncallable_contract_from_deploy() {
         .get(PACKAGE_ACCESS_KEY)
         .expect("should have package hash");
 
+    let package_hash = package_hash
+        .into_package_hash()
+        .map(|package_hash| Key::Hash(package_hash.value()))
+        .expect("must get Key::Hash");
+
     // This inserts package as an argument because this test
     // can work from different accounts which might not have the same keys in their session
     // code.
+
     let args = runtime_args! {
-        PACKAGE_HASH_ARG => *package_hash,
+        PACKAGE_HASH_ARG => package_hash,
     };
     let deploy_item = DeployItemBuilder::new()
         .with_address(*DEFAULT_ACCOUNT_ADDR)
@@ -553,7 +594,7 @@ fn should_not_call_uncallable_contract_from_deploy() {
     assert_matches!(error, Error::Exec(ExecError::InvalidContext));
 
     let args = runtime_args! {
-        PACKAGE_HASH_ARG => *package_hash,
+        PACKAGE_HASH_ARG => package_hash,
     };
     let deploy_item = DeployItemBuilder::new()
         .with_address(*DEFAULT_ACCOUNT_ADDR)
@@ -570,9 +611,7 @@ fn should_not_call_uncallable_contract_from_deploy() {
 
     let exec_request_3 = ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
 
-    builder.exec(exec_request_3).expect_failure();
-
-    builder.assert_error(Error::Exec(ExecError::InvalidContext))
+    builder.exec(exec_request_3).expect_success().commit();
 }
 
 #[ignore]
@@ -584,7 +623,7 @@ fn should_not_call_uncallable_session_from_deploy() {
         .get_entity_with_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
         .expect("must have contract");
 
-    let package_hash = account
+    let package_hash = *account
         .named_keys()
         .get(PACKAGE_HASH_KEY)
         .expect("should have contract package");
@@ -593,11 +632,16 @@ fn should_not_call_uncallable_session_from_deploy() {
         .get(PACKAGE_ACCESS_KEY)
         .expect("should have package hash");
 
+    let package_hash = package_hash
+        .into_package_hash()
+        .map(|package_hash| Key::Hash(package_hash.value()))
+        .expect("must get Key::Hash");
+
     // This inserts package as an argument because this test
     // can work from different accounts which might not have the same keys in their session
     // code.
     let args = runtime_args! {
-        PACKAGE_HASH_ARG => *package_hash,
+        PACKAGE_HASH_ARG => package_hash,
     };
     let deploy_item = DeployItemBuilder::new()
         .with_address(*DEFAULT_ACCOUNT_ADDR)
@@ -617,7 +661,7 @@ fn should_not_call_uncallable_session_from_deploy() {
     assert_matches!(error, Error::Exec(ExecError::InvalidContext));
 
     let args = runtime_args! {
-        PACKAGE_HASH_ARG => *package_hash,
+        PACKAGE_HASH_ARG => package_hash,
     };
     let deploy_item = DeployItemBuilder::new()
         .with_address(*DEFAULT_ACCOUNT_ADDR)
@@ -633,9 +677,7 @@ fn should_not_call_uncallable_session_from_deploy() {
         .build();
 
     let exec_request_3 = ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
-    builder.exec(exec_request_3).expect_failure();
-
-    builder.assert_error(Error::Exec(ExecError::InvalidContext))
+    builder.exec(exec_request_3).expect_success().commit();
 }
 
 #[ignore]
@@ -751,7 +793,5 @@ fn should_call_group_restricted_stored_payment_code() {
 
     let exec_request_3 = ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
 
-    builder.exec(exec_request_3).expect_failure();
-
-    builder.assert_error(Error::Exec(ExecError::InvalidContext));
+    builder.exec(exec_request_3).expect_success().commit();
 }

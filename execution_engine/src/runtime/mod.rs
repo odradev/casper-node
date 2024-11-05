@@ -1354,6 +1354,7 @@ where
                 Err(ExecError::InvalidContext)
             }
             (EntryPointType::Caller, EntryPointType::Caller) => {
+                println!("reuse base key {}", self.context.get_context_key());
                 // Session code called from session reuses current base key
                 Ok(self.context.get_context_key())
             }
@@ -1666,14 +1667,13 @@ where
 
         // if session the caller's context
         // else the called contract's context
+        println!("addr {}", entity_addr);
         let context_entity_key =
             self.get_context_key_for_contract_call(entity_addr, &entry_point)?;
 
         let context_entity_hash = context_entity_key
             .into_entity_hash_addr()
             .ok_or_else(|| ExecError::UnexpectedKeyVariant(context_entity_key))?;
-
-        println!("ceh {:?}", context_entity_hash);
 
         let (should_attenuate_urefs, should_validate_urefs) = {
             // Determines if this call originated from the system account based on a first
@@ -1725,12 +1725,32 @@ where
             all_urefs
         };
 
-        let access_rights = {
-            let mut access_rights =
-                footprint.extract_access_rights(entity_hash.value(), footprint.named_keys());
-            access_rights.extend(&extended_access_rights);
-            access_rights
+        let (mut named_keys, access_rights) = match entry_point_type {
+            EntryPointType::Caller => {
+                let mut access_rights = self
+                    .context
+                    .runtime_footprint()
+                    .borrow()
+                    .extract_access_rights(context_entity_hash);
+                access_rights.extend(&extended_access_rights);
+
+                let named_keys = self
+                    .context
+                    .runtime_footprint()
+                    .borrow()
+                    .named_keys()
+                    .clone();
+
+                (named_keys, access_rights)
+            }
+            EntryPointType::Called | EntryPointType::Factory => {
+                let mut access_rights = footprint.extract_access_rights(entity_hash.value());
+                access_rights.extend(&extended_access_rights);
+                (footprint.named_keys().clone(), access_rights)
+            }
         };
+
+        println!("rights {:?}", access_rights);
 
         let stack = {
             let mut stack = self.try_get_stack()?.clone();
@@ -1825,8 +1845,6 @@ where
 
             casper_wasm::deserialize_buffer(byte_code.bytes())?
         };
-
-        let mut named_keys = footprint.take_named_keys();
 
         let context = self.context.new_from_self(
             context_entity_key,
@@ -3446,6 +3464,7 @@ where
         amount: U512,
         id: Option<u64>,
     ) -> Result<Result<(), mint::Error>, ExecError> {
+        println!("source {source}");
         self.context.validate_uref(&source)?;
         let mint_contract_key = self.get_mint_hash()?;
         match self.mint_transfer(mint_contract_key, None, source, target, amount, id)? {
@@ -3708,43 +3727,89 @@ where
         package_key: PackageHash,
         label: Group,
     ) -> Result<Result<(), ApiError>, ExecError> {
-        let mut package: Package = self.context.get_validated_package(package_key)?;
+        if self.context.engine_config().enable_entity {
+            let mut package: Package = self.context.get_validated_package(package_key)?;
 
-        let group_to_remove = Group::new(label);
-        let groups = package.groups_mut();
+            let group_to_remove = Group::new(label);
+            let groups = package.groups_mut();
 
-        // Ensure group exists in groups
-        if !groups.contains(&group_to_remove) {
-            return Ok(Err(addressable_entity::Error::GroupDoesNotExist.into()));
-        }
+            // Ensure group exists in groups
+            if !groups.contains(&group_to_remove) {
+                return Ok(Err(addressable_entity::Error::GroupDoesNotExist.into()));
+            }
 
-        // Remove group if it is not referenced by at least one entry_point in active versions.
-        let versions = package.versions();
-        for entity_hash in versions.contract_hashes() {
-            let entry_points = {
-                self.context
-                    .get_casper_vm_v1_entry_point(Key::contract_entity_key(*entity_hash))?
-            };
-            for entry_point in entry_points.take_entry_points() {
-                match entry_point.access() {
-                    EntryPointAccess::Public | EntryPointAccess::Template => {
-                        continue;
-                    }
-                    EntryPointAccess::Groups(groups) => {
-                        if groups.contains(&group_to_remove) {
-                            return Ok(Err(addressable_entity::Error::GroupInUse.into()));
+            // Remove group if it is not referenced by at least one entry_point in active versions.
+            let versions = package.versions();
+            for entity_hash in versions.contract_hashes() {
+                let entry_points = {
+                    self.context
+                        .get_casper_vm_v1_entry_point(Key::contract_entity_key(*entity_hash))?
+                };
+                for entry_point in entry_points.take_entry_points() {
+                    match entry_point.access() {
+                        EntryPointAccess::Public | EntryPointAccess::Template => {
+                            continue;
+                        }
+                        EntryPointAccess::Groups(groups) => {
+                            if groups.contains(&group_to_remove) {
+                                return Ok(Err(addressable_entity::Error::GroupInUse.into()));
+                            }
                         }
                     }
                 }
             }
-        }
 
-        if !package.remove_group(&group_to_remove) {
-            return Ok(Err(addressable_entity::Error::GroupInUse.into()));
-        }
+            if !package.remove_group(&group_to_remove) {
+                return Ok(Err(addressable_entity::Error::GroupInUse.into()));
+            }
 
-        // Write updated package to the global state
-        self.context.metered_write_gs_unsafe(package_key, package)?;
+            // Write updated package to the global state
+            self.context.metered_write_gs_unsafe(package_key, package)?;
+        } else {
+            let mut contract_package = self
+                .context
+                .get_validated_contract_package(package_key.value())?;
+
+            let group_to_remove = Group::new(label);
+            let groups = contract_package.groups_mut();
+
+            // Ensure group exists in groups
+            if !groups.contains(&group_to_remove) {
+                return Ok(Err(addressable_entity::Error::GroupDoesNotExist.into()));
+            }
+
+            // Remove group if it is not referenced by at least one entry_point in active versions.
+            for (_version, contract_hash) in contract_package.versions().iter() {
+                let entry_points = {
+                    self.context
+                        .get_casper_vm_v1_entry_point(Key::contract_entity_key(
+                            AddressableEntityHash::new(contract_hash.value()),
+                        ))?
+                };
+                for entry_point in entry_points.take_entry_points() {
+                    match entry_point.access() {
+                        EntryPointAccess::Public | EntryPointAccess::Template => {
+                            continue;
+                        }
+                        EntryPointAccess::Groups(groups) => {
+                            if groups.contains(&group_to_remove) {
+                                return Ok(Err(addressable_entity::Error::GroupInUse.into()));
+                            }
+                        }
+                    }
+                }
+            }
+
+            if !contract_package.remove_group(&group_to_remove) {
+                return Ok(Err(addressable_entity::Error::GroupInUse.into()));
+            }
+
+            // Write updated package to the global state
+            self.context.metered_write_gs_unsafe(
+                ContractPackageHash::new(package_key.value()),
+                contract_package,
+            )?;
+        }
         Ok(Ok(()))
     }
 
@@ -3759,31 +3824,73 @@ where
     ) -> Result<Result<(), ApiError>, ExecError> {
         let contract_package_hash = self.t_from_mem(package_ptr, package_size)?;
         let label: String = self.t_from_mem(label_ptr, label_size)?;
-        let mut contract_package = self.context.get_validated_package(contract_package_hash)?;
-        let groups = contract_package.groups_mut();
+        let new_uref = if self.context.engine_config().enable_entity {
+            let mut contract_package = self.context.get_validated_package(contract_package_hash)?;
+            let groups = contract_package.groups_mut();
 
-        let group_label = Group::new(label);
+            let group_label = Group::new(label);
 
-        // Ensure there are not too many urefs
-        if groups.total_urefs() + 1 > addressable_entity::MAX_TOTAL_UREFS {
-            return Ok(Err(addressable_entity::Error::MaxTotalURefsExceeded.into()));
-        }
-
-        // Ensure given group exists and does not exceed limits
-        let group = match groups.get_mut(&group_label) {
-            Some(group) if group.len() + 1 > addressable_entity::MAX_GROUPS as usize => {
-                // Ensures there are not too many groups to fit in amount of new urefs
+            // Ensure there are not too many urefs
+            if groups.total_urefs() + 1 > addressable_entity::MAX_TOTAL_UREFS {
                 return Ok(Err(addressable_entity::Error::MaxTotalURefsExceeded.into()));
             }
-            Some(group) => group,
-            None => return Ok(Err(addressable_entity::Error::GroupDoesNotExist.into())),
-        };
 
-        // Proceed with creating new URefs
-        let new_uref = self.context.new_unit_uref()?;
-        if !group.insert(new_uref) {
-            return Ok(Err(addressable_entity::Error::URefAlreadyExists.into()));
-        }
+            // Ensure given group exists and does not exceed limits
+            let group = match groups.get_mut(&group_label) {
+                Some(group) if group.len() + 1 > addressable_entity::MAX_GROUPS as usize => {
+                    // Ensures there are not too many groups to fit in amount of new urefs
+                    return Ok(Err(addressable_entity::Error::MaxTotalURefsExceeded.into()));
+                }
+                Some(group) => group,
+                None => return Ok(Err(addressable_entity::Error::GroupDoesNotExist.into())),
+            };
+
+            // Proceed with creating new URefs
+            let new_uref = self.context.new_unit_uref()?;
+            if !group.insert(new_uref) {
+                return Ok(Err(addressable_entity::Error::URefAlreadyExists.into()));
+            }
+
+            // Write updated package to the global state
+            self.context
+                .metered_write_gs_unsafe(contract_package_hash, contract_package)?;
+            new_uref
+        } else {
+            let mut contract_package = self
+                .context
+                .get_validated_contract_package(contract_package_hash.value())?;
+            let groups = contract_package.groups_mut();
+
+            let group_label = Group::new(label);
+
+            // Ensure there are not too many urefs
+            if groups.total_urefs() + 1 > addressable_entity::MAX_TOTAL_UREFS {
+                return Ok(Err(addressable_entity::Error::MaxTotalURefsExceeded.into()));
+            }
+
+            // Ensure given group exists and does not exceed limits
+            let group = match groups.get_mut(&group_label) {
+                Some(group) if group.len() + 1 > addressable_entity::MAX_GROUPS as usize => {
+                    // Ensures there are not too many groups to fit in amount of new urefs
+                    return Ok(Err(addressable_entity::Error::MaxTotalURefsExceeded.into()));
+                }
+                Some(group) => group,
+                None => return Ok(Err(addressable_entity::Error::GroupDoesNotExist.into())),
+            };
+
+            // Proceed with creating new URefs
+            let new_uref = self.context.new_unit_uref()?;
+            if !group.insert(new_uref) {
+                return Ok(Err(addressable_entity::Error::URefAlreadyExists.into()));
+            }
+
+            // Write updated package to the global state
+            self.context.metered_write_gs_unsafe(
+                ContractPackageHash::new(contract_package_hash.value()),
+                contract_package,
+            )?;
+            new_uref
+        };
 
         // check we can write to the host buffer
         if let Err(err) = self.check_host_buffer() {
@@ -3805,10 +3912,6 @@ where
             return Err(ExecError::Interpreter(error.into()));
         }
 
-        // Write updated package to the global state
-        self.context
-            .metered_write_gs_unsafe(contract_package_hash, contract_package)?;
-
         Ok(Ok(()))
     }
 
@@ -3826,28 +3929,56 @@ where
         let label: String = self.t_from_mem(label_ptr, label_size)?;
         let urefs: BTreeSet<URef> = self.t_from_mem(urefs_ptr, urefs_size)?;
 
-        let mut contract_package = self.context.get_validated_package(contract_package_hash)?;
+        if self.context.engine_config().enable_entity {
+            let mut contract_package = self.context.get_validated_package(contract_package_hash)?;
 
-        let groups = contract_package.groups_mut();
-        let group_label = Group::new(label);
+            let groups = contract_package.groups_mut();
+            let group_label = Group::new(label);
 
-        let group = match groups.get_mut(&group_label) {
-            Some(group) => group,
-            None => return Ok(Err(addressable_entity::Error::GroupDoesNotExist.into())),
-        };
+            let group = match groups.get_mut(&group_label) {
+                Some(group) => group,
+                None => return Ok(Err(addressable_entity::Error::GroupDoesNotExist.into())),
+            };
 
-        if urefs.is_empty() {
-            return Ok(Ok(()));
-        }
-
-        for uref in urefs {
-            if !group.remove(&uref) {
-                return Ok(Err(addressable_entity::Error::UnableToRemoveURef.into()));
+            if urefs.is_empty() {
+                return Ok(Ok(()));
             }
+
+            for uref in urefs {
+                if !group.remove(&uref) {
+                    return Ok(Err(addressable_entity::Error::UnableToRemoveURef.into()));
+                }
+            }
+            // Write updated package to the global state
+            self.context
+                .metered_write_gs_unsafe(contract_package_hash, contract_package)?;
+        } else {
+            let contract_package_hash = ContractPackageHash::new(contract_package_hash.value());
+            let mut contract_package = self
+                .context
+                .get_validated_contract_package(contract_package_hash.value())?;
+
+            let groups = contract_package.groups_mut();
+            let group_label = Group::new(label);
+
+            let group = match groups.get_mut(&group_label) {
+                Some(group) => group,
+                None => return Ok(Err(addressable_entity::Error::GroupDoesNotExist.into())),
+            };
+
+            if urefs.is_empty() {
+                return Ok(Ok(()));
+            }
+
+            for uref in urefs {
+                if !group.remove(&uref) {
+                    return Ok(Err(addressable_entity::Error::UnableToRemoveURef.into()));
+                }
+            }
+            // Write updated package to the global state
+            self.context
+                .metered_write_gs_unsafe(contract_package_hash, contract_package)?;
         }
-        // Write updated package to the global state
-        self.context
-            .metered_write_gs_unsafe(contract_package_hash, contract_package)?;
 
         Ok(Ok(()))
     }

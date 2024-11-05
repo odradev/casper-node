@@ -92,7 +92,9 @@ fn should_create_and_remove_group() {
     let query_result = builder
         .query(None, *package_hash, &[])
         .expect("should have result");
-    let contract_package = query_result.as_package().expect("should be package");
+    let contract_package = query_result
+        .as_contract_package()
+        .expect("should be package");
     assert_eq!(contract_package.groups().len(), 1);
     let group_1 = contract_package
         .groups()
@@ -128,7 +130,9 @@ fn should_create_and_remove_group() {
     let query_result = builder
         .query(None, *package_hash, &[])
         .expect("should have result");
-    let contract_package = query_result.as_package().expect("should be package");
+    let contract_package = query_result
+        .as_contract_package()
+        .expect("should be package");
     assert_eq!(
         contract_package.groups().get(&Group::new(GROUP_1_NAME)),
         None
@@ -191,7 +195,9 @@ fn should_create_and_extend_user_group() {
     let query_result = builder
         .query(None, *package_hash, &[])
         .expect("should have result");
-    let contract_package = query_result.as_package().expect("should be package");
+    let contract_package = query_result
+        .as_contract_package()
+        .expect("should be package");
     assert_eq!(contract_package.groups().len(), 1);
     let group_1 = contract_package
         .groups()
@@ -228,7 +234,9 @@ fn should_create_and_extend_user_group() {
     let query_result = builder
         .query(None, *package_hash, &[])
         .expect("should have result");
-    let contract_package = query_result.as_package().expect("should be package");
+    let contract_package = query_result
+        .as_contract_package()
+        .expect("should be package");
     let group_1_extended = contract_package
         .groups()
         .get(&Group::new(GROUP_1_NAME))
@@ -294,7 +302,9 @@ fn should_create_and_remove_urefs_from_group() {
     let query_result = builder
         .query(None, *package_hash, &[])
         .expect("should have result");
-    let contract_package = query_result.as_package().expect("should be package");
+    let contract_package = query_result
+        .as_contract_package()
+        .expect("should be package");
     assert_eq!(contract_package.groups().len(), 1);
     let group_1 = contract_package
         .groups()
@@ -333,7 +343,9 @@ fn should_create_and_remove_urefs_from_group() {
     let query_result = builder
         .query(None, *package_hash, &[])
         .expect("should have result");
-    let contract_package = query_result.as_package().expect("should be package");
+    let contract_package = query_result
+        .as_contract_package()
+        .expect("should be package");
     let group_1_modified = contract_package
         .groups()
         .get(&Group::new(GROUP_1_NAME))
@@ -396,7 +408,9 @@ fn should_limit_max_urefs_while_extending() {
     let query_result = builder
         .query(None, *package_hash, &[])
         .expect("should have result");
-    let contract_package = query_result.as_package().expect("should be package");
+    let contract_package = query_result
+        .as_contract_package()
+        .expect("should be package");
     assert_eq!(contract_package.groups().len(), 1);
     let group_1 = contract_package
         .groups()
@@ -458,7 +472,9 @@ fn should_limit_max_urefs_while_extending() {
     let query_result = builder
         .query(None, *package_hash, &[])
         .expect("should have result");
-    let contract_package = query_result.as_package().expect("should be package");
+    let contract_package = query_result
+        .as_contract_package()
+        .expect("should be package");
     let group_1_modified = contract_package
         .groups()
         .get(&Group::new(GROUP_1_NAME))

@@ -61,6 +61,11 @@ pub enum AllowInstallUpgrade {
     Forbidden,
 }
 
+enum PackageFootprint {
+    Package(Package),
+    ContractPackage(ContractPackage),
+}
+
 /// Holds information specific to the deployed contract.
 pub struct RuntimeContext<'a, R> {
     tracking_copy: Rc<RefCell<TrackingCopy<R>>>,
@@ -212,6 +217,7 @@ where
 
     /// Returns a named key by a name if it exists.
     pub fn named_keys_get(&self, name: &str) -> Option<&Key> {
+        println!("NK {:?}, {}", self.named_keys, self.context_key);
         self.named_keys.get(name)
     }
 
@@ -418,7 +424,7 @@ where
         // the element stored under `base_key`) is allowed to add new named keys to itself.
         match self.get_context_key() {
             Key::Account(_) | Key::Hash(_) => {
-                println!("{name} for {}", self.get_context_key());
+                println!("{name} for {} {}", self.get_context_key(), key);
                 let named_key_value = StoredValue::CLValue(CLValue::from_t((name.clone(), key))?);
                 self.validate_value(&named_key_value)?;
                 self.metered_add_gs_unsafe(self.get_context_key(), named_key_value)?;

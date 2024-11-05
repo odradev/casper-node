@@ -115,8 +115,7 @@ impl ExecutionEngineV1 {
             Ok(execution_kind) => execution_kind,
             Err(ese) => return WasmV1Result::precondition_failure(gas_limit, ese),
         };
-        let access_rights =
-            runtime_footprint.extract_access_rights(entity_addr.value(), &named_keys);
+        let access_rights = runtime_footprint.extract_access_rights(entity_addr.value());
         Executor::new(self.config().clone()).exec(
             execution_kind,
             args,

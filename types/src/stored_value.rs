@@ -157,6 +157,14 @@ impl StoredValue {
         }
     }
 
+    /// Returns a reference to the wrapped `ContractPackage` if this is a `ContractPackage` variant.
+    pub fn as_contract_package(&self) -> Option<&ContractPackage> {
+        match self {
+            StoredValue::ContractPackage(package) => Some(package),
+            _ => None,
+        }
+    }
+
     /// Returns a reference to the wrapped `TransferV1` if this is a `LegacyTransfer` variant.
     pub fn as_legacy_transfer(&self) -> Option<&TransferV1> {
         match self {
@@ -496,7 +504,7 @@ impl TryFrom<StoredValue> for CLValue {
         let type_name = stored_value.type_name();
         match stored_value {
             StoredValue::CLValue(cl_value) => Ok(cl_value),
-            StoredValue::Package(contract_package) => Ok(CLValue::from_t(contract_package)
+            StoredValue::ContractPackage(contract_package) => Ok(CLValue::from_t(contract_package)
                 .map_err(|_error| TypeMismatch::new("ContractPackage".to_string(), type_name))?),
             _ => Err(TypeMismatch::new("StoredValue".to_string(), type_name)),
         }
