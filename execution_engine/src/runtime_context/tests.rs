@@ -926,7 +926,7 @@ fn remove_uref_works() {
 
     let next_session_access_rights = footprint
         .borrow()
-        .extract_access_rights(entity_hash.value(), &entity_named_keys);
+        .extract_access_rights(entity_hash.value());
     let address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
 
     let (runtime_context, _tempdir) = new_runtime_context(

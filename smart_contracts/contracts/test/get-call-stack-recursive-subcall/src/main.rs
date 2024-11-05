@@ -7,8 +7,8 @@ use alloc::{boxed::Box, string::ToString, vec};
 
 use casper_contract::contract_api::{runtime, storage};
 use casper_types::{
-    AddressableEntityHash, CLType, EntryPoint, EntryPointAccess, EntryPointPayment, EntryPointType,
-    EntryPoints, Key, Parameter,
+    CLType, EntryPoint, EntryPointAccess, EntryPointPayment, EntryPointType, EntryPoints, Key,
+    Parameter,
 };
 
 use get_call_stack_recursive_subcall::{

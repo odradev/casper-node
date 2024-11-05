@@ -1424,6 +1424,7 @@ where
         self
     }
 
+    /// Returns the `Account` if present.
     pub fn get_account(&self, account_hash: AccountHash) -> Option<Account> {
         let stored_value = self
             .query(None, Key::Account(account_hash), &[])

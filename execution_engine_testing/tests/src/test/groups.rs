@@ -12,10 +12,10 @@ use casper_execution_engine::{engine_state::Error, execution::ExecError};
 use casper_types::{
     account::AccountHash,
     contracts::{ContractPackageHash, CONTRACT_INITIAL_VERSION},
-    runtime_args, HoldBalanceHandling, Key, PackageHash, RuntimeArgs, Timestamp, U512,
+    runtime_args, Key, PackageHash, RuntimeArgs, U512,
 };
 
-use crate::{lmdb_fixture, wasm_utils};
+use crate::wasm_utils;
 
 const CONTRACT_GROUPS: &str = "groups.wasm";
 const PACKAGE_HASH_KEY: &str = "package_hash_key";
@@ -33,8 +33,6 @@ const UNCALLABLE_CONTRACT: &str = "uncallable_contract";
 const CALL_RESTRICTED_ENTRY_POINTS: &str = "call_restricted_entry_points";
 const ARG_AMOUNT: &str = "amount";
 const ARG_TARGET: &str = "target";
-
-const GROUPS_FIXTURE: &str = "groups";
 
 static TRANSFER_1_AMOUNT: Lazy<U512> =
     Lazy::new(|| U512::from(MINIMUM_ACCOUNT_CREATION_BALANCE) + 1000);

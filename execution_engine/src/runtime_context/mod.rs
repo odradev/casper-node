@@ -61,11 +61,6 @@ pub enum AllowInstallUpgrade {
     Forbidden,
 }
 
-enum PackageFootprint {
-    Package(Package),
-    ContractPackage(ContractPackage),
-}
-
 /// Holds information specific to the deployed contract.
 pub struct RuntimeContext<'a, R> {
     tracking_copy: Rc<RefCell<TrackingCopy<R>>>,

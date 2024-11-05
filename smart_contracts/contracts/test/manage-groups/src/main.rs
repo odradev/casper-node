@@ -23,7 +23,7 @@ use casper_types::{
     api_error,
     bytesrepr::{self, ToBytes},
     contracts::{ContractPackage, ContractPackageHash, NamedKeys},
-    ApiError, CLType, EntryPointPayment, Group, Key, Package, PackageHash, Parameter, URef,
+    ApiError, CLType, EntryPointPayment, Group, Key, Parameter, URef,
 };
 
 const PACKAGE_HASH_KEY: &str = "package_hash_key";

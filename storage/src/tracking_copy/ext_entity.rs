@@ -1,5 +1,5 @@
 use std::collections::BTreeSet;
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
 use casper_types::{
     account::AccountHash,
@@ -160,16 +160,6 @@ where
         &self,
         entity_addr: EntityAddr,
     ) -> Result<RuntimeFootprint, Self::Error> {
-        let key = if self.enable_addressable_entity {
-            Key::AddressableEntity(entity_addr)
-        } else {
-            match entity_addr {
-                EntityAddr::System(system_hash_addr) => Key::Hash(system_hash_addr),
-                EntityAddr::Account(account_hash) => Key::Account(AccountHash::new(account_hash)),
-                EntityAddr::SmartContract(contract_hash_addr) => Key::Hash(contract_hash_addr),
-            }
-        };
-
         let entity_key = match entity_addr {
             EntityAddr::Account(account_addr) => {
                 let account_key = Key::Account(AccountHash::new(account_addr));
@@ -177,10 +167,7 @@ where
                     Some(StoredValue::Account(account)) => {
                         return Ok(RuntimeFootprint::new_account_footprint(account))
                     }
-                    Some(StoredValue::CLValue(cl_value)) => {
-                        let key = cl_value.to_t::<Key>()?;
-                        key
-                    }
+                    Some(StoredValue::CLValue(cl_value)) => cl_value.to_t::<Key>()?,
                     Some(other) => {
                         return Err(TrackingCopyError::TypeMismatch(
                             StoredValueTypeMismatch::new(
@@ -222,10 +209,7 @@ where
                             maybe_system_entity_type,
                         ));
                     }
-                    Some(StoredValue::CLValue(cl_value)) => {
-                        let key = cl_value.to_t::<Key>()?;
-                        key
-                    }
+                    Some(StoredValue::CLValue(cl_value)) => cl_value.to_t::<Key>()?,
                     Some(_) | None => Key::AddressableEntity(entity_addr),
                 }
             }
@@ -406,7 +390,6 @@ where
                 }
             };
             let mint = self.runtime_footprint_by_hash_addr(mint_hash)?;
-            let mint_named_keys = mint.named_keys();
             let mint_access_rights = mint.extract_access_rights(mint_hash);
             (mint.take_named_keys(), mint_access_rights)
         };
