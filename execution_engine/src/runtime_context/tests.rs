@@ -915,7 +915,6 @@ fn remove_uref_works() {
     // even if you remove the URef from the named keys.
     assert!(runtime_context.validate_key(&uref_key).is_ok());
     assert!(!runtime_context.named_keys_contains_key(&uref_name));
-    let footprint = runtime_context.runtime_footprint();
 
     let entity_named_keys = runtime_context
         .get_named_keys(entity_key)
@@ -924,9 +923,10 @@ fn remove_uref_works() {
     // The next time the account is used, the access right is gone for the removed
     // named key.
 
-    let next_session_access_rights = footprint
-        .borrow()
-        .extract_access_rights(entity_hash.value());
+    let next_session_access_rights = addressable_entity.extract_access_rights(
+        AddressableEntityHash::new(account_hash.value()),
+        &entity_named_keys,
+    );
     let address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
 
     let (runtime_context, _tempdir) = new_runtime_context(
