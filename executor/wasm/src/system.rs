@@ -11,15 +11,12 @@ use casper_storage::{
         mint::Mint,
         runtime_native::{Config, Id, RuntimeNative},
     },
-    tracking_copy::{TrackingCopyError, TrackingCopyExt},
+    tracking_copy::{TrackingCopyEntityExt, TrackingCopyError},
     AddressGenerator, TrackingCopy,
 };
 use casper_types::{
-    account::AccountHash,
-    addressable_entity::{ActionThresholds, AssociatedKeys, MessageTopics},
-    AddressableEntity, ByteCodeHash, CLValueError, ContextAccessRights, Contract, EntityAddr,
-    EntityKind, Key, PackageHash, Phase, ProtocolVersion, PublicKey, StoredValue, StoredValueTag,
-    TransactionHash, TransactionRuntime, URef, U512,
+    account::AccountHash, CLValueError, ContextAccessRights, EntityAddr, Key, Phase,
+    ProtocolVersion, PublicKey, SystemHashRegistry, TransactionHash, URef, U512,
 };
 use parking_lot::RwLock;
 use thiserror::Error;
@@ -28,20 +25,15 @@ use tracing::{debug, error};
 #[derive(Debug, Error)]
 enum DispatchError {
     #[error("Tracking copy error: {0}")]
-    Storage(#[from] TrackingCopyError),
+    Storage(TrackingCopyError),
     #[error("CLValue error: {0}")]
     CLValue(CLValueError),
     #[error("Registry not found")]
     RegistryNotFound,
     #[error("Missing system contract: {0}")]
     MissingSystemContract(&'static str),
-    #[error("Error getting named keys")]
-    GetNamedKeys(TrackingCopyError),
-    #[error("Invalid key variant")]
-    InvalidStoredValueVariant {
-        expected: StoredValueTag,
-        actual: StoredValue,
-    },
+    #[error("Runtime footprint")]
+    RuntimeFootprint(TrackingCopyError),
 }
 
 fn dispatch_system_contract<R: GlobalStateReader, Ret: PartialEq>(
@@ -51,101 +43,71 @@ fn dispatch_system_contract<R: GlobalStateReader, Ret: PartialEq>(
     system_contract: &'static str,
     func: impl FnOnce(RuntimeNative<R>) -> Ret,
 ) -> Result<Ret, DispatchError> {
-    // let system_entity_registry = {
-    //     let stored_value = tracking_copy
-    //         .read(&Key::SystemEntityRegistry)?
-    //         .ok_or(DispatchError::RegistryNotFound)?;
-    //     stored_value
-    //         .into_cl_value()
-    //         .expect("should convert stored value into CLValue")
-    //         .into_t::<SystemEntityRegistry>()
-    //         .map_err(DispatchError::CLValue)?
-    // };
-    // let system_entity_addr = system_entity_registry
-    //     .get(system_contract)
-    //     .ok_or(DispatchError::MissingSystemContract(system_contract))?;
-    // let entity_addr = EntityAddr::new_system(system_entity_addr.value());
+    let system_entity_registry = {
+        let stored_value = tracking_copy
+            .read(&Key::SystemEntityRegistry)
+            .map_err(DispatchError::Storage)?
+            .ok_or(DispatchError::RegistryNotFound)?;
+        stored_value
+            .into_cl_value()
+            .expect("should convert stored value into CLValue")
+            .into_t::<SystemHashRegistry>()
+            .map_err(DispatchError::CLValue)?
+    };
+    let system_entity_addr = system_entity_registry
+        .get(system_contract)
+        .ok_or(DispatchError::MissingSystemContract(system_contract))?;
+    let entity_addr = EntityAddr::new_system(*system_entity_addr);
 
-    // // let addressable_entity_stored_value =
+    // let addressable_entity_stored_value =
 
-    // let addressable_entity = match tracking_copy.read(&Key::AddressableEntity(entity_addr))? {
-    //     Some(StoredValue::AddressableEntity(addressable_entity)) => addressable_entity,
-    //     Some(addressable_entity_stored_value) => {
-    //         return Err(DispatchError::InvalidStoredValueVariant {
-    //             expected: StoredValueTag::AddressableEntity,
-    //             actual: addressable_entity_stored_value,
-    //         })
-    //     }
-    //     None => {
-    //         let legacy_contract_stored_value = tracking_copy
-    //             .read(&Key::Hash(system_entity_addr.value()))?
-    //             .expect("Legacy contract structure should be present");
-    //         let legacy_contract: Contract = legacy_contract_stored_value
-    //             .into_contract()
-    //             .expect("should convert stored value into contract");
-    //         AddressableEntity::new(
-    //             PackageHash::new(legacy_contract.contract_package_hash().value()), //:
-    // PackageHash,             ByteCodeHash::new(legacy_contract.contract_wasm_hash().value()),
-    // //: ByteCodeHash,             legacy_contract.protocol_version(), //: ProtocolVersion,
-    //             URef::default(),                    // main_purse
-    //             AssociatedKeys::default(),          //: AssociatedKeys,
-    //             ActionThresholds::default(),        //: ActionThresholds,
-    //             MessageTopics::default(),
-    //             EntityKind::SmartContract(TransactionRuntime::VmCasperV1),
-    //         )
-    //     }
-    // };
+    let runtime_footprint = tracking_copy
+        .runtime_footprint_by_entity_addr(entity_addr)
+        .map_err(DispatchError::RuntimeFootprint)?;
 
-    // let config = Config::default();
-    // let protocol_version = ProtocolVersion::V1_0_0;
+    let config = Config::default();
+    let protocol_version = ProtocolVersion::V1_0_0;
 
-    // let access_rights = ContextAccessRights::new(*system_entity_addr, []);
-    // let address = PublicKey::System.to_account_hash();
+    let access_rights = ContextAccessRights::new(*system_entity_addr, []);
+    let address = PublicKey::System.to_account_hash();
 
-    // let named_keys = tracking_copy
-    //     .get_named_keys(entity_addr)
-    //     .map_err(DispatchError::GetNamedKeys)?;
+    let forked_tracking_copy = Rc::new(RefCell::new(tracking_copy.fork2()));
 
-    // let forked_tracking_copy = Rc::new(RefCell::new(tracking_copy.fork2()));
+    let remaining_spending_limit = U512::MAX; // NOTE: Since there's no custom payment, there's no need to track the remaining spending limit.
+    let phase = Phase::System; // NOTE: Since this is a system contract, the phase is always `System`.
 
-    // let remaining_spending_limit = U512::MAX; // NOTE: Since there's no custom payment, there's
-    // no need to track the remaining spending limit. let phase = Phase::System; // NOTE: Since
-    // this is a system contract, the phase is always `System`.
+    let ret = {
+        let runtime = RuntimeNative::new(
+            config,
+            protocol_version,
+            Id::Transaction(transaction_hash),
+            address_generator,
+            Rc::clone(&forked_tracking_copy),
+            address,
+            Key::AddressableEntity(entity_addr),
+            runtime_footprint,
+            access_rights,
+            remaining_spending_limit,
+            phase,
+        );
 
-    // let ret = {
-    //     let runtime = RuntimeNative::new(
-    //         config,
-    //         protocol_version,
-    //         Id::Transaction(transaction_hash),
-    //         address_generator,
-    //         Rc::clone(&forked_tracking_copy),
-    //         address,
-    //         Key::AddressableEntity(entity_addr),
-    //         addressable_entity,
-    //         named_keys,
-    //         access_rights,
-    //         remaining_spending_limit,
-    //         phase,
-    //     );
+        func(runtime)
+    };
 
-    //     func(runtime)
-    // };
+    // SAFETY: `RuntimeNative` is dropped in the block above, we can extract the tracking copy the
+    // effects.
+    let modified_tracking_copy = Rc::try_unwrap(forked_tracking_copy)
+        .ok()
+        .expect("No other references");
 
-    // // SAFETY: `RuntimeNative` is dropped in the block above, we can extract the tracking copy
-    // and // the effects.
-    // let modified_tracking_copy = Rc::try_unwrap(forked_tracking_copy)
-    //     .ok()
-    //     .expect("No other references");
+    let modified_tracking_copy = modified_tracking_copy.into_inner();
 
-    // let modified_tracking_copy = modified_tracking_copy.into_inner();
+    tracking_copy.apply_changes(
+        modified_tracking_copy.effects(),
+        modified_tracking_copy.cache(),
+    );
 
-    // tracking_copy.apply_changes(
-    //     modified_tracking_copy.effects(),
-    //     modified_tracking_copy.cache(),
-    // );
-
-    // Ok(ret)
-    todo!("dispatch system contract")
+    Ok(ret)
 }
 
 #[derive(Debug, Clone, Copy)]

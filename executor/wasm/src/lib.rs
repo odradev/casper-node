@@ -34,7 +34,7 @@ use casper_storage::{
 };
 use casper_types::{
     account::AccountHash,
-    addressable_entity::{ActionThresholds, AssociatedKeys, MessageTopics},
+    addressable_entity::{ActionThresholds, AssociatedKeys},
     bytesrepr,
     contracts::{ContractHash, ContractPackageHash},
     AddressableEntity, ByteCode, ByteCodeAddr, ByteCodeHash, ByteCodeKind, Digest, EntityAddr,
@@ -121,188 +121,188 @@ impl ExecutorV2 {
         R: StateProvider + CommitProvider,
         <R as StateProvider>::Reader: 'static,
     {
-        // let mut tracking_copy = match state_provider.checkout(state_root_hash) {
-        //     Ok(Some(tracking_copy)) => TrackingCopy::new(tracking_copy, 0),
-        //     Ok(None) => {
-        //         return Err(InstallContractError::GlobalState(
-        //             GlobalStateError::RootNotFound,
-        //         ))
-        //     }
-        //     Err(error) => return Err(error.into()),
-        // };
+        let mut tracking_copy = match state_provider.checkout(state_root_hash) {
+            Ok(Some(tracking_copy)) => {
+                TrackingCopy::new(tracking_copy, 1, state_provider.enable_entity())
+            }
+            Ok(None) => {
+                return Err(InstallContractError::GlobalState(
+                    GlobalStateError::RootNotFound,
+                ))
+            }
+            Err(error) => return Err(error.into()),
+        };
 
-        // let InstallContractRequest {
-        //     initiator,
-        //     gas_limit,
-        //     wasm_bytes,
-        //     entry_point,
-        //     input,
-        //     transferred_value,
-        //     address_generator,
-        //     transaction_hash,
-        //     chain_name,
-        //     block_time,
-        //     seed,
-        //     state_hash,
-        //     parent_block_hash,
-        //     block_height,
-        // } = install_request;
+        let InstallContractRequest {
+            initiator,
+            gas_limit,
+            wasm_bytes,
+            entry_point,
+            input,
+            transferred_value,
+            address_generator,
+            transaction_hash,
+            chain_name,
+            block_time,
+            seed,
+            state_hash,
+            parent_block_hash,
+            block_height,
+        } = install_request;
 
-        // let caller_key = Key::Account(initiator);
-        // let _source_purse = get_purse_for_entity(&mut tracking_copy, caller_key);
+        let caller_key = Key::Account(initiator);
+        let _source_purse = get_purse_for_entity(&mut tracking_copy, caller_key);
 
-        // // 1. Store package hash
-        // let contract_package = Package::new(
-        //     Default::default(),
-        //     Default::default(),
-        //     Groups::default(),
-        //     PackageStatus::Unlocked,
-        // );
+        // 1. Store package hash
+        let contract_package = Package::new(
+            Default::default(),
+            Default::default(),
+            Groups::default(),
+            PackageStatus::Unlocked,
+        );
 
-        // let bytecode_hash = chain_utils::compute_wasm_bytecode_hash(&wasm_bytes);
+        let bytecode_hash = chain_utils::compute_wasm_bytecode_hash(&wasm_bytes);
 
-        // let package_hash_bytes: [u8; 32];
-        // let contract_hash = chain_utils::compute_predictable_address(
-        //     chain_name.as_bytes(),
-        //     initiator,
-        //     bytecode_hash,
-        //     seed,
-        // );
+        let package_hash_bytes: [u8; 32];
+        let contract_hash = chain_utils::compute_predictable_address(
+            chain_name.as_bytes(),
+            initiator,
+            bytecode_hash,
+            seed,
+        );
 
-        // {
-        //     let mut gen = address_generator.write();
-        //     package_hash_bytes = gen.create_address(); // TODO: Do we need packages at all in new
-        //                                                // VM?
-        //                                                // contract_hash = gen.create_address();
-        // }
+        {
+            let mut gen = address_generator.write();
+            package_hash_bytes = gen.create_address(); // TODO: Do we need packages at all in new
+                                                       // VM?
+                                                       // contract_hash = gen.create_address();
+        }
 
-        // tracking_copy.write(
-        //     Key::Package(package_hash_bytes),
-        //     StoredValue::Package(contract_package),
-        // );
+        tracking_copy.write(
+            Key::Package(package_hash_bytes),
+            StoredValue::Package(contract_package),
+        );
 
-        // // 2. Store wasm
+        // 2. Store wasm
 
-        // let bytecode = ByteCode::new(ByteCodeKind::V2CasperWasm, wasm_bytes.clone().into());
-        // let bytecode_addr = ByteCodeAddr::V2CasperWasm(bytecode_hash);
+        let bytecode = ByteCode::new(ByteCodeKind::V2CasperWasm, wasm_bytes.clone().into());
+        let bytecode_addr = ByteCodeAddr::V2CasperWasm(bytecode_hash);
 
-        // tracking_copy.write(
-        //     Key::ByteCode(bytecode_addr),
-        //     StoredValue::ByteCode(bytecode),
-        // );
+        tracking_copy.write(
+            Key::ByteCode(bytecode_addr),
+            StoredValue::ByteCode(bytecode),
+        );
 
-        // // 3. Store addressable entity
+        // 3. Store addressable entity
 
-        // let entity_addr = EntityAddr::SmartContract(contract_hash);
-        // let addressable_entity_key = Key::AddressableEntity(entity_addr);
+        let entity_addr = EntityAddr::SmartContract(contract_hash);
+        let addressable_entity_key = Key::AddressableEntity(entity_addr);
 
-        // // TODO: abort(str) as an alternative to trap
-        // let main_purse: URef = match system::mint_mint(
-        //     &mut tracking_copy,
-        //     transaction_hash,
-        //     Arc::clone(&address_generator),
-        //     MintArgs {
-        //         initial_balance: U512::zero(),
-        //     },
-        // ) {
-        //     Ok(uref) => uref,
-        //     Err(mint_error) => {
-        //         error!(?mint_error, "Failed to create a purse");
-        //         return Err(InstallContractError::SystemContract(
-        //             HostError::CalleeTrapped(TrapCode::UnreachableCodeReached),
-        //         ));
-        //     }
-        // };
+        // TODO: abort(str) as an alternative to trap
+        let main_purse: URef = match system::mint_mint(
+            &mut tracking_copy,
+            transaction_hash,
+            Arc::clone(&address_generator),
+            MintArgs {
+                initial_balance: U512::zero(),
+            },
+        ) {
+            Ok(uref) => uref,
+            Err(mint_error) => {
+                error!(?mint_error, "Failed to create a purse");
+                return Err(InstallContractError::SystemContract(
+                    HostError::CalleeTrapped(TrapCode::UnreachableCodeReached),
+                ));
+            }
+        };
 
-        // let addressable_entity = AddressableEntity::new(
-        //     PackageHash::new(package_hash_bytes),
-        //     ByteCodeHash::new(bytecode_hash),
-        //     ProtocolVersion::V2_0_0,
-        //     main_purse,
-        //     AssociatedKeys::default(),
-        //     ActionThresholds::default(),
-        //     MessageTopics::default(),
-        //     EntityKind::SmartContract(TransactionRuntime::VmCasperV2),
-        // );
+        let addressable_entity = AddressableEntity::new(
+            PackageHash::new(package_hash_bytes),
+            ByteCodeHash::new(bytecode_hash),
+            ProtocolVersion::V2_0_0,
+            main_purse,
+            AssociatedKeys::default(),
+            ActionThresholds::default(),
+            EntityKind::SmartContract(TransactionRuntime::VmCasperV2),
+        );
 
-        // tracking_copy.write(
-        //     addressable_entity_key,
-        //     StoredValue::AddressableEntity(addressable_entity),
-        // );
+        tracking_copy.write(
+            addressable_entity_key,
+            StoredValue::AddressableEntity(addressable_entity),
+        );
 
-        // let ctor_gas_usage = match entry_point {
-        //     Some(entry_point_name) => {
-        //         let input = input.unwrap_or_default();
-        //         let execute_request = ExecuteRequestBuilder::default()
-        //             .with_initiator(initiator)
-        //             .with_caller_key(caller_key)
-        //             .with_callee_key(addressable_entity_key)
-        //             .with_target(ExecutionKind::Stored {
-        //                 address: entity_addr,
-        //                 entry_point: entry_point_name,
-        //             })
-        //             .with_gas_limit(gas_limit)
-        //             .with_input(input)
-        //             .with_transferred_value(transferred_value)
-        //             .with_transaction_hash(transaction_hash)
-        //             .with_shared_address_generator(address_generator)
-        //             .with_chain_name(chain_name)
-        //             .with_block_time(block_time)
-        //             .with_state_hash(state_hash)
-        //             .with_parent_block_hash(parent_block_hash)
-        //             .with_block_height(block_height)
-        //             .build()
-        //             .expect("should build");
+        let ctor_gas_usage = match entry_point {
+            Some(entry_point_name) => {
+                let input = input.unwrap_or_default();
+                let execute_request = ExecuteRequestBuilder::default()
+                    .with_initiator(initiator)
+                    .with_caller_key(caller_key)
+                    .with_callee_key(addressable_entity_key)
+                    .with_target(ExecutionKind::Stored {
+                        address: entity_addr,
+                        entry_point: entry_point_name,
+                    })
+                    .with_gas_limit(gas_limit)
+                    .with_input(input)
+                    .with_transferred_value(transferred_value)
+                    .with_transaction_hash(transaction_hash)
+                    .with_shared_address_generator(address_generator)
+                    .with_chain_name(chain_name)
+                    .with_block_time(block_time)
+                    .with_state_hash(state_hash)
+                    .with_parent_block_hash(parent_block_hash)
+                    .with_block_height(block_height)
+                    .build()
+                    .expect("should build");
 
-        //         let forked_tc = tracking_copy.fork2();
+                let forked_tc = tracking_copy.fork2();
 
-        //         match Self::execute_with_tracking_copy(self, forked_tc, execute_request) {
-        //             Ok(ExecuteResult {
-        //                 host_error,
-        //                 output,
-        //                 gas_usage,
-        //                 effects,
-        //                 cache,
-        //             }) => {
-        //                 if let Some(host_error) = host_error {
-        //                     return Err(InstallContractError::Constructor { host_error });
-        //                 }
+                match Self::execute_with_tracking_copy(self, forked_tc, execute_request) {
+                    Ok(ExecuteResult {
+                        host_error,
+                        output,
+                        gas_usage,
+                        effects,
+                        cache,
+                    }) => {
+                        if let Some(host_error) = host_error {
+                            return Err(InstallContractError::Constructor { host_error });
+                        }
 
-        //                 tracking_copy.apply_changes(effects, cache);
+                        tracking_copy.apply_changes(effects, cache);
 
-        //                 if let Some(output) = output {
-        //                     warn!(?output, "unexpected output from constructor");
-        //                 }
+                        if let Some(output) = output {
+                            warn!(?output, "unexpected output from constructor");
+                        }
 
-        //                 gas_usage
-        //             }
-        //             Err(error) => {
-        //                 error!(%error, "unable to execute constructor");
-        //                 return Err(InstallContractError::Execute(error));
-        //             }
-        //         }
-        //     }
-        //     None => {
-        //         // TODO: Calculate storage gas cost etc. and make it the base cost, then add
-        //         // constructor gas cost
-        //         GasUsage::new(gas_limit, gas_limit)
-        //     }
-        // };
+                        gas_usage
+                    }
+                    Err(error) => {
+                        error!(%error, "unable to execute constructor");
+                        return Err(InstallContractError::Execute(error));
+                    }
+                }
+            }
+            None => {
+                // TODO: Calculate storage gas cost etc. and make it the base cost, then add
+                // constructor gas cost
+                GasUsage::new(gas_limit, gas_limit)
+            }
+        };
 
-        // let effects = tracking_copy.effects();
+        let effects = tracking_copy.effects();
 
-        // match state_provider.commit_effects(state_root_hash, effects.clone()) {
-        //     Ok(post_state_hash) => Ok(InstallContractResult {
-        //         contract_package_hash: ContractPackageHash::new(package_hash_bytes),
-        //         contract_hash: ContractHash::new(contract_hash),
-        //         version: 1,
-        //         gas_usage: ctor_gas_usage,
-        //         effects,
-        //         post_state_hash,
-        //     }),
-        //     Err(error) => Err(InstallContractError::GlobalState(error)),
-        // }
-        todo!("install")
+        match state_provider.commit_effects(state_root_hash, effects.clone()) {
+            Ok(post_state_hash) => Ok(InstallContractResult {
+                contract_package_hash: ContractPackageHash::new(package_hash_bytes),
+                contract_hash: ContractHash::new(contract_hash),
+                version: 1,
+                gas_usage: ctor_gas_usage,
+                effects,
+                post_state_hash,
+            }),
+            Err(error) => Err(InstallContractError::GlobalState(error)),
+        }
     }
 
     fn execute_with_tracking_copy<R: GlobalStateReader + 'static>(

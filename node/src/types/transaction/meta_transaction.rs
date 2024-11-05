@@ -7,7 +7,7 @@ use casper_execution_engine::engine_state::{SessionDataDeploy, SessionDataV1, Se
 use casper_types::{
     account::AccountHash, bytesrepr::ToBytes, Approval, Chainspec, Deploy, Digest,
     ExecutableDeployItem, Gas, GasLimited, HashAddr, InitiatorAddr, InvalidTransaction, Phase,
-    PricingMode, RuntimeArgs, TimeDiff, Timestamp, Transaction, TransactionArgs, TransactionConfig,
+    PricingMode, TimeDiff, Timestamp, Transaction, TransactionArgs, TransactionConfig,
     TransactionEntryPoint, TransactionHash, TransactionTarget, INSTALL_UPGRADE_LANE_ID,
     LARGE_WASM_LANE_ID, MINT_LANE_ID,
 };

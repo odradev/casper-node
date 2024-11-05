@@ -1172,7 +1172,8 @@ fn add_should_work() {
 
     let (effects, cache) = {
         let view = global_state.checkout(root_hash).unwrap().unwrap();
-        let mut tracking_copy = TrackingCopy::new(view, DEFAULT_MAX_QUERY_DEPTH);
+        let mut tracking_copy =
+            TrackingCopy::new(view, DEFAULT_MAX_QUERY_DEPTH, DEFAULT_ENABLE_ENTITY);
         assert!(
             matches!(tracking_copy.get(&key), Ok(Some(StoredValue::CLValue(initial_value))) if initial_value.clone().into_t::<i32>().unwrap() == 1)
         );
@@ -1186,7 +1187,7 @@ fn add_should_work() {
     };
 
     let view = global_state.checkout(root_hash).unwrap().unwrap();
-    let mut tc = TrackingCopy::new(view, DEFAULT_MAX_QUERY_DEPTH);
+    let mut tc = TrackingCopy::new(view, DEFAULT_MAX_QUERY_DEPTH, DEFAULT_ENABLE_ENTITY);
     assert!(
         matches!(tc.get(&key), Ok(Some(StoredValue::CLValue(initial_value))) if initial_value.clone().into_t::<i32>().unwrap() == 1)
     );

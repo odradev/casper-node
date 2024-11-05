@@ -16,13 +16,12 @@ use casper_storage::{
         mint::Mint,
         runtime_native::{Config, Id, RuntimeNative},
     },
-    tracking_copy::{TrackingCopyEntityExt, TrackingCopyError, TrackingCopyExt},
+    tracking_copy::{TrackingCopyEntityExt, TrackingCopyError},
     AddressGenerator, TrackingCopy,
 };
 use casper_types::{
     account::AccountHash, CLValueError, ContextAccessRights, EntityAddr, Key, Phase,
-    ProtocolVersion, PublicKey, StoredValue, StoredValueTag, SystemHashRegistry, TransactionHash,
-    URef, U512,
+    ProtocolVersion, PublicKey, SystemHashRegistry, TransactionHash, URef, U512,
 };
 use parking_lot::RwLock;
 use thiserror::Error;
@@ -40,8 +39,6 @@ enum DispatchError {
     MissingRuntimeFootprint(TrackingCopyError),
     #[error("Missing system contract: {0}")]
     MissingSystemContract(&'static str),
-    #[error("Error getting named keys")]
-    GetNamedKeys(TrackingCopyError),
 }
 
 fn dispatch_system_contract<R: GlobalStateReader, Ret>(

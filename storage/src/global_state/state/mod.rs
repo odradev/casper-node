@@ -2373,6 +2373,7 @@ pub trait StateProvider: Send + Sync {
     /// Finds all the children of `trie_raw` which aren't present in the state.
     fn missing_children(&self, trie_raw: &[u8]) -> Result<Vec<Digest>, GlobalStateError>;
 
+    /// Gets the value of enable entity flag.
     fn enable_entity(&self) -> bool;
 }
 

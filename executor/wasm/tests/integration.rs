@@ -20,10 +20,12 @@ use casper_storage::{
     AddressGenerator,
 };
 use casper_types::{
-    account::AccountHash, bytesrepr::ToBytes, BlockTime, ChainspecRegistry, Digest, EntityAddr,
-    GenesisAccount, GenesisConfigBuilder, Key, Motes, Phase, ProtocolVersion, PublicKey,
-    RuntimeArgs, SecretKey, StoredValue, Timestamp, TransactionHash, TransactionV1Hash, U512,
+    account::AccountHash, bytesrepr::ToBytes, BlockHash, BlockTime, ChainspecRegistry, Digest,
+    EntityAddr, GenesisAccount, GenesisConfigBuilder, Key, Motes, Phase, ProtocolVersion,
+    PublicKey, RuntimeArgs, SecretKey, StoredValue, Timestamp, TransactionHash, TransactionV1Hash,
+    U512,
 };
+use digest::block_buffer::Block;
 use fs_extra::dir;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
@@ -75,6 +77,9 @@ fn base_execute_builder() -> ExecuteRequestBuilder {
         .with_transaction_hash(TRANSACTION_HASH)
         .with_chain_name(DEFAULT_CHAIN_NAME)
         .with_block_time(Timestamp::now().into())
+        .with_state_hash(Digest::hash(b"state"))
+        .with_block_height(1)
+        .with_parent_block_hash(BlockHash::new(Digest::hash(b"block1")))
 }
 
 fn base_install_request_builder() -> InstallContractRequestBuilder {
@@ -84,6 +89,9 @@ fn base_install_request_builder() -> InstallContractRequestBuilder {
         .with_transaction_hash(TRANSACTION_HASH)
         .with_chain_name(DEFAULT_CHAIN_NAME)
         .with_block_time(Timestamp::now().into())
+        .with_state_hash(Digest::hash(b"state"))
+        .with_block_height(1)
+        .with_parent_block_hash(BlockHash::new(Digest::hash(b"block1")))
 }
 
 // #[test]
@@ -161,6 +169,9 @@ fn harness() {
         .with_shared_address_generator(address_generator)
         .with_chain_name(DEFAULT_CHAIN_NAME)
         .with_block_time(Timestamp::now().into())
+        .with_state_hash(state_root_hash)
+        .with_block_height(1)
+        .with_parent_block_hash(BlockHash::new(Digest::hash(b"bl0ck")))
         .build()
         .expect("should build");
     run_wasm_session(
@@ -203,6 +214,9 @@ fn cep18() {
         .with_input(input_data)
         .with_chain_name(DEFAULT_CHAIN_NAME)
         .with_block_time(Timestamp::now().into())
+        .with_state_hash(Digest::from_raw([0; 32])) // TODO: Carry on state root hash
+        .with_block_height(1) // TODO: Carry on block height
+        .with_parent_block_hash(BlockHash::new(Digest::from_raw([0; 32]))) // TODO: Carry on parent block hash
         .build()
         .expect("should build");
 
@@ -230,6 +244,9 @@ fn cep18() {
         .with_shared_address_generator(Arc::clone(&address_generator))
         .with_chain_name(DEFAULT_CHAIN_NAME)
         .with_block_time(Timestamp::now().into())
+        .with_state_hash(Digest::from_raw([0; 32])) // TODO: Carry on state root hash
+        .with_block_height(1) // TODO: Carry on block height
+        .with_parent_block_hash(BlockHash::new(Digest::from_raw([0; 32]))) // TODO: Carry on parent block hash
         .build()
         .expect("should build");
 
@@ -530,6 +547,7 @@ fn backwards_compatibility() {
                 Arc::new(trie_store),
                 post_state_hash,
                 100,
+                false,
             ),
             post_state_hash,
             to,
@@ -578,6 +596,9 @@ fn backwards_compatibility() {
         .with_gas_limit(DEFAULT_GAS_LIMIT)
         .with_transferred_value(0)
         .with_shared_address_generator(Arc::clone(&address_generator))
+        .with_state_hash(state_root_hash)
+        .with_block_height(1)
+        .with_parent_block_hash(BlockHash::new(Digest::hash(b"block1")))
         .build()
         .expect("should build");
     let res = run_wasm_session(
@@ -600,6 +621,9 @@ fn backwards_compatibility() {
         .with_transferred_value(0)
         .with_entry_point("new".to_string())
         .with_input(input_data.into())
+        .with_state_hash(state_root_hash)
+        .with_block_height(2)
+        .with_parent_block_hash(BlockHash::new(Digest::hash(b"block2")))
         .build()
         .expect("should build");
 
@@ -625,6 +649,9 @@ fn backwards_compatibility() {
         .with_gas_limit(DEFAULT_GAS_LIMIT)
         .with_transferred_value(0)
         .with_shared_address_generator(Arc::clone(&address_generator))
+        .with_state_hash(state_root_hash)
+        .with_block_height(3)
+        .with_parent_block_hash(BlockHash::new(Digest::hash(b"block3")))
         .build()
         .expect("should build");
 
