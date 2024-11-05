@@ -1374,7 +1374,6 @@ where
     ) -> Result<Key, ExecError> {
         let current = self.context.entry_point_type();
         let next = entry_point.entry_point_type();
-        println!("{:?} {:?}", current, next);
         match (current, next) {
             (EntryPointType::Called, EntryPointType::Caller) => {
                 // Session code can't be called from Contract code for security reasons.
@@ -1385,7 +1384,6 @@ where
                 Err(ExecError::InvalidContext)
             }
             (EntryPointType::Caller, EntryPointType::Caller) => {
-                println!("reuse base key {}", self.context.get_context_key());
                 // Session code called from session reuses current base key
                 Ok(self.context.get_context_key())
             }
@@ -1639,8 +1637,6 @@ where
             .cloned()
             .ok_or_else(|| ExecError::NoSuchMethod(entry_point_name.to_owned()))?;
 
-        println!("entry point: {:?}", entry_point);
-
         let entry_point_type = entry_point.entry_point_type();
 
         if self.context.engine_config().enable_entity && entry_point_type.is_invalid_context() {
@@ -1698,7 +1694,6 @@ where
 
         // if session the caller's context
         // else the called contract's context
-        println!("addr {}", entity_addr);
         let context_entity_key =
             self.get_context_key_for_contract_call(entity_addr, &entry_point)?;
 
@@ -1780,8 +1775,6 @@ where
                 (footprint.named_keys().clone(), access_rights)
             }
         };
-
-        println!("rights {:?}", access_rights);
 
         let stack = {
             let mut stack = self.try_get_stack()?.clone();
@@ -3495,7 +3488,6 @@ where
         amount: U512,
         id: Option<u64>,
     ) -> Result<Result<(), mint::Error>, ExecError> {
-        println!("source {source}");
         self.context.validate_uref(&source)?;
         let mint_contract_key = self.get_mint_hash()?;
         match self.mint_transfer(mint_contract_key, None, source, target, amount, id)? {

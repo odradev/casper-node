@@ -37,7 +37,6 @@ pub trait Mint: RuntimeProvider + StorageProvider + SystemProvider {
         }
 
         let purse_uref: URef = self.new_uref(())?;
-        println!("new URef {} caller: {}", purse_uref, caller);
         self.write_balance(purse_uref, initial_balance)?;
 
         if !is_empty_purse {
