@@ -1,11 +1,13 @@
 use std::fmt::{self, Display, Formatter};
 
 use derive_more::From;
+use either::Either;
 use rand::Rng;
 use serde::Serialize;
 
 use casper_binary_port::{
     BinaryRequest, BinaryResponse, GetRequest, GlobalStateEntityQualifier, GlobalStateRequest,
+    RecordId,
 };
 
 use casper_types::{
@@ -55,7 +57,7 @@ struct TestCase {
     allow_request_get_all_values: bool,
     allow_request_get_trie: bool,
     allow_request_speculative_exec: bool,
-    request_generator: fn(&mut TestRng) -> BinaryRequest,
+    request_generator: Either<fn(&mut TestRng) -> BinaryRequest, BinaryRequest>,
 }
 
 #[tokio::test]
@@ -66,21 +68,21 @@ async fn should_enqueue_requests_for_enabled_functions() {
         allow_request_get_all_values: ENABLED,
         allow_request_get_trie: rng.gen(),
         allow_request_speculative_exec: rng.gen(),
-        request_generator: |_| all_values_request(),
+        request_generator: Either::Left(|_| all_values_request()),
     };
 
     let get_trie_enabled = TestCase {
         allow_request_get_all_values: rng.gen(),
         allow_request_get_trie: ENABLED,
         allow_request_speculative_exec: rng.gen(),
-        request_generator: |_| trie_request(),
+        request_generator: Either::Left(|_| trie_request()),
     };
 
     let try_speculative_exec_enabled = TestCase {
         allow_request_get_all_values: rng.gen(),
         allow_request_get_trie: rng.gen(),
         allow_request_speculative_exec: ENABLED,
-        request_generator: try_speculative_exec_request,
+        request_generator: Either::Left(try_speculative_exec_request),
     };
 
     for test_case in [
@@ -110,21 +112,21 @@ async fn should_return_error_for_disabled_functions() {
         allow_request_get_all_values: DISABLED,
         allow_request_get_trie: rng.gen(),
         allow_request_speculative_exec: rng.gen(),
-        request_generator: |_| all_values_request(),
+        request_generator: Either::Left(|_| all_values_request()),
     };
 
     let get_trie_disabled = TestCase {
         allow_request_get_all_values: rng.gen(),
         allow_request_get_trie: DISABLED,
         allow_request_speculative_exec: rng.gen(),
-        request_generator: |_| trie_request(),
+        request_generator: Either::Left(|_| trie_request()),
     };
 
     let try_speculative_exec_disabled = TestCase {
         allow_request_get_all_values: rng.gen(),
         allow_request_get_trie: rng.gen(),
         allow_request_speculative_exec: DISABLED,
-        request_generator: try_speculative_exec_request,
+        request_generator: Either::Left(try_speculative_exec_request),
     };
 
     for test_case in [
@@ -145,6 +147,38 @@ async fn should_return_error_for_disabled_functions() {
             }
         };
         assert_eq!(result.error_code(), EXPECTED_ERROR_CODE as u16)
+    }
+}
+
+#[tokio::test]
+async fn should_return_empty_response_when_fetching_empty_key() {
+    let mut rng = TestRng::new();
+
+    let test_cases: Vec<TestCase> = record_requests_with_empty_keys()
+        .into_iter()
+        .map(|request| TestCase {
+            allow_request_get_all_values: DISABLED,
+            allow_request_get_trie: DISABLED,
+            allow_request_speculative_exec: DISABLED,
+            request_generator: Either::Right(request),
+        })
+        .collect();
+
+    for test_case in test_cases {
+        let (receiver, mut runner) = run_test_case(test_case, &mut rng).await;
+
+        let result = tokio::select! {
+            result = receiver => result.expect("expected successful response"),
+            _ = runner.crank_until(
+                &mut rng,
+                got_contract_runtime_request,
+                Duration::from_secs(10),
+            ) => {
+                panic!("expected receiver to complete first")
+            }
+        };
+        assert_eq!(result.error_code(), 0);
+        assert!(result.payload().is_empty());
     }
 }
 
@@ -192,8 +226,12 @@ async fn run_test_case(
         .await;
 
     let (sender, receiver) = oneshot::channel();
+    let request = match request_generator {
+        Either::Left(f) => f(rng),
+        Either::Right(v) => v,
+    };
     let event = BinaryPortEvent::HandleRequest {
-        request: request_generator(rng),
+        request,
         responder: Responder::without_shutdown(sender),
     };
 
@@ -387,6 +425,18 @@ fn all_values_request() -> BinaryRequest {
             key_tag: KeyTag::Account,
         },
     ))))
+}
+
+#[cfg(test)]
+fn record_requests_with_empty_keys() -> Vec<BinaryRequest> {
+    let mut data = Vec::new();
+    for record_id in RecordId::all() {
+        data.push(BinaryRequest::Get(GetRequest::Record {
+            record_type_tag: record_id.into(),
+            key: vec![],
+        }))
+    }
+    data
 }
 
 fn trie_request() -> BinaryRequest {
