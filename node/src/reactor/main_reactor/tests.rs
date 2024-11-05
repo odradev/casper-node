@@ -1293,8 +1293,7 @@ async fn should_catch_up_and_shutdown() {
     info!("joining node using block {trusted_height} {trusted_hash}");
     let secret_key = SecretKey::random(&mut fixture.rng);
     let (mut config, storage_dir) = fixture.create_node_config(&secret_key, Some(trusted_hash), 1);
-    config.node.sync_handling = SyncHandling::NoSync;
-    config.node.catch_up_and_shutdown = true;
+    config.node.sync_handling = SyncHandling::CompleteBlock;
     let joiner_id = fixture
         .add_node(Arc::new(secret_key), config, storage_dir)
         .await;

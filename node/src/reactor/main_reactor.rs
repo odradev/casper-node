@@ -203,7 +203,6 @@ pub(crate) struct MainReactor {
 
     finality_signature_creation: bool,
     prevent_validator_shutdown: bool,
-    catch_up_and_shutdown: bool,
 }
 
 impl reactor::Reactor for MainReactor {
@@ -1090,7 +1089,6 @@ impl reactor::Reactor for MainReactor {
 
         let protocol_version = chainspec.protocol_config.version;
         let prevent_validator_shutdown = config.value().node.prevent_validator_shutdown;
-        let catch_up_and_shutdown = config.value().node.catch_up_and_shutdown;
 
         let trusted_hash = config.value().node.trusted_hash;
         let (root_dir, config) = config.into_parts();
@@ -1278,7 +1276,6 @@ impl reactor::Reactor for MainReactor {
             node_startup_instant,
             finality_signature_creation: true,
             prevent_validator_shutdown,
-            catch_up_and_shutdown,
         };
         info!("MainReactor: instantiated");
 

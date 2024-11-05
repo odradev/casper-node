@@ -20,6 +20,9 @@ pub enum SyncHandling {
     Ttl,
     /// Don't attempt to sync historical blocks.
     NoSync,
+    /// Don't attempt to sync historical blocks and shut down node instead of switching to KeepUp
+    /// after acquiring the first complete block
+    CompleteBlock,
 }
 
 impl SyncHandling {
@@ -36,6 +39,11 @@ impl SyncHandling {
     /// Don't Sync?
     pub fn is_no_sync(&self) -> bool {
         matches!(self, SyncHandling::NoSync)
+    }
+
+    /// Don't Sync and shut down?
+    pub fn is_complete_block(&self) -> bool {
+        matches!(self, SyncHandling::CompleteBlock)
     }
 }
 
@@ -75,9 +83,6 @@ pub struct NodeConfig {
 
     /// If true, prevents a node from shutting down if it is supposed to be a validator in the era.
     pub prevent_validator_shutdown: bool,
-
-    /// Flag which forces node to shut down after initial sync is done
-    pub catch_up_and_shutdown: bool,
 }
 
 impl Default for NodeConfig {
@@ -92,7 +97,6 @@ impl Default for NodeConfig {
             shutdown_for_upgrade_timeout: DEFAULT_SHUTDOWN_FOR_UPGRADE_TIMEOUT.parse().unwrap(),
             upgrade_timeout: DEFAULT_UPGRADE_TIMEOUT.parse().unwrap(),
             prevent_validator_shutdown: false,
-            catch_up_and_shutdown: false,
         }
     }
 }

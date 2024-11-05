@@ -139,7 +139,7 @@ impl MainReactor {
                     }
                     // shut down instead of switching to KeepUp if catch up and shutdown mode is
                     // enabled
-                    if self.catch_up_and_shutdown {
+                    if self.sync_handling.is_complete_block() {
                         info!("CatchUp: immediate shutdown after catching up");
                         self.state = ReactorState::ShutdownAfterCatchingUp;
                         (Duration::ZERO, Effects::new())
