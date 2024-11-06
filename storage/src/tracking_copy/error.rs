@@ -2,7 +2,7 @@ use thiserror::Error;
 
 use crate::data_access_layer::balance::BalanceFailure;
 use casper_types::{
-    addressable_entity::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
+    account::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
     bytesrepr, system, ApiError, CLType, CLValueError, Key, StoredValueTypeMismatch,
 };
 

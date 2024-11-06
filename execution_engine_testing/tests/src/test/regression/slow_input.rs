@@ -160,11 +160,11 @@ fn should_charge_extra_per_amount_of_br_table_elements() {
 
     builder.exec(exec_request_1).expect_success().commit();
 
-    let gas_cost_1 = builder.last_exec_gas_cost();
+    let gas_cost_1 = builder.last_exec_gas_consumed();
 
     builder.exec(exec_request_2).expect_success().commit();
 
-    let gas_cost_2 = builder.last_exec_gas_cost();
+    let gas_cost_2 = builder.last_exec_gas_consumed();
 
     assert!(
         gas_cost_2 > gas_cost_1,

@@ -272,10 +272,7 @@ impl BlockBuilder {
             | BlockAcquisitionState::HaveAllDeploys(_, _)
             | BlockAcquisitionState::HaveStrictFinalitySignatures(_, _)
             | BlockAcquisitionState::HaveExecutableBlock(_, _, _)
-            | BlockAcquisitionState::Failed(_, _) => {
-                //TODO: does failed also mean finished?
-                false
-            }
+            | BlockAcquisitionState::Failed(_, _) => false,
             BlockAcquisitionState::Complete(_) => true,
         }
     }

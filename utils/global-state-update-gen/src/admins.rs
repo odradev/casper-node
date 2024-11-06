@@ -1,9 +1,8 @@
 use casper_engine_test_support::LmdbWasmTestBuilder;
 use casper_execution_engine::engine_state::engine_config::DEFAULT_PROTOCOL_VERSION;
 use casper_types::{
-    account::Account, addressable_entity::NamedKeys, bytesrepr::ToBytes, system::mint,
-    AccessRights, AsymmetricType, CLTyped, CLValue, EntityAddr, Key, PublicKey, StoredValue, URef,
-    U512,
+    account::Account, bytesrepr::ToBytes, contracts::NamedKeys, system::mint, AccessRights,
+    AsymmetricType, CLTyped, CLValue, EntityAddr, Key, PublicKey, StoredValue, URef, U512,
 };
 use clap::ArgMatches;
 use rand::Rng;

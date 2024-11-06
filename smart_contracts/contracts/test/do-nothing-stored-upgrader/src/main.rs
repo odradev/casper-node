@@ -15,7 +15,8 @@ use casper_contract::{
 use core::convert::TryInto;
 
 use casper_types::{
-    addressable_entity::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, NamedKeys},
+    addressable_entity::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints},
+    contracts::NamedKeys,
     CLType, CLTyped, EntryPointPayment, Key, PackageHash, Parameter, URef,
 };
 
@@ -62,7 +63,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert();
 
     let (contract_hash, contract_version) = storage::add_contract_version(
-        do_nothing_package_hash,
+        do_nothing_package_hash.into(),
         entry_points,
         NamedKeys::new(),
         BTreeMap::new(),

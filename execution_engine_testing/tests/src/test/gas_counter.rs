@@ -164,7 +164,7 @@ fn should_correctly_measure_gas_for_opcodes() {
 
     builder.exec(exec_request).commit().expect_success();
 
-    let gas_cost = builder.last_exec_gas_cost();
+    let gas_cost = builder.last_exec_gas_consumed();
     let expected_cost = accounted_opcodes
         .clone()
         .into_iter()

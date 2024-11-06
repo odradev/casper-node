@@ -83,7 +83,7 @@ fn run_test_case(input_wasm_bytes: &[u8], expected_error: &str, execution_phase:
         let actual_error = builder.get_error().expect("should have error").to_string();
         assert!(actual_error.contains(expected_error_message));
 
-        let gas = builder.last_exec_gas_cost();
+        let gas = builder.last_exec_gas_consumed();
         assert_eq!(gas, Gas::zero());
     }
 }

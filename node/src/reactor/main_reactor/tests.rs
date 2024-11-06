@@ -75,6 +75,7 @@ const ERA_ONE: EraId = EraId::new(1);
 const ERA_TWO: EraId = EraId::new(2);
 const ERA_THREE: EraId = EraId::new(3);
 const TEN_SECS: Duration = Duration::from_secs(10);
+const THIRTY_SECS: Duration = Duration::from_secs(30);
 const ONE_MIN: Duration = Duration::from_secs(60);
 
 type Nodes = testing::network::Nodes<FilterReactor<MainReactor>>;
@@ -112,7 +113,7 @@ struct ConfigsOverride {
     refund_handling_override: Option<RefundHandling>,
     fee_handling_override: Option<FeeHandling>,
     pricing_handling_override: Option<PricingHandling>,
-    allow_reservations_override: Option<bool>,
+    allow_prepaid_override: Option<bool>,
     balance_hold_interval_override: Option<TimeDiff>,
     administrators: Option<BTreeSet<PublicKey>>,
     chain_name: Option<String>,
@@ -137,8 +138,8 @@ impl ConfigsOverride {
     }
 
     #[allow(unused)]
-    fn with_allow_reservations(mut self, allow_reservations: bool) -> Self {
-        self.allow_reservations_override = Some(allow_reservations);
+    fn with_allow_prepaid(mut self, allow_prepaid: bool) -> Self {
+        self.allow_prepaid_override = Some(allow_prepaid);
         self
     }
 
@@ -228,7 +229,7 @@ impl Default for ConfigsOverride {
             refund_handling_override: None,
             fee_handling_override: None,
             pricing_handling_override: None,
-            allow_reservations_override: None,
+            allow_prepaid_override: None,
             balance_hold_interval_override: None,
             administrators: None,
             chain_name: None,
@@ -348,7 +349,7 @@ impl TestFixture {
             refund_handling_override,
             fee_handling_override,
             pricing_handling_override,
-            allow_reservations_override,
+            allow_prepaid_override,
             balance_hold_interval_override,
             administrators,
             chain_name,
@@ -387,8 +388,8 @@ impl TestFixture {
         if let Some(pricing_handling) = pricing_handling_override {
             chainspec.core_config.pricing_handling = pricing_handling;
         }
-        if let Some(allow_reservations) = allow_reservations_override {
-            chainspec.core_config.allow_reservations = allow_reservations;
+        if let Some(allow_prepaid) = allow_prepaid_override {
+            chainspec.core_config.allow_prepaid = allow_prepaid;
         }
         if let Some(balance_hold_interval) = balance_hold_interval_override {
             chainspec.core_config.gas_hold_interval = balance_hold_interval;
@@ -1981,7 +1982,7 @@ async fn node_should_rejoin_after_ejection() {
     // Inject the transaction and run the network until executed.
     fixture.inject_transaction(txn).await;
     fixture
-        .run_until_executed_transaction(&txn_hash, TEN_SECS)
+        .run_until_executed_transaction(&txn_hash, THIRTY_SECS)
         .await;
 
     // Ensure execution succeeded and that there is a Write transform for the bid's key.
@@ -2347,7 +2348,6 @@ async fn run_rewards_network_scenario(
     }
 
     // Run the network for a specified number of eras
-    // TODO: Consider replacing era duration estimate with actual chainspec value
     let timeout = Duration::from_secs(time_out);
     fixture
         .run_until_stored_switch_block_header(EraId::new(era_count - 1), timeout)

@@ -403,7 +403,7 @@ impl TransactionV1 {
                 gas_price_tolerance,
                 ..
             } => *gas_price_tolerance,
-            PricingMode::Reserved { .. } => {
+            PricingMode::Prepaid { .. } => {
                 // TODO: Change this when reserve gets implemented.
                 0u8
             }

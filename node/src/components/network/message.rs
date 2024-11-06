@@ -394,9 +394,6 @@ pub(crate) trait FromIncoming<P> {
     ///
     /// This function can optionally be called before `from_incoming` to attempt to convert an
     /// incoming payload into a potential demand.
-
-    // TODO: Replace both this and `from_incoming` with a single function that returns an
-    //       appropriate `Either`.
     fn try_demand_from_incoming(
         _effect_builder: EffectBuilder<Self>,
         _sender: NodeId,

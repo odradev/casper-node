@@ -10,8 +10,9 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    addressable_entity::{EntryPoint, EntryPoints, NamedKeys, Parameters},
+    addressable_entity::{EntryPoint, EntryPoints, Parameters},
     bytesrepr::FromBytes,
+    contracts::NamedKeys,
     ApiError, CLType, CLTyped, EntryPointAccess, EntryPointPayment, EntryPointType, Key, URef,
     U512,
 };

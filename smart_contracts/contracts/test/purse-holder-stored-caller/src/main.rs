@@ -20,8 +20,11 @@ pub extern "C" fn call() {
     match entry_point_name.as_str() {
         METHOD_VERSION => {
             let contract_hash: AddressableEntityHash = runtime::get_named_arg(HASH_KEY_NAME);
-            let version: String =
-                runtime::call_contract(contract_hash, &entry_point_name, RuntimeArgs::default());
+            let version: String = runtime::call_contract(
+                contract_hash.into(),
+                &entry_point_name,
+                RuntimeArgs::default(),
+            );
             let version_key = storage::new_uref(version).into();
             runtime::put_key(METHOD_VERSION, version_key);
         }
@@ -32,7 +35,7 @@ pub extern "C" fn call() {
             let args = runtime_args! {
                 PURSE_NAME => purse_name,
             };
-            runtime::call_contract::<()>(contract_hash, &entry_point_name, args);
+            runtime::call_contract::<()>(contract_hash.into(), &entry_point_name, args);
         }
     };
 }

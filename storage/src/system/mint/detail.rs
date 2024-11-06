@@ -20,7 +20,7 @@ where
     // get total supply or error
     let total_supply_uref = match mint.get_key(TOTAL_SUPPLY_KEY) {
         Some(Key::URef(uref)) => uref,
-        Some(_) => return Err(Error::MissingKey), // TODO
+        Some(_) => return Err(Error::MissingKey),
         None => return Err(Error::MissingKey),
     };
     let total_supply: U512 = mint

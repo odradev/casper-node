@@ -98,7 +98,11 @@ pub const DEFAULT_COST_INCREASE_PER_MESSAGE_EMITTED: u32 = 50;
 const DEFAULT_MESSAGE_TOPIC_NAME_SIZE_WEIGHT: u32 = 30_000;
 const DEFAULT_MESSAGE_PAYLOAD_SIZE_WEIGHT: u32 = 120_000;
 
-const DEFAULT_GENERIC_HASH_COST: u32 = 300;
+const DEFAULT_CONTRACT_VERSION_ARG_SIZE_WEIGHT: u32 = 120_000;
+
+const DEFAULT_GENERIC_HASH_COST: u32 = 1_200_000;
+
+const DEFAULT_GENERIC_HASH_INPUT_COST: u32 = 120_000;
 
 /// Representation of a host function cost.
 ///
@@ -613,7 +617,7 @@ impl Default for HostFunctionCosts {
                     NOT_USED,
                     NOT_USED,
                     NOT_USED,
-                    NOT_USED,
+                    DEFAULT_CONTRACT_VERSION_ARG_SIZE_WEIGHT,
                     NOT_USED,
                     NOT_USED,
                     NOT_USED,
@@ -622,7 +626,21 @@ impl Default for HostFunctionCosts {
                     NOT_USED,
                 ],
             ),
-            add_contract_version: HostFunction::default(),
+            add_contract_version: HostFunction::new(
+                DEFAULT_FIXED_COST,
+                [
+                    NOT_USED,
+                    NOT_USED,
+                    NOT_USED,
+                    NOT_USED,
+                    DEFAULT_CONTRACT_VERSION_ARG_SIZE_WEIGHT,
+                    NOT_USED,
+                    NOT_USED,
+                    NOT_USED,
+                    NOT_USED,
+                    NOT_USED,
+                ],
+            ),
             add_contract_version_with_message_topics: HostFunction::new(
                 DEFAULT_FIXED_COST,
                 [
@@ -630,7 +648,7 @@ impl Default for HostFunctionCosts {
                     NOT_USED,
                     NOT_USED,
                     NOT_USED,
-                    NOT_USED,
+                    DEFAULT_CONTRACT_VERSION_ARG_SIZE_WEIGHT,
                     NOT_USED,
                     NOT_USED,
                     NOT_USED,
@@ -714,10 +732,16 @@ impl Default for HostFunctionCosts {
             ),
             generic_hash: HostFunction::new(
                 DEFAULT_GENERIC_HASH_COST,
-                [NOT_USED, NOT_USED, NOT_USED, NOT_USED, NOT_USED],
+                [
+                    NOT_USED,
+                    DEFAULT_GENERIC_HASH_INPUT_COST,
+                    NOT_USED,
+                    NOT_USED,
+                    NOT_USED,
+                ],
             ),
             cost_increase_per_message: DEFAULT_COST_INCREASE_PER_MESSAGE_EMITTED,
-            get_block_info: HostFunction::new(DEFAULT_FIXED_COST, [NOT_USED, NOT_USED]),
+            get_block_info: HostFunction::new(DEFAULT_GET_BLOCKTIME_COST, [NOT_USED, NOT_USED]),
         }
     }
 }

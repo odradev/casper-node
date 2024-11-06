@@ -448,8 +448,6 @@ impl TransactionBuffer {
         let mut holds = HashSet::new();
         let mut dead = HashSet::new();
 
-        // TODO[RC]: It's error prone to use 4 different flags to track the limits. Implement a
-        // proper limiter.
         let mut have_hit_mint_limit = false;
         let mut have_hit_wasm_limit = false;
         let mut have_hit_install_upgrade_limit = false;

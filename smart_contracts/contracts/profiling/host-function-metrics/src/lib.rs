@@ -12,12 +12,11 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    account::AccountHash,
-    addressable_entity::{ActionType, NamedKeys, Weight},
+    account::{AccountHash, ActionType, Weight},
     bytesrepr::Bytes,
-    runtime_args, AddressableEntityHash, ApiError, BlockTime, CLType, CLValue, EntityVersion,
-    EntryPoint, EntryPointAccess, EntryPointPayment, EntryPointType, EntryPoints, Key, Parameter,
-    Phase, U512,
+    contracts::{ContractHash, ContractVersion, NamedKeys},
+    runtime_args, ApiError, BlockTime, CLType, CLValue, EntryPoint, EntryPointAccess,
+    EntryPointPayment, EntryPointType, EntryPoints, Key, Parameter, Phase, U512,
 };
 
 const MIN_FUNCTION_NAME_LENGTH: usize = 1;
@@ -25,8 +24,6 @@ const MAX_FUNCTION_NAME_LENGTH: usize = 100;
 
 const NAMED_KEY_COUNT: usize = 100;
 const MIN_NAMED_KEY_NAME_LENGTH: usize = 10;
-// TODO - consider increasing to e.g. 1_000 once https://casperlabs.atlassian.net/browse/EE-966 is
-//        resolved.
 const MAX_NAMED_KEY_NAME_LENGTH: usize = 100;
 const VALUE_FOR_ADDITION_1: u64 = 1;
 const VALUE_FOR_ADDITION_2: u64 = 2;
@@ -217,7 +214,7 @@ pub extern "C" fn call() {
 fn store_function(
     entry_point_name: &str,
     named_keys: Option<NamedKeys>,
-) -> (AddressableEntityHash, EntityVersion) {
+) -> (ContractHash, ContractVersion) {
     let entry_points = {
         let mut entry_points = EntryPoints::new();
 

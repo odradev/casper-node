@@ -9,8 +9,9 @@ use alloc::string::String;
 use casper_contract::contract_api::{runtime, storage};
 
 use casper_types::{
-    runtime_args, AddressableEntityHash, ApiError, CLType, EntityVersion, EntryPoint,
-    EntryPointAccess, EntryPointPayment, EntryPointType, EntryPoints, Key, Parameter,
+    contracts::{ContractHash, ContractVersion},
+    runtime_args, ApiError, CLType, EntryPoint, EntryPointAccess, EntryPointPayment,
+    EntryPointType, EntryPoints, Key, Parameter,
 };
 
 const SUBCALL_NAME: &str = "add_gas";
@@ -47,7 +48,7 @@ pub extern "C" fn add_gas() {
     consume_at_least_gas_amount(amount as usize);
 }
 
-fn store() -> (AddressableEntityHash, EntityVersion) {
+fn store() -> (ContractHash, ContractVersion) {
     let entry_points = {
         let mut entry_points = EntryPoints::new();
         let entry_point = EntryPoint::new(

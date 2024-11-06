@@ -40,8 +40,8 @@ pub const DEFAULT_PRICING_HANDLING: PricingHandling = PricingHandling::Fixed;
 /// Default fee handling.
 pub const DEFAULT_FEE_HANDLING: FeeHandling = FeeHandling::NoFee;
 
-/// Default allow reservations.
-pub const DEFAULT_ALLOW_RESERVATIONS: bool = false;
+/// Default allow prepaid.
+pub const DEFAULT_ALLOW_PREPAID: bool = false;
 
 /// Default value for minimum bid amount in motes.
 pub const DEFAULT_MINIMUM_BID_AMOUNT: u64 = 1;
@@ -179,8 +179,8 @@ pub struct CoreConfig {
     pub fee_handling: FeeHandling,
     /// Pricing handling.
     pub pricing_handling: PricingHandling,
-    /// Allow reservations.
-    pub allow_reservations: bool,
+    /// Allow prepaid.
+    pub allow_prepaid: bool,
     /// How do gas holds affect available balance calculations?
     pub gas_hold_balance_handling: HoldBalanceHandling,
     /// How long does it take for a gas hold to expire?
@@ -272,7 +272,7 @@ impl CoreConfig {
             PricingHandling::Fixed
         };
 
-        let allow_reservations = DEFAULT_ALLOW_RESERVATIONS;
+        let allow_prepaid = DEFAULT_ALLOW_PREPAID;
 
         let fee_handling = if rng.gen() {
             FeeHandling::PayToProposer
@@ -325,7 +325,7 @@ impl CoreConfig {
             compute_rewards,
             refund_handling,
             pricing_handling,
-            allow_reservations,
+            allow_prepaid,
             fee_handling,
             gas_hold_balance_handling,
             gas_hold_interval,
@@ -373,7 +373,7 @@ impl Default for CoreConfig {
             refund_handling: DEFAULT_REFUND_HANDLING,
             pricing_handling: DEFAULT_PRICING_HANDLING,
             fee_handling: DEFAULT_FEE_HANDLING,
-            allow_reservations: DEFAULT_ALLOW_RESERVATIONS,
+            allow_prepaid: DEFAULT_ALLOW_PREPAID,
             gas_hold_balance_handling: DEFAULT_GAS_HOLD_BALANCE_HANDLING,
             gas_hold_interval: DEFAULT_GAS_HOLD_INTERVAL,
             migrate_legacy_accounts: false,
@@ -422,7 +422,7 @@ impl ToBytes for CoreConfig {
         buffer.extend(self.refund_handling.to_bytes()?);
         buffer.extend(self.pricing_handling.to_bytes()?);
         buffer.extend(self.fee_handling.to_bytes()?);
-        buffer.extend(self.allow_reservations.to_bytes()?);
+        buffer.extend(self.allow_prepaid.to_bytes()?);
         buffer.extend(self.gas_hold_balance_handling.to_bytes()?);
         buffer.extend(self.gas_hold_interval.to_bytes()?);
         buffer.extend(self.migrate_legacy_accounts.to_bytes()?);
@@ -467,7 +467,7 @@ impl ToBytes for CoreConfig {
             + self.refund_handling.serialized_length()
             + self.pricing_handling.serialized_length()
             + self.fee_handling.serialized_length()
-            + self.allow_reservations.serialized_length()
+            + self.allow_prepaid.serialized_length()
             + self.gas_hold_balance_handling.serialized_length()
             + self.gas_hold_interval.serialized_length()
             + self.migrate_legacy_accounts.serialized_length()
@@ -512,7 +512,7 @@ impl FromBytes for CoreConfig {
         let (refund_handling, remainder) = FromBytes::from_bytes(remainder)?;
         let (pricing_handling, remainder) = FromBytes::from_bytes(remainder)?;
         let (fee_handling, remainder) = FromBytes::from_bytes(remainder)?;
-        let (allow_reservations, remainder) = FromBytes::from_bytes(remainder)?;
+        let (allow_prepaid, remainder) = FromBytes::from_bytes(remainder)?;
         let (gas_hold_balance_handling, remainder) = FromBytes::from_bytes(remainder)?;
         let (gas_hold_interval, remainder) = TimeDiff::from_bytes(remainder)?;
         let (migrate_legacy_accounts, remainder) = FromBytes::from_bytes(remainder)?;
@@ -552,7 +552,7 @@ impl FromBytes for CoreConfig {
             refund_handling,
             pricing_handling,
             fee_handling,
-            allow_reservations,
+            allow_prepaid,
             gas_hold_balance_handling,
             gas_hold_interval,
             migrate_legacy_accounts,

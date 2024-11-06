@@ -88,7 +88,6 @@ pub trait Auction:
         }
 
         if amount < U512::from(minimum_bid_amount) {
-            println!("bond too small");
             return Err(Error::BondTooSmall.into());
         }
 

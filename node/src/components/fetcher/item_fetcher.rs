@@ -65,7 +65,6 @@ pub(super) trait ItemFetcher<T: FetchItem + 'static> {
             id,
             peer,
             validation_metadata,
-            // TODO: Change signature of `get_locally` to return boxed item instead of boxing here.
             maybe_item: result.map(Box::new),
             responder,
         })
