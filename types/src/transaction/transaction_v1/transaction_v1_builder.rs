@@ -543,8 +543,6 @@ impl<'a> TransactionV1Builder<'a> {
 
     /// Sets the runtime for the transaction.
     ///
-    /// If not provided, the runtime will be set to [`Self::DEFAULT_RUNTIME`].
-    ///
     /// NOTE: This has no effect for native transactions, i.e. where the `body.target` is
     /// `TransactionTarget::Native`.
     pub fn with_runtime(mut self, runtime: TransactionRuntime) -> Self {

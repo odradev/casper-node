@@ -1,4 +1,4 @@
-use casper_executor_wasm_interface::executor::Executor;
+use casper_executor_wasm_interface::{executor::Executor, TrapCode, VMError, VMResult};
 use casper_storage::global_state::GlobalStateReader;
 use wasmer::{FunctionEnv, FunctionEnvMut, Imports, Store};
 
@@ -51,6 +51,10 @@ pub(crate) fn populate_imports<S: GlobalStateReader + 'static, E: Executor + 'st
     function_env: &FunctionEnv<WasmerEnv<S, E>>,
 ) {
     macro_rules! visit_host_function {
+        (@convert_ret $ret:ty) => {
+            <$ret as $crate::imports::WasmerConvert>::Output
+        };
+        (@convert_ret) => { () };
         ( $( $(#[$cfg:meta])? $vis:vis fn $name:ident $(( $($arg:ident: $argty:ty,)* ))? $(-> $ret:ty)?;)+) => {
             $(
                 imports.define(env_name, stringify!($name), wasmer::Function::new_typed_with_env(
@@ -60,13 +64,15 @@ pub(crate) fn populate_imports<S: GlobalStateReader + 'static, E: Executor + 'st
                         env: FunctionEnvMut<WasmerEnv<S, E>>,
                         // List all types and statically mapped C types into wasm types
                         $($($arg: <$argty as $crate::imports::WasmerConvert>::Output,)*)?
-                    | $(-> casper_executor_wasm_interface::VMResult<<$ret as $crate::imports::WasmerConvert>::Output>)? {
+                    | {
                         let wasmer_caller = $crate::WasmerCaller { env };
+
                         // Dispatch to the actual host function
                         let _res = casper_executor_wasm_host::host::$name(wasmer_caller, $($($arg,)*)?);
 
                         // TODO: Unify results in the `host` module and create a VMResult out of it
-                        todo!()
+                        let result: VMResult< visit_host_function!(@convert_ret $($ret)?) > =  Err(VMError::Trap(TrapCode::UnreachableCodeReached));
+                        result
                     }
                 ));
             )*

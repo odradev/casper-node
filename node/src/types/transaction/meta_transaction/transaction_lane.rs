@@ -8,13 +8,11 @@ use casper_types::{
     TransactionRuntime, TransactionTarget, TransactionV1Config, AUCTION_LANE_ID,
     INSTALL_UPGRADE_LANE_ID, MINT_LANE_ID,
 };
-#[cfg(feature = "datasize")]
 use datasize::DataSize;
 use serde::Serialize;
 
 /// The category of a Transaction.
-#[cfg_attr(feature = "datasize", derive(DataSize))]
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug, Serialize)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug, Serialize, DataSize)]
 #[repr(u8)]
 pub enum TransactionLane {
     /// Native mint interaction (the default).

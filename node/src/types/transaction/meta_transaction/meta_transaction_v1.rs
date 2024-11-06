@@ -7,9 +7,7 @@ use casper_types::{
     TransactionV1ExcessiveSizeError, TransactionV1Hash, U512,
 };
 use core::fmt::{self, Debug, Display, Formatter};
-#[cfg(feature = "datasize")]
 use datasize::DataSize;
-#[cfg(any(feature = "once_cell", test))]
 use once_cell::sync::OnceCell;
 use serde::Serialize;
 use std::collections::BTreeSet;
@@ -23,8 +21,7 @@ const TRANSFERRED_VALUE_MAP_KEY: u16 = 4;
 const SEED_MAP_KEY: u16 = 5;
 const EXPECTED_NUMBER_OF_FIELDS: usize = 6;
 
-#[cfg_attr(feature = "datasize", derive(DataSize))]
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, DataSize)]
 pub struct MetaTransactionV1 {
     hash: TransactionV1Hash,
     chain_name: String,
@@ -43,12 +40,8 @@ pub struct MetaTransactionV1 {
     transferred_value: u64,
     seed: Option<[u8; 32]>,
     has_valid_hash: Result<(), InvalidTransactionV1>,
-    #[cfg_attr(any(all(feature = "std", feature = "once_cell"), test), serde(skip))]
-    #[cfg_attr(
-        all(any(feature = "once_cell", test), feature = "datasize"),
-        data_size(skip)
-    )]
-    #[cfg(any(feature = "once_cell", test))]
+    #[serde(skip)]
+    #[data_size(skip)]
     is_verified: OnceCell<Result<(), InvalidTransactionV1>>,
 }
 
@@ -178,7 +171,6 @@ impl MetaTransactionV1 {
             has_valid_hash,
             transferred_value,
             seed,
-            #[cfg(any(feature = "once_cell", test))]
             is_verified: OnceCell::new(),
         }
     }
@@ -203,11 +195,7 @@ impl MetaTransactionV1 {
     ///   * approvals are non empty, and
     ///   * all approvals are valid signatures of the signed hash
     pub fn verify(&self) -> Result<(), InvalidTransactionV1> {
-        #[cfg(any(feature = "once_cell", test))]
         return self.is_verified.get_or_init(|| self.do_verify()).clone();
-
-        #[cfg(not(any(feature = "once_cell", test)))]
-        self.do_verify()
     }
 
     /// Returns `Ok` if and only if this transaction's body hashes to the value of `body_hash()`,

@@ -12,13 +12,10 @@ use casper_types::{
     LARGE_WASM_LANE_ID, MINT_LANE_ID,
 };
 use core::fmt::{self, Debug, Display, Formatter};
-#[cfg(feature = "datasize")]
-use datasize::DataSize;
 pub(crate) use meta_transaction_v1::MetaTransactionV1;
 use serde::Serialize;
 use std::{borrow::Cow, collections::BTreeSet};
 
-#[cfg_attr(feature = "datasize", derive(DataSize))]
 #[derive(Clone, Debug, Serialize)]
 pub(crate) enum MetaTransaction {
     Deploy(Deploy),
