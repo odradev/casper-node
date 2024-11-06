@@ -26,11 +26,11 @@ use casper_types::{
         },
         SystemEntityType, AUCTION, HANDLE_PAYMENT, MINT,
     },
-    AccessRights, Account, AddressableEntity, AddressableEntityHash, ByteCode, ByteCodeAddr,
-    ByteCodeHash, ByteCodeKind, CLValue, CLValueError, Contract, Digest, EntityAddr,
-    EntityVersions, EntryPointAddr, EntryPointValue, EntryPoints, FeeHandling, Groups, HashAddr,
-    Key, KeyTag, Package, PackageHash, PackageStatus, Phase, ProtocolUpgradeConfig,
-    ProtocolVersion, PublicKey, StoredValue, SystemHashRegistry, URef, U512,
+    AccessRights, AddressableEntity, AddressableEntityHash, ByteCode, ByteCodeAddr, ByteCodeHash,
+    ByteCodeKind, CLValue, CLValueError, Contract, Digest, EntityAddr, EntityVersions,
+    EntryPointAddr, EntryPointValue, EntryPoints, FeeHandling, Groups, HashAddr, Key, KeyTag,
+    Package, PackageHash, PackageStatus, Phase, ProtocolUpgradeConfig, ProtocolVersion, PublicKey,
+    StoredValue, SystemHashRegistry, URef, U512,
 };
 
 use crate::{

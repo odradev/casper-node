@@ -1095,17 +1095,20 @@ pub trait StateProvider: Sized {
         match get_snapshot_data(self, &scr, state_hash, enable_addressable_entity) {
             not_found @ SeigniorageRecipientsResult::ValueNotFound(_) => {
                 if enable_addressable_entity {
-                    //There is a chance that, when looking for rewards data, we are fetching a pre-condor state root hash that will have data stored in the old format
-                    // So we will have another go at fetching the data in the old format
+                    //There is a chance that, when looking for systemic data, we could be using a
+                    // state root hash from before the AddressableEntity
+                    // migration boundary. In such a case, we should attempt to look up the data
+                    // under the Account/Contract model instead; e.g Key::Hash instead of
+                    // Key::AddressableEntity
                     match get_snapshot_data(self, &scr, state_hash, false) {
                         SeigniorageRecipientsResult::ValueNotFound(_) => not_found,
-                        other @ _ => other,
+                        other => other,
                     }
                 } else {
                     not_found
                 }
             }
-            other @ _ => other,
+            other => other,
         }
     }
 
@@ -1890,17 +1893,20 @@ pub trait StateProvider: Sized {
         match get_total_supply_data(self, &scr, state_hash, enable_addressable_entity) {
             not_found @ TotalSupplyResult::ValueNotFound(_) => {
                 if enable_addressable_entity {
-                    //There is a chance that, when looking for rewards data, we are fetching a pre-condor state root hash that will have data stored in the old format
-                    // So we will have another go at fetching the data in the old format
+                    //There is a chance that, when looking for systemic data, we could be using a
+                    // state root hash from before the AddressableEntity
+                    // migration boundary. In such a case, we should attempt to look up the data
+                    // under the Account/Contract model instead; e.g Key::Hash instead of
+                    // Key::AddressableEntity
                     match get_total_supply_data(self, &scr, state_hash, false) {
                         TotalSupplyResult::ValueNotFound(_) => not_found,
-                        other @ _ => other,
+                        other => other,
                     }
                 } else {
                     not_found
                 }
             }
-            other @ _ => other,
+            other => other,
         }
     }
 
@@ -1925,17 +1931,20 @@ pub trait StateProvider: Sized {
         match get_round_seigniorage_rate_data(self, &scr, state_hash, enable_addressable_entity) {
             not_found @ RoundSeigniorageRateResult::ValueNotFound(_) => {
                 if enable_addressable_entity {
-                    //There is a chance that, when looking for rewards data, we are fetching a pre-condor state root hash that will have data stored in the old format
-                    // So we will have another go at fetching the data in the old format
+                    //There is a chance that, when looking for systemic data, we could be using a
+                    // state root hash from before the AddressableEntity
+                    // migration boundary. In such a case, we should attempt to look up the data
+                    // under the Account/Contract model instead; e.g Key::Hash instead of
+                    // Key::AddressableEntity
                     match get_round_seigniorage_rate_data(self, &scr, state_hash, false) {
                         RoundSeigniorageRateResult::ValueNotFound(_) => not_found,
-                        other @ _ => other,
+                        other => other,
                     }
                 } else {
                     not_found
                 }
             }
-            other @ _ => other,
+            other => other,
         }
     }
 
@@ -2431,7 +2440,7 @@ fn build_query_requests(
                 ),
             ))
         }
-        None => return Err(SeigniorageRecipientsResult::AuctionNotFound),
+        None => Err(SeigniorageRecipientsResult::AuctionNotFound),
     }
 }
 
