@@ -10,8 +10,8 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    ApiError, CLType, EntryPoint, EntryPointAccess, EntryPointPayment, EntryPointType, EntryPoints,
-    Key,
+    AddressableEntityHash, ApiError, CLType, EntryPoint, EntryPointAccess, EntryPointPayment,
+    EntryPointType, EntryPoints, Key,
 };
 
 const PACKAGE_NAME: &str = "load_caller_info_package";
@@ -81,5 +81,8 @@ pub extern "C" fn call() {
         None,
     );
 
-    runtime::put_key(CONTRACT_HASH, Key::contract_entity_key(contract_hash));
+    runtime::put_key(
+        CONTRACT_HASH,
+        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
+    );
 }

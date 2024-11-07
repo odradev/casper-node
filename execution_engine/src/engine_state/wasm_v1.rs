@@ -192,6 +192,14 @@ impl<'a> SessionInputData<'a> {
             SessionInputData::SessionDataV1 { data } => data.is_standard_payment,
         }
     }
+
+    /// Is install upgrade allowed?
+    pub fn is_install_upgrade_allowed(&self) -> bool {
+        match self {
+            SessionInputData::DeploySessionData { .. } => true,
+            SessionInputData::SessionDataV1 { data } => data.is_install_upgrade,
+        }
+    }
 }
 
 /// Error returned if constructing a new [`WasmV1Request`] fails.
@@ -239,6 +247,19 @@ pub enum ExecutableItem {
     },
     /// An attempt to invoke a stored entity or package.
     Invocation(TransactionInvocationTarget),
+}
+
+impl ExecutableItem {
+    /// Is install upgrade allowed?
+    pub fn is_install_upgrade_allowed(&self) -> bool {
+        match self {
+            ExecutableItem::Deploy(_) => true,
+            ExecutableItem::PaymentBytes(_) | ExecutableItem::Invocation(_) => false,
+            ExecutableItem::SessionBytes { kind, .. } => {
+                matches!(kind, SessionKind::InstallUpgradeBytecode)
+            }
+        }
+    }
 }
 
 /// Block info.
@@ -913,7 +934,7 @@ impl TryFrom<&SessionDataV1<'_>> for PaymentInfo {
                     ));
                 }
             }
-            mode @ PricingMode::Fixed { .. } | mode @ PricingMode::Reserved { .. } => {
+            mode @ PricingMode::Fixed { .. } | mode @ PricingMode::Prepaid { .. } => {
                 return Err(InvalidRequest::UnsupportedMode(
                     transaction_hash,
                     mode.to_string(),

@@ -46,7 +46,6 @@ pub struct LmdbGlobalState {
     pub(crate) environment: Arc<LmdbEnvironment>,
     /// Trie store held within LMDB.
     pub(crate) trie_store: Arc<LmdbTrieStore>,
-    // TODO: make this a lazy-static
     /// Empty root hash used for a new trie.
     pub(crate) empty_root_hash: Digest,
     /// Max query depth

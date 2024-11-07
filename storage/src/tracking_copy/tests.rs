@@ -6,9 +6,9 @@ use casper_types::{
     account::AccountHash,
     addressable_entity::{
         ActionThresholds, AddressableEntityHash, AssociatedKeys, NamedKeyAddr, NamedKeyValue,
-        NamedKeys, Weight,
+        Weight,
     },
-    contracts::EntryPoints as ContractEntryPoints,
+    contracts::{EntryPoints as ContractEntryPoints, NamedKeys},
     execution::{Effects, TransformKindV2, TransformV2},
     gens::*,
     global_state::TrieMerkleProof,

@@ -706,6 +706,7 @@ pub fn execute_finalized_block(
                 scratch_state.handle_fee(handle_fee_request)
             }
         };
+
         state_root_hash =
             scratch_state.commit_effects(state_root_hash, handle_fee_result.effects().clone())?;
 
@@ -1108,8 +1109,6 @@ pub fn execute_finalized_block(
         last_switch_block_hash,
     ));
 
-    // TODO: this should just use the data_access_layer.query mechanism to avoid
-    // leaking data provisioning abstraction
     let proof_of_checksum_registry = match data_access_layer.tracking_copy(state_root_hash)? {
         Some(tc) => match tc.reader().read_with_proof(&Key::ChecksumRegistry)? {
             Some(proof) => proof,

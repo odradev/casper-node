@@ -18,5 +18,5 @@ pub extern "C" fn call() {
 
     let entry_point: String = runtime::get_named_arg("entry_point");
 
-    runtime::call_contract::<()>(contract_hash, &entry_point, RuntimeArgs::default());
+    runtime::call_contract::<()>(contract_hash.into(), &entry_point, RuntimeArgs::default());
 }

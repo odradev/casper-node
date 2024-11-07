@@ -5,14 +5,13 @@ use core::mem::MaybeUninit;
 
 use casper_types::{
     account::AccountHash,
-    addressable_entity::NamedKeys,
     api_error,
     bytesrepr::{self, FromBytes, U64_SERIALIZED_LENGTH},
     contract_messages::{MessagePayload, MessageTopicOperation},
+    contracts::{ContractHash, ContractPackageHash, ContractVersion, NamedKeys},
     system::CallerInfo,
-    AddressableEntityHash, ApiError, BlockTime, CLTyped, CLValue, Digest, EntityVersion,
-    HashAlgorithm, Key, PackageHash, Phase, RuntimeArgs, URef, BLAKE2B_DIGEST_LENGTH,
-    BLOCKTIME_SERIALIZED_LENGTH, PHASE_SERIALIZED_LENGTH,
+    ApiError, BlockTime, CLTyped, CLValue, Digest, HashAlgorithm, Key, Phase, RuntimeArgs, URef,
+    BLAKE2B_DIGEST_LENGTH, BLOCKTIME_SERIALIZED_LENGTH, PHASE_SERIALIZED_LENGTH,
 };
 
 use crate::{contract_api, ext_ffi, unwrap_or_revert::UnwrapOrRevert};
@@ -57,7 +56,7 @@ pub fn revert<T: Into<ApiError>>(error: T) -> ! {
 /// stored contract calls [`revert`], then execution stops and `call_contract` doesn't return.
 /// Otherwise `call_contract` returns `()`.
 pub fn call_contract<T: CLTyped + FromBytes>(
-    contract_hash: AddressableEntityHash,
+    contract_hash: ContractHash,
     entry_point_name: &str,
     runtime_args: RuntimeArgs,
 ) -> T {
@@ -93,8 +92,8 @@ pub fn call_contract<T: CLTyped + FromBytes>(
 /// `call_versioned_contract`.  If the stored contract calls [`revert`], then execution stops and
 /// `call_versioned_contract` doesn't return. Otherwise `call_versioned_contract` returns `()`.
 pub fn call_versioned_contract<T: CLTyped + FromBytes>(
-    contract_package_hash: PackageHash,
-    contract_version: Option<EntityVersion>,
+    contract_package_hash: ContractPackageHash,
+    contract_version: Option<ContractVersion>,
     entry_point_name: &str,
     runtime_args: RuntimeArgs,
 ) -> T {

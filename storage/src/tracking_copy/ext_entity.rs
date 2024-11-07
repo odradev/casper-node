@@ -3,10 +3,8 @@ use tracing::{debug, error};
 
 use casper_types::{
     account::AccountHash,
-    addressable_entity::{
-        ActionThresholds, AssociatedKeys, NamedKeyAddr, NamedKeyValue, NamedKeys, Weight,
-    },
-    contracts::ContractHash,
+    addressable_entity::{ActionThresholds, AssociatedKeys, NamedKeyAddr, NamedKeyValue, Weight},
+    contracts::{ContractHash, NamedKeys},
     system::{
         handle_payment::ACCUMULATION_PURSE_KEY, SystemEntityType, AUCTION, HANDLE_PAYMENT, MINT,
     },
@@ -30,8 +28,8 @@ pub enum FeesPurseHandling {
     ToProposer(AccountHash),
     /// Transfer all fees to a system-wide accumulation purse, for future disbursement.
     Accumulate,
-    /// Burn all fees.
-    Burn,
+    /// Burn all fees from specified purse.
+    Burn(URef),
     /// No fees are charged.
     None(URef),
 }
@@ -162,17 +160,62 @@ where
         &self,
         entity_addr: EntityAddr,
     ) -> Result<RuntimeFootprint, Self::Error> {
-        let key = if self.enable_addressable_entity {
-            Key::AddressableEntity(entity_addr)
-        } else {
-            match entity_addr {
-                EntityAddr::System(system_hash_addr) => Key::Hash(system_hash_addr),
-                EntityAddr::Account(account_hash) => Key::Account(AccountHash::new(account_hash)),
-                EntityAddr::SmartContract(contract_hash_addr) => Key::Hash(contract_hash_addr),
+        let entity_key = match entity_addr {
+            EntityAddr::Account(account_addr) => {
+                let account_key = Key::Account(AccountHash::new(account_addr));
+                match self.read(&account_key)? {
+                    Some(StoredValue::Account(account)) => {
+                        return Ok(RuntimeFootprint::new_account_footprint(account))
+                    }
+                    Some(StoredValue::CLValue(cl_value)) => cl_value.to_t::<Key>()?,
+                    Some(other) => {
+                        return Err(TrackingCopyError::TypeMismatch(
+                            StoredValueTypeMismatch::new(
+                                "Account or Key".to_string(),
+                                other.type_name(),
+                            ),
+                        ))
+                    }
+                    None => return Err(TrackingCopyError::KeyNotFound(account_key)),
+                }
+            }
+            EntityAddr::SmartContract(addr) | EntityAddr::System(addr) => {
+                let contract_key = Key::Hash(addr);
+                match self.read(&contract_key)? {
+                    Some(StoredValue::Contract(contract)) => {
+                        let contract_hash = ContractHash::new(entity_addr.value());
+                        let maybe_system_entity_type = {
+                            let mut ret = None;
+                            let registry = self.get_system_entity_registry()?;
+                            for (name, hash) in registry.inner().into_iter() {
+                                if hash == entity_addr.value() {
+                                    match name.as_ref() {
+                                        MINT => ret = Some(SystemEntityType::Mint),
+                                        AUCTION => ret = Some(SystemEntityType::Auction),
+                                        HANDLE_PAYMENT => {
+                                            ret = Some(SystemEntityType::HandlePayment)
+                                        }
+                                        _ => continue,
+                                    }
+                                }
+                            }
+
+                            ret
+                        };
+
+                        return Ok(RuntimeFootprint::new_contract_footprint(
+                            contract_hash,
+                            contract,
+                            maybe_system_entity_type,
+                        ));
+                    }
+                    Some(StoredValue::CLValue(cl_value)) => cl_value.to_t::<Key>()?,
+                    Some(_) | None => Key::AddressableEntity(entity_addr),
+                }
             }
         };
 
-        match self.read(&key)? {
+        match self.read(&entity_key)? {
             Some(StoredValue::AddressableEntity(entity)) => {
                 let named_keys = self.get_named_keys(entity_addr)?;
                 let entry_points = self.get_v1_entry_points(entity_addr)?;
@@ -183,41 +226,10 @@ where
                     entry_points,
                 ))
             }
-            Some(StoredValue::Account(account)) => {
-                Ok(RuntimeFootprint::new_account_footprint(account))
-            }
-            Some(StoredValue::Contract(contract)) => {
-                let contract_hash = ContractHash::new(entity_addr.value());
-                let maybe_system_entity_type = {
-                    let mut ret = None;
-                    let registry = self.get_system_entity_registry()?;
-                    for (name, hash) in registry.inner().into_iter() {
-                        if hash == entity_addr.value() {
-                            match name.as_ref() {
-                                MINT => ret = Some(SystemEntityType::Mint),
-                                AUCTION => ret = Some(SystemEntityType::Auction),
-                                HANDLE_PAYMENT => ret = Some(SystemEntityType::HandlePayment),
-                                _ => continue,
-                            }
-                        }
-                    }
-
-                    ret
-                };
-
-                Ok(RuntimeFootprint::new_contract_footprint(
-                    contract_hash,
-                    contract,
-                    maybe_system_entity_type,
-                ))
-            }
             Some(other) => Err(TrackingCopyError::TypeMismatch(
-                StoredValueTypeMismatch::new(
-                    "AddressableEntity or Contract".to_string(),
-                    other.type_name(),
-                ),
+                StoredValueTypeMismatch::new("AddressableEntity".to_string(), other.type_name()),
             )),
-            None => Err(TrackingCopyError::KeyNotFound(key)),
+            None => Err(TrackingCopyError::KeyNotFound(entity_key)),
         }
     }
 
@@ -339,8 +351,7 @@ where
             authorization_keys,
             administrative_accounts,
         )?;
-        let access_rights =
-            footprint.extract_access_rights(entity_addr.value(), footprint.named_keys());
+        let access_rights = footprint.extract_access_rights(entity_addr.value());
         Ok((entity_addr, footprint, access_rights))
     }
 
@@ -365,8 +376,7 @@ where
                 }
             };
             let auction = self.runtime_footprint_by_hash_addr(auction_hash)?;
-            let auction_access_rights =
-                auction.extract_access_rights(auction_hash, auction.named_keys());
+            let auction_access_rights = auction.extract_access_rights(auction_hash);
             (auction.take_named_keys(), auction_access_rights)
         };
         let (mint_named_keys, mint_access_rights) = {
@@ -380,8 +390,7 @@ where
                 }
             };
             let mint = self.runtime_footprint_by_hash_addr(mint_hash)?;
-            let mint_named_keys = mint.named_keys();
-            let mint_access_rights = mint.extract_access_rights(mint_hash, mint_named_keys);
+            let mint_access_rights = mint.extract_access_rights(mint_hash);
             (mint.take_named_keys(), mint_access_rights)
         };
 
@@ -396,8 +405,7 @@ where
                 }
             };
             let payment = self.runtime_footprint_by_hash_addr(payment_hash)?;
-            let payment_access_rights =
-                payment.extract_access_rights(payment_hash, &mint_named_keys);
+            let payment_access_rights = payment.extract_access_rights(payment_hash);
             (payment.take_named_keys(), payment_access_rights)
         };
 
@@ -801,8 +809,6 @@ where
             FeesPurseHandling::ToProposer(proposer) => {
                 let (_, entity) =
                     self.runtime_footprint_by_account_hash(protocol_version, proposer)?;
-
-                println!("foo");
                 Ok(entity
                     .main_purse()
                     .ok_or_else(|| TrackingCopyError::AddressableEntityDisable)?)
@@ -838,10 +844,7 @@ where
 
                 Ok(accumulation_purse_uref)
             }
-            FeesPurseHandling::Burn => {
-                // TODO: replace this with new burn logic once it merges
-                Ok(URef::default())
-            }
+            FeesPurseHandling::Burn(uref) => Ok(uref),
         }
     }
 

@@ -2,6 +2,8 @@
 // TODO - remove once schemars stops causing warning.
 #![allow(clippy::field_reassign_with_default)]
 
+mod named_keys;
+
 use alloc::{
     collections::{BTreeMap, BTreeSet},
     format,
@@ -27,9 +29,11 @@ use serde::{
 use serde_map_to_array::KeyValueJsonSchema;
 use serde_map_to_array::{BTreeMapToArray, KeyValueLabels};
 
+pub use self::named_keys::NamedKeys;
+
 use crate::{
     account,
-    addressable_entity::{NamedKeys, TryFromSliceForAccountHashError},
+    addressable_entity::TryFromSliceForAccountHashError,
     bytesrepr::{self, FromBytes, ToBytes, U32_SERIALIZED_LENGTH},
     checksummed_hex,
     contract_wasm::ContractWasmHash,
@@ -38,7 +42,8 @@ use crate::{
     uref::{self, URef},
     AddressableEntityHash, CLType, CLTyped, EntityVersionKey, EntryPoint as EntityEntryPoint,
     EntryPointAccess, EntryPointPayment, EntryPointType, EntryPoints as EntityEntryPoints, Group,
-    Groups, HashAddr, Key, Package, Parameter, Parameters, ProtocolVersion, KEY_HASH_LENGTH,
+    Groups, HashAddr, Key, Package, PackageHash, Parameter, Parameters, ProtocolVersion,
+    KEY_HASH_LENGTH,
 };
 
 const CONTRACT_STRING_PREFIX: &str = "contract-";
@@ -492,6 +497,12 @@ impl ContractPackageHash {
 
         let bytes = HashAddr::try_from(checksummed_hex::decode(hex_addr)?.as_ref())?;
         Ok(ContractPackageHash(bytes))
+    }
+}
+
+impl From<PackageHash> for ContractPackageHash {
+    fn from(value: PackageHash) -> Self {
+        ContractPackageHash::new(value.value())
     }
 }
 

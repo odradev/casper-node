@@ -16,5 +16,6 @@ pub extern "C" fn call() {
     let contract_package_hash: PackageHash = runtime::get_named_arg(ARG_CONTRACT_PACKAGE_HASH);
     let contract_hash: AddressableEntityHash = runtime::get_named_arg(ARG_CONTRACT_HASH);
 
-    storage::disable_contract_version(contract_package_hash, contract_hash).unwrap_or_revert();
+    storage::disable_contract_version(contract_package_hash.into(), contract_hash.into())
+        .unwrap_or_revert();
 }

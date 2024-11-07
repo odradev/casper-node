@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{contract_runtime::StateResultError, types::TransactionHeader};
-use casper_types::{execution::PaymentInfo, InitiatorAddr, Transfer};
+use casper_types::{InitiatorAddr, Transfer};
 use datasize::DataSize;
 use serde::Serialize;
 
@@ -75,7 +75,6 @@ pub(crate) struct ExecutionArtifactBuilder {
     messages: Messages,
     transfers: Vec<Transfer>,
     initiator: InitiatorAddr,
-    payment: Vec<PaymentInfo>,
     cost: U512,
     limit: Gas,
     consumed: Gas,
@@ -92,7 +91,6 @@ impl ExecutionArtifactBuilder {
             transfers: vec![],
             messages: Default::default(),
             initiator: transaction.initiator_addr(),
-            payment: vec![],
             cost: U512::zero(),
             limit: Gas::zero(),
             consumed: Gas::zero(),
@@ -343,13 +341,6 @@ impl ExecutionArtifactBuilder {
         self
     }
 
-    //TODO: use this when payment breakdown is implemented.
-    #[allow(unused)]
-    pub fn with_appended_payment_info(&mut self, payment: &mut Vec<PaymentInfo>) -> &mut Self {
-        self.payment.append(payment);
-        self
-    }
-
     pub(crate) fn build(self) -> ExecutionArtifact {
         let result = ExecutionResultV2 {
             effects: self.effects,
@@ -358,7 +349,6 @@ impl ExecutionArtifactBuilder {
             limit: self.limit,
             consumed: self.consumed,
             cost: self.cost,
-            payment: self.payment,
             size_estimate: self.size_estimate,
             error_message: self.error_message,
         };

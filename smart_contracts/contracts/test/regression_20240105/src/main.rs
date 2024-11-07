@@ -19,13 +19,14 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    account::AccountHash,
-    addressable_entity::{ActionType, NamedKeys, Weight, MAX_GROUPS},
+    account::{AccountHash, ActionType, Weight},
+    addressable_entity::MAX_GROUPS,
     api_error,
     bytesrepr::ToBytes,
-    runtime_args, AccessRights, AddressableEntityHash, ApiError, CLType, CLValue, EntryPoint,
-    EntryPointAccess, EntryPointPayment, EntryPointType, EntryPoints, EraId, Key, PackageHash,
-    Parameter, TransferredTo, URef, U512,
+    contracts::{ContractHash, ContractPackageHash},
+    runtime_args, AccessRights, ApiError, CLType, CLValue, EntryPoint, EntryPointAccess,
+    EntryPointPayment, EntryPointType, EntryPoints, EraId, Key, NamedKeys, Parameter,
+    TransferredTo, URef, U512,
 };
 
 const NOOP: &str = "noop";
@@ -40,7 +41,7 @@ fn to_ptr<T: ToBytes>(t: &T) -> (*const u8, usize, Vec<u8>) {
 #[no_mangle]
 extern "C" fn noop() {}
 
-fn store_noop_contract(maybe_contract_pkg_hash: Option<PackageHash>) -> AddressableEntityHash {
+fn store_noop_contract(maybe_contract_pkg_hash: Option<ContractPackageHash>) -> ContractHash {
     let mut entry_points = EntryPoints::new();
     entry_points.add_entry_point(EntryPoint::new(
         NOOP,

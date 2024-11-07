@@ -572,6 +572,16 @@ mod tests {
             }
         }
 
+        fn new_with_block_gas_limit(rng: &'a mut TestRng, block_limit: u64) -> Self {
+            let (mut chainspec, _) = <(Chainspec, ChainspecRawBytes)>::from_resources("local");
+            chainspec.transaction_config.block_gas_limit = block_limit;
+            Fixture {
+                rng,
+                transactions: vec![],
+                chainspec,
+            }
+        }
+
         fn footprints(&self) -> Vec<(TransactionHash, TransactionFootprint)> {
             self.transactions
                 .iter()
@@ -1152,7 +1162,7 @@ mod tests {
     #[test]
     fn state_should_change_to_validation_succeeded() {
         let mut rng = TestRng::new();
-        let mut fixture = Fixture::new(&mut rng);
+        let mut fixture = Fixture::new_with_block_gas_limit(&mut rng, 50_000_000_000_000);
         let (mut state, _maybe_responder) = fixture.new_state(2, 2, 1, 1);
         assert!(matches!(state, BlockValidationState::InProgress { .. }));
 
@@ -1237,7 +1247,7 @@ mod tests {
             new_standard(fixture.rng, Timestamp::MAX, TimeDiff::from_seconds(1));
         let invalid_transaction_hash = invalid_transaction.hash();
         fixture.transactions.push(invalid_transaction.clone());
-        let (mut state, _maybe_responder) = fixture.new_state(2, 2, 1, 2);
+        let (mut state, _maybe_responder) = fixture.new_state(1, 1, 1, 1);
         assert!(matches!(state, BlockValidationState::InProgress { .. }));
         if let BlockValidationState::InProgress {
             ref mut missing_transactions,

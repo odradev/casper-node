@@ -4,9 +4,9 @@ use crate::{
     AddressGenerator, TrackingCopy,
 };
 use casper_types::{
-    account::AccountHash, addressable_entity::NamedKeys, Chainspec, ContextAccessRights,
-    EntityAddr, FeeHandling, Key, Phase, ProtocolVersion, PublicKey, RefundHandling,
-    RuntimeFootprint, StoredValue, TransactionHash, Transfer, URef, U512,
+    account::AccountHash, contracts::NamedKeys, Chainspec, ContextAccessRights, EntityAddr,
+    FeeHandling, Key, Phase, ProtocolVersion, PublicKey, RefundHandling, RuntimeFootprint,
+    StoredValue, TransactionHash, Transfer, URef, U512,
 };
 use num_rational::Ratio;
 use parking_lot::RwLock;
@@ -414,8 +414,7 @@ where
         let runtime_footprint = tracking_copy
             .borrow_mut()
             .runtime_footprint_by_hash_addr(hash)?;
-        let access_rights =
-            runtime_footprint.extract_access_rights(hash, runtime_footprint.named_keys());
+        let access_rights = runtime_footprint.extract_access_rights(hash);
         let address = PublicKey::System.to_account_hash();
         let remaining_spending_limit = U512::MAX; // system has no spending limit
         Ok(RuntimeNative {

@@ -140,12 +140,12 @@ validator_credit_cap = [1, 5]
 # Valid options are:
 #   'classic': senders of transaction self-specify how much they pay.
 #   'fixed': costs are fixed, per the cost table
-#   'reserved': prepaid transaction (currently not supported)
+#   'prepaid': prepaid transaction (currently not supported)
 pricing_handling = { type = 'fixed' }
-# Does the network allow pre-payment / reservations for future
+# Does the network allow pre-payment for future
 # execution? Currently not supported.
 #
-allow_reservations = false
+allow_prepaid = false
 # Defines how gas holds affect available balance calculations.
 #
 # Valid options are:
@@ -199,7 +199,7 @@ vm_casper_v2 = false
 [transactions.v1]
 # The configuration settings for the lanes of transactions including both native and Wasm based interactions.
 # Currently the node supports two native interactions the mint and auction and have the reserved identifiers of 0 and 1
-# repsectively
+# respectively
 # The remaining wasm based lanes specify the range of configuration settings for a given Wasm based transaction
 # within a given lane.
 # The maximum length in bytes of runtime args per V1 transaction.

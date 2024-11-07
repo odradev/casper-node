@@ -12,8 +12,9 @@ use casper_contract::{
 
 use casper_types::{
     account::AccountHash,
-    addressable_entity::{EntryPoint, EntryPointAccess, EntryPointType, NamedKeys, Parameter},
-    CLTyped, CLValue, EntryPointPayment, EntryPoints, Key, URef,
+    addressable_entity::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
+    contracts::NamedKeys,
+    AddressableEntityHash, CLTyped, CLValue, EntryPointPayment, EntryPoints, Key, URef,
 };
 
 const GET_PAYMENT_PURSE_NAME: &str = "get_payment_purse";
@@ -69,5 +70,8 @@ pub extern "C" fn call() {
         None,
     );
     runtime::put_key(CONTRACT_VERSION, storage::new_uref(contract_version).into());
-    runtime::put_key(HASH_KEY_NAME, Key::contract_entity_key(contract_hash));
+    runtime::put_key(
+        HASH_KEY_NAME,
+        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
+    );
 }

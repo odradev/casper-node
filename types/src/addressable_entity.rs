@@ -7,7 +7,7 @@ mod action_type;
 pub mod associated_keys;
 mod entry_points;
 mod error;
-mod named_keys;
+//mod named_keys;
 mod weight;
 
 use alloc::{
@@ -53,15 +53,14 @@ pub use self::{
         EntryPoint, EntryPointAccess, EntryPointAddr, EntryPointPayment, EntryPointType,
         EntryPointValue, EntryPoints, Parameter, Parameters, DEFAULT_ENTRY_POINT_NAME,
     },
-    error::{
-        FromAccountHashStrError, SetThresholdFailure, TryFromIntError,
-        TryFromSliceForAccountHashError,
-    },
-    named_keys::NamedKeys,
+    error::{FromAccountHashStrError, TryFromIntError, TryFromSliceForAccountHashError},
     weight::{Weight, WEIGHT_SERIALIZED_LENGTH},
 };
 use crate::{
-    account::{Account, AccountHash},
+    account::{
+        Account, AccountHash, AddKeyFailure, RemoveKeyFailure, SetThresholdFailure,
+        UpdateKeyFailure,
+    },
     byte_code::ByteCodeHash,
     bytesrepr::{self, FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
     checksummed_hex,
@@ -71,7 +70,8 @@ use crate::{
     transaction::TransactionRuntime,
     uref::{self, URef},
     AccessRights, ApiError, CLType, CLTyped, CLValue, CLValueError, ContextAccessRights, HashAddr,
-    Key, PackageHash, ProtocolVersion, PublicKey, Tagged, BLAKE2B_DIGEST_LENGTH, KEY_HASH_LENGTH,
+    Key, NamedKeys, PackageHash, ProtocolVersion, PublicKey, Tagged, BLAKE2B_DIGEST_LENGTH,
+    KEY_HASH_LENGTH,
 };
 
 /// Maximum number of distinct user groups.
@@ -429,149 +429,6 @@ impl TryFrom<&Vec<u8>> for AddressableEntityHash {
 impl Distribution<AddressableEntityHash> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> AddressableEntityHash {
         AddressableEntityHash(rng.gen())
-    }
-}
-
-/// Errors that can occur while adding a new [`AccountHash`] to an account's associated keys map.
-#[derive(PartialEq, Eq, Debug, Copy, Clone)]
-#[repr(i32)]
-#[non_exhaustive]
-pub enum AddKeyFailure {
-    /// There are already maximum [`AccountHash`]s associated with the given account.
-    MaxKeysLimit = 1,
-    /// The given [`AccountHash`] is already associated with the given account.
-    DuplicateKey = 2,
-    /// Caller doesn't have sufficient permissions to associate a new [`AccountHash`] with the
-    /// given account.
-    PermissionDenied = 3,
-}
-
-impl Display for AddKeyFailure {
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        match self {
-            AddKeyFailure::MaxKeysLimit => formatter.write_str(
-                "Unable to add new associated key because maximum amount of keys is reached",
-            ),
-            AddKeyFailure::DuplicateKey => formatter
-                .write_str("Unable to add new associated key because given key already exists"),
-            AddKeyFailure::PermissionDenied => formatter
-                .write_str("Unable to add new associated key due to insufficient permissions"),
-        }
-    }
-}
-
-// This conversion is not intended to be used by third party crates.
-#[doc(hidden)]
-impl TryFrom<i32> for AddKeyFailure {
-    type Error = TryFromIntError;
-
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
-        match value {
-            d if d == AddKeyFailure::MaxKeysLimit as i32 => Ok(AddKeyFailure::MaxKeysLimit),
-            d if d == AddKeyFailure::DuplicateKey as i32 => Ok(AddKeyFailure::DuplicateKey),
-            d if d == AddKeyFailure::PermissionDenied as i32 => Ok(AddKeyFailure::PermissionDenied),
-            _ => Err(TryFromIntError(())),
-        }
-    }
-}
-
-/// Errors that can occur while removing a [`AccountHash`] from an account's associated keys map.
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
-#[repr(i32)]
-#[non_exhaustive]
-pub enum RemoveKeyFailure {
-    /// The given [`AccountHash`] is not associated with the given account.
-    MissingKey = 1,
-    /// Caller doesn't have sufficient permissions to remove an associated [`AccountHash`] from the
-    /// given account.
-    PermissionDenied = 2,
-    /// Removing the given associated [`AccountHash`] would cause the total weight of all remaining
-    /// `AccountHash`s to fall below one of the action thresholds for the given account.
-    ThresholdViolation = 3,
-}
-
-impl Display for RemoveKeyFailure {
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        match self {
-            RemoveKeyFailure::MissingKey => {
-                formatter.write_str("Unable to remove a key that does not exist")
-            }
-            RemoveKeyFailure::PermissionDenied => formatter
-                .write_str("Unable to remove associated key due to insufficient permissions"),
-            RemoveKeyFailure::ThresholdViolation => formatter.write_str(
-                "Unable to remove a key which would violate action threshold constraints",
-            ),
-        }
-    }
-}
-
-// This conversion is not intended to be used by third party crates.
-#[doc(hidden)]
-impl TryFrom<i32> for RemoveKeyFailure {
-    type Error = TryFromIntError;
-
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
-        match value {
-            d if d == RemoveKeyFailure::MissingKey as i32 => Ok(RemoveKeyFailure::MissingKey),
-            d if d == RemoveKeyFailure::PermissionDenied as i32 => {
-                Ok(RemoveKeyFailure::PermissionDenied)
-            }
-            d if d == RemoveKeyFailure::ThresholdViolation as i32 => {
-                Ok(RemoveKeyFailure::ThresholdViolation)
-            }
-            _ => Err(TryFromIntError(())),
-        }
-    }
-}
-
-/// Errors that can occur while updating the [`Weight`] of a [`AccountHash`] in an account's
-/// associated keys map.
-#[derive(PartialEq, Eq, Debug, Copy, Clone)]
-#[repr(i32)]
-#[non_exhaustive]
-pub enum UpdateKeyFailure {
-    /// The given [`AccountHash`] is not associated with the given account.
-    MissingKey = 1,
-    /// Caller doesn't have sufficient permissions to update an associated [`AccountHash`] from the
-    /// given account.
-    PermissionDenied = 2,
-    /// Updating the [`Weight`] of the given associated [`AccountHash`] would cause the total
-    /// weight of all `AccountHash`s to fall below one of the action thresholds for the given
-    /// account.
-    ThresholdViolation = 3,
-}
-
-impl Display for UpdateKeyFailure {
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        match self {
-            UpdateKeyFailure::MissingKey => formatter.write_str(
-                "Unable to update the value under an associated key that does not exist",
-            ),
-            UpdateKeyFailure::PermissionDenied => formatter
-                .write_str("Unable to update associated key due to insufficient permissions"),
-            UpdateKeyFailure::ThresholdViolation => formatter.write_str(
-                "Unable to update weight that would fall below any of action thresholds",
-            ),
-        }
-    }
-}
-
-// This conversion is not intended to be used by third party crates.
-#[doc(hidden)]
-impl TryFrom<i32> for UpdateKeyFailure {
-    type Error = TryFromIntError;
-
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
-        match value {
-            d if d == UpdateKeyFailure::MissingKey as i32 => Ok(UpdateKeyFailure::MissingKey),
-            d if d == UpdateKeyFailure::PermissionDenied as i32 => {
-                Ok(UpdateKeyFailure::PermissionDenied)
-            }
-            d if d == UpdateKeyFailure::ThresholdViolation as i32 => {
-                Ok(UpdateKeyFailure::ThresholdViolation)
-            }
-            _ => Err(TryFromIntError(())),
-        }
     }
 }
 

@@ -114,7 +114,7 @@ fn add_bid_and_withdraw_bid_have_expected_costs() {
         balance_after,
         balance_before - U512::from(BOND_AMOUNT) - transaction_fee_1
     );
-    assert_eq!(builder.last_exec_gas_cost().value(), expected_call_cost);
+    assert_eq!(builder.last_exec_gas_consumed().value(), expected_call_cost);
 
     // Withdraw bid
     let withdraw_bid_request = ExecuteRequestBuilder::contract_call_by_hash(
@@ -148,7 +148,7 @@ fn add_bid_and_withdraw_bid_have_expected_costs() {
     let system_config = builder.chainspec().system_costs_config;
     let expected_call_cost = U512::from(system_config.auction_costs().withdraw_bid);
     assert_eq!(balance_after, balance_before - transaction_fee_2);
-    assert_eq!(builder.last_exec_gas_cost().value(), expected_call_cost);
+    assert_eq!(builder.last_exec_gas_consumed().value(), expected_call_cost);
 }
 
 #[ignore]
@@ -216,7 +216,7 @@ fn upgraded_add_bid_and_withdraw_bid_have_expected_costs() {
         balance_after,
         balance_before - U512::from(BOND_AMOUNT) - transaction_fee_1
     );
-    assert_eq!(builder.last_exec_gas_cost().value(), expected_call_cost);
+    assert_eq!(builder.last_exec_gas_consumed().value(), expected_call_cost);
 
     // Withdraw bid
     let withdraw_bid_request = ExecuteRequestBuilder::contract_call_by_hash(
@@ -248,7 +248,7 @@ fn upgraded_add_bid_and_withdraw_bid_have_expected_costs() {
 
     let call_cost = U512::from(NEW_WITHDRAW_BID_COST);
     assert_eq!(balance_after, balance_before - transaction_fee_2);
-    assert_eq!(builder.last_exec_gas_cost().value(), call_cost);
+    assert_eq!(builder.last_exec_gas_consumed().value(), call_cost);
 }
 
 #[ignore]
@@ -333,7 +333,7 @@ fn delegate_and_undelegate_have_expected_costs() {
         balance_after,
         balance_before - U512::from(BID_AMOUNT) - transaction_fee_1,
     );
-    assert_eq!(builder.last_exec_gas_cost().value(), expected_call_cost);
+    assert_eq!(builder.last_exec_gas_consumed().value(), expected_call_cost);
 
     let redelegate_request = ExecuteRequestBuilder::contract_call_by_hash(
         *DEFAULT_ACCOUNT_ADDR,
@@ -358,7 +358,7 @@ fn delegate_and_undelegate_have_expected_costs() {
 
     let system_config = builder.chainspec().system_costs_config;
     let expected_call_cost = U512::from(system_config.auction_costs().redelegate);
-    assert_eq!(builder.last_exec_gas_cost().value(), expected_call_cost);
+    assert_eq!(builder.last_exec_gas_consumed().value(), expected_call_cost);
 
     // Withdraw bid
     let undelegate_request = ExecuteRequestBuilder::contract_call_by_hash(
@@ -392,7 +392,7 @@ fn delegate_and_undelegate_have_expected_costs() {
     let system_config = builder.chainspec().system_costs_config;
     let expected_call_cost = U512::from(system_config.auction_costs().undelegate);
     assert_eq!(balance_after, balance_before - transaction_fee_2);
-    assert_eq!(builder.last_exec_gas_cost().value(), expected_call_cost);
+    assert_eq!(builder.last_exec_gas_consumed().value(), expected_call_cost);
 }
 
 #[ignore]
@@ -485,7 +485,7 @@ fn upgraded_delegate_and_undelegate_have_expected_costs() {
         balance_before - U512::from(BID_AMOUNT) - transaction_fee_1,
     );
 
-    assert_eq!(builder.last_exec_gas_cost().value(), call_cost);
+    assert_eq!(builder.last_exec_gas_consumed().value(), call_cost);
 
     // Redelegate bid
     let redelegate_request = ExecuteRequestBuilder::contract_call_by_hash(
@@ -510,7 +510,7 @@ fn upgraded_delegate_and_undelegate_have_expected_costs() {
     builder.exec(redelegate_request).expect_success().commit();
 
     let expected_call_cost = U512::from(NEW_REDELEGATE_COST);
-    assert_eq!(builder.last_exec_gas_cost().value(), expected_call_cost);
+    assert_eq!(builder.last_exec_gas_consumed().value(), expected_call_cost);
 
     // Withdraw bid (undelegate)
     let undelegate_request = ExecuteRequestBuilder::contract_call_by_hash(
@@ -543,7 +543,7 @@ fn upgraded_delegate_and_undelegate_have_expected_costs() {
 
     let call_cost = U512::from(NEW_UNDELEGATE_COST);
     assert_eq!(balance_after, balance_before - transaction_fee_2);
-    assert_eq!(builder.last_exec_gas_cost().value(), call_cost);
+    assert_eq!(builder.last_exec_gas_consumed().value(), call_cost);
 }
 
 #[ignore]
@@ -740,7 +740,7 @@ fn should_charge_for_erroneous_system_contract_calls() {
             expected_cost,
         );
         assert_eq!(
-            builder.last_exec_gas_cost().value(),
+            builder.last_exec_gas_consumed().value(),
             call_cost,
             "{:?}",
             entrypoint
@@ -783,7 +783,7 @@ fn should_verify_do_nothing_charges_only_for_standard_payment() {
 
     assert_eq!(user_funds_after, user_funds_before - transaction_fee,);
 
-    assert_eq!(builder.last_exec_gas_cost(), Gas::new(U512::zero()));
+    assert_eq!(builder.last_exec_gas_consumed(), Gas::new(U512::zero()));
 }
 
 #[ignore]
@@ -920,5 +920,8 @@ fn should_verify_wasm_add_bid_wasm_cost_is_not_recursive() {
     let expected_call_cost =
         U512::from(DEFAULT_ADD_BID_COST) + U512::from(UPDATED_CALL_CONTRACT_COST);
 
-    assert_eq!(builder.last_exec_gas_cost(), Gas::new(expected_call_cost));
+    assert_eq!(
+        builder.last_exec_gas_consumed(),
+        Gas::new(expected_call_cost)
+    );
 }

@@ -11,7 +11,6 @@ const PRICING_HANDLING_TAG_LENGTH: u8 = 1;
 
 const PRICING_HANDLING_CLASSIC_TAG: u8 = 0;
 const PRICING_HANDLING_FIXED_TAG: u8 = 1;
-const PRICING_HANDLING_GASLIMITED_TAG: u8 = 2;
 
 /// Defines what pricing mode a network allows. Correlates to the PricingMode of a
 /// [`crate::Transaction`]. Nodes will not accept transactions whose pricing mode does not match.
@@ -26,9 +25,6 @@ pub enum PricingHandling {
     // in 2.0 the default pricing handling is Fixed
     #[default]
     Fixed,
-    /// The transaction sender self-specifies how much token they want to use as a gas limit, which
-    /// becomes their gas.
-    GasLimited,
 }
 
 impl Display for PricingHandling {
@@ -39,9 +35,6 @@ impl Display for PricingHandling {
             }
             PricingHandling::Fixed => {
                 write!(f, "PricingHandling::Fixed")
-            }
-            PricingHandling::GasLimited => {
-                write!(f, "PricingHandling::GasLimited")
             }
         }
     }
@@ -57,9 +50,6 @@ impl ToBytes for PricingHandling {
             }
             PricingHandling::Fixed => {
                 buffer.push(PRICING_HANDLING_FIXED_TAG);
-            }
-            PricingHandling::GasLimited => {
-                buffer.push(PRICING_HANDLING_GASLIMITED_TAG);
             }
         }
 
@@ -77,7 +67,6 @@ impl FromBytes for PricingHandling {
         match tag {
             PRICING_HANDLING_CLASSIC_TAG => Ok((PricingHandling::Classic, rem)),
             PRICING_HANDLING_FIXED_TAG => Ok((PricingHandling::Fixed, rem)),
-            PRICING_HANDLING_GASLIMITED_TAG => Ok((PricingHandling::GasLimited, rem)),
             _ => Err(bytesrepr::Error::Formatting),
         }
     }
@@ -97,12 +86,6 @@ mod tests {
     #[test]
     fn bytesrepr_roundtrip_for_fixed() {
         let handling = PricingHandling::Fixed;
-        bytesrepr::test_serialization_roundtrip(&handling);
-    }
-
-    #[test]
-    fn bytesrepr_roundtrip_for_gas_limited() {
-        let handling = PricingHandling::GasLimited;
         bytesrepr::test_serialization_roundtrip(&handling);
     }
 }

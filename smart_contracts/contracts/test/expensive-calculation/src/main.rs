@@ -5,8 +5,8 @@ extern crate alloc;
 
 use casper_contract::contract_api::{runtime, storage};
 use casper_types::{
-    addressable_entity::Parameters, CLType, EntryPoint, EntryPointAccess, EntryPointPayment,
-    EntryPointType, EntryPoints, Key,
+    addressable_entity::Parameters, AddressableEntityHash, CLType, EntryPoint, EntryPointAccess,
+    EntryPointPayment, EntryPointType, EntryPoints, Key,
 };
 
 const ENTRY_FUNCTION_NAME: &str = "calculate";
@@ -49,6 +49,6 @@ pub extern "C" fn call() {
     );
     runtime::put_key(
         "expensive-calculation",
-        Key::contract_entity_key(contract_hash),
+        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
     );
 }

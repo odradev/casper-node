@@ -27,7 +27,6 @@ impl From<ExecError> for Option<Error> {
     }
 }
 
-// TODO: Update MintProvider to better handle errors
 impl<'a, R> MintProvider for Runtime<'a, R>
 where
     R: StateReader<Key, StoredValue, Error = GlobalStateError>,
@@ -84,7 +83,6 @@ where
     }
 }
 
-// TODO: Update RuntimeProvider to better handle errors
 impl<'a, R> RuntimeProvider for Runtime<'a, R>
 where
     R: StateReader<Key, StoredValue, Error = GlobalStateError>,

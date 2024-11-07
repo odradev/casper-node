@@ -12,11 +12,11 @@ use casper_contract::{
 };
 use casper_types::{
     account::AccountHash,
-    addressable_entity::NamedKeys,
+    contracts::NamedKeys,
     runtime_args,
     system::{handle_payment, mint},
-    AccessRights, CLType, CLTyped, EntryPoint, EntryPointAccess, EntryPointPayment, EntryPointType,
-    EntryPoints, Key, Parameter, RuntimeArgs, URef, U512,
+    AccessRights, AddressableEntityHash, CLType, CLTyped, EntryPoint, EntryPointAccess,
+    EntryPointPayment, EntryPointType, EntryPoints, Key, Parameter, RuntimeArgs, URef, U512,
 };
 
 const HARDCODED_UREF: URef = URef::new([42; 32], AccessRights::READ_ADD_WRITE);
@@ -220,5 +220,8 @@ pub extern "C" fn call() {
         Some(ACCESS_UREF_NAME.to_string()),
         None,
     );
-    runtime::put_key(CONTRACT_HASH_NAME, Key::contract_entity_key(contract_hash));
+    runtime::put_key(
+        CONTRACT_HASH_NAME,
+        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
+    );
 }

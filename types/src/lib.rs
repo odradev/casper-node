@@ -153,7 +153,7 @@ pub use chainspec::{
 };
 pub use contract_wasm::{ContractWasm, ContractWasmHash};
 #[doc(inline)]
-pub use contracts::Contract;
+pub use contracts::{Contract, NamedKeys};
 pub use crypto::*;
 pub use deploy_info::DeployInfo;
 pub use digest::{

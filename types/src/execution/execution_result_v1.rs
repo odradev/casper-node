@@ -718,7 +718,7 @@ impl FromBytes for TransformKindV1 {
 #[cfg(any(feature = "testing", test))]
 impl Distribution<TransformKindV1> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> TransformKindV1 {
-        // TODO - include WriteDeployInfo and WriteTransfer as options
+        // TODO - cover all options
         match rng.gen_range(0..13) {
             0 => TransformKindV1::Identity,
             1 => TransformKindV1::WriteCLValue(CLValue::from_t(true).unwrap()),

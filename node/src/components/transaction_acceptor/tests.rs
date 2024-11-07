@@ -30,8 +30,9 @@ use casper_storage::{
 };
 use casper_types::{
     account::{Account, AccountHash, ActionThresholds, AssociatedKeys, Weight},
-    addressable_entity::{AddressableEntity, NamedKeys},
+    addressable_entity::AddressableEntity,
     bytesrepr::Bytes,
+    contracts::NamedKeys,
     global_state::TrieMerkleProof,
     testing::TestRng,
     Block, BlockV2, CLValue, Chainspec, ChainspecRawBytes, Contract, Deploy, EntryPointValue,

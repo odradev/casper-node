@@ -1375,7 +1375,6 @@ fn prepare_exec_result_with_transfer(
         limit,
         cost: limit.value(),
         consumed: limit,
-        payment: vec![],
         transfers: vec![transfer.clone()],
         effects: Effects::new(),
         size_estimate: rng.gen(),

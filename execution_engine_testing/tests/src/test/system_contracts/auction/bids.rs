@@ -4474,15 +4474,6 @@ fn should_transfer_to_main_purse_in_case_of_redelegation_past_max_delegation_cap
 
         builder.advance_era();
     }
-
-    // TODO: reenable when new payment code is added
-    // let delegator_1_purse_balance_after = builder.get_purse_balance(delegator_1_main_purse);
-
-    // assert_eq!(
-    //     delegator_1_purse_balance_before
-    //         + U512::from(UNDELEGATE_AMOUNT_1 + DEFAULT_MINIMUM_DELEGATION_AMOUNT),
-    //     delegator_1_purse_balance_after
-    // )
 }
 
 #[ignore]

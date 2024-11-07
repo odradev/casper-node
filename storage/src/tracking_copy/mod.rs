@@ -29,9 +29,10 @@ use crate::{
     KeyPrefix,
 };
 use casper_types::{
-    addressable_entity::{NamedKeyAddr, NamedKeys},
+    addressable_entity::NamedKeyAddr,
     bytesrepr::{self, ToBytes},
     contract_messages::{Message, Messages},
+    contracts::NamedKeys,
     execution::{Effects, TransformError, TransformInstruction, TransformKindV2, TransformV2},
     global_state::TrieMerkleProof,
     handle_stored_dictionary_value, BlockGlobalAddr, CLType, CLValue, CLValueError, Digest, Key,
@@ -852,9 +853,8 @@ where
                 StoredValue::EntryPoint(_) => {
                     return Ok(query.into_not_found_result("EntryPoint value found."));
                 }
-                // TODO: We may be interested in this value, check the logic
-                StoredValue::Reservation(_) => {
-                    return Ok(query.into_not_found_result("Reservation value found."))
+                StoredValue::Prepaid(_) => {
+                    return Ok(query.into_not_found_result("Prepaid value found."))
                 }
                 StoredValue::RawBytes(_) => {
                     return Ok(query.into_not_found_result("RawBytes value found."));
@@ -1098,7 +1098,6 @@ use crate::global_state::{
         lmdb::{make_temporary_global_state, LmdbGlobalStateView},
         StateProvider,
     },
-    DEFAULT_ENABLE_ENTITY,
 };
 use tempfile::TempDir;
 
@@ -1106,6 +1105,7 @@ use tempfile::TempDir;
 pub fn new_temporary_tracking_copy(
     initial_data: impl IntoIterator<Item = (Key, StoredValue)>,
     max_query_depth: Option<u64>,
+    enable_addressable_entity: bool,
 ) -> (TrackingCopy<LmdbGlobalStateView>, TempDir) {
     let (global_state, state_root_hash, tempdir) = make_temporary_global_state(initial_data);
 
@@ -1120,7 +1120,7 @@ pub fn new_temporary_tracking_copy(
     };
 
     (
-        TrackingCopy::new(reader, query_depth, DEFAULT_ENABLE_ENTITY),
+        TrackingCopy::new(reader, query_depth, enable_addressable_entity),
         tempdir,
     )
 }

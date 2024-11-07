@@ -307,9 +307,9 @@ impl Chainspec {
         self
     }
 
-    /// Set allow reservations.
-    pub fn with_allow_reservations(&mut self, allow_reservations: bool) -> &mut Self {
-        self.core_config.allow_reservations = allow_reservations;
+    /// Set allow prepaid.
+    pub fn with_allow_prepaid(&mut self, allow_prepaid: bool) -> &mut Self {
+        self.core_config.allow_prepaid = allow_prepaid;
         self
     }
 }

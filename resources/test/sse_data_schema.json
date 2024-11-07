@@ -1724,13 +1724,13 @@
           "additionalProperties": false
         },
         {
-          "description": "The payment for this transaction was previously reserved, as proven by the receipt hash (this is for future use, not currently implemented).",
+          "description": "The payment for this transaction was previously paid, as proven by the receipt hash (this is for future use, not currently implemented).",
           "type": "object",
           "required": [
-            "Reserved"
+            "Prepaid"
           ],
           "properties": {
-            "Reserved": {
+            "Prepaid": {
               "type": "object",
               "required": [
                 "receipt"
@@ -3103,7 +3103,6 @@
         "effects",
         "initiator",
         "limit",
-        "payment",
         "size_estimate",
         "transfers"
       ],
@@ -3147,13 +3146,6 @@
             }
           ]
         },
-        "payment": {
-          "description": "Breakdown of payments made to cover the cost.",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/PaymentInfo"
-          }
-        },
         "transfers": {
           "description": "A record of transfers performed while executing this transaction.",
           "type": "array",
@@ -3185,23 +3177,6 @@
           "$ref": "#/definitions/U512"
         }
       ]
-    },
-    "PaymentInfo": {
-      "description": "Breakdown of payments made to cover the cost.",
-      "type": "object",
-      "required": [
-        "source"
-      ],
-      "properties": {
-        "source": {
-          "description": "Source purse used for payment of the transaction.",
-          "allOf": [
-            {
-              "$ref": "#/definitions/URef"
-            }
-          ]
-        }
-      }
     },
     "Transfer": {
       "description": "A versioned wrapper for a transfer.",
@@ -3720,11 +3695,11 @@
           "description": "A reservation record.",
           "type": "object",
           "required": [
-            "Reservation"
+            "Prepaid"
           ],
           "properties": {
-            "Reservation": {
-              "$ref": "#/definitions/ReservationKind"
+            "Prepaid": {
+              "$ref": "#/definitions/PrepaidKind"
             }
           },
           "additionalProperties": false
@@ -4606,24 +4581,24 @@
         }
       }
     },
-    "ReservationKind": {
-      "description": "Container for bytes recording location, type and data for a gas reservation",
+    "PrepaidKind": {
+      "description": "Container for bytes recording location, type and data for a gas pre payment",
       "type": "object",
       "required": [
-        "receipt",
-        "reservation_data",
-        "reservation_kind"
+        "prepayment_data",
+        "prepayment_kind",
+        "receipt"
       ],
       "properties": {
         "receipt": {
           "$ref": "#/definitions/Digest"
         },
-        "reservation_kind": {
+        "prepayment_kind": {
           "type": "integer",
           "format": "uint8",
           "minimum": 0.0
         },
-        "reservation_data": {
+        "prepayment_data": {
           "$ref": "#/definitions/Bytes"
         }
       }

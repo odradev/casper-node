@@ -6,8 +6,8 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    addressable_entity::Parameters, AccessRights, CLType, CLValue, EntryPoint, EntryPointAccess,
-    EntryPointPayment, EntryPointType, EntryPoints, Key, URef,
+    addressable_entity::Parameters, AccessRights, AddressableEntityHash, CLType, CLValue,
+    EntryPoint, EntryPointAccess, EntryPointPayment, EntryPointType, EntryPoints, Key, URef,
 };
 
 const RET_AS_CONTRACT: &str = "ret_as_contract";
@@ -108,7 +108,10 @@ pub extern "C" fn call() {
     let (contract_hash, _contract_version) =
         storage::new_locked_contract(entry_points, None, None, None, None);
 
-    runtime::put_key(CONTRACT_HASH_NAME, Key::contract_entity_key(contract_hash));
+    runtime::put_key(
+        CONTRACT_HASH_NAME,
+        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
+    );
 }
 
 #[no_mangle]

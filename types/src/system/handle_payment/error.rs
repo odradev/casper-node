@@ -12,7 +12,6 @@ use crate::{
 };
 
 /// Errors which can occur while executing the Handle Payment contract.
-// TODO: Split this up into user errors vs. system errors.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 #[non_exhaustive]
@@ -142,8 +141,6 @@ pub enum Error {
     /// assert_eq!(19, Error::RewardsPurseKeyUnexpectedType as u8);
     /// ```
     RewardsPurseKeyUnexpectedType = 19,
-    // TODO: Put these in their own enum, and wrap them separately in `BondingError` and
-    //       `UnbondingError`.
     /// Internal error: failed to deserialize the stake's key.
     /// ```
     /// # use casper_types::system::handle_payment::Error;
