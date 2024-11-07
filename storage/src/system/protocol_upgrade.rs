@@ -25,11 +25,11 @@ use casper_types::{
         },
         SystemEntityType, AUCTION, HANDLE_PAYMENT, MINT,
     },
-    AccessRights, Account, AddressableEntity, AddressableEntityHash, ByteCode, ByteCodeAddr,
-    ByteCodeHash, ByteCodeKind, CLValue, CLValueError, Contract, Digest, EntityAddr,
-    EntityVersions, EntryPointAddr, EntryPointValue, EntryPoints, FeeHandling, Groups, HashAddr,
-    Key, KeyTag, Package, PackageHash, PackageStatus, Phase, ProtocolUpgradeConfig,
-    ProtocolVersion, PublicKey, StoredValue, SystemHashRegistry, URef, U512,
+    AccessRights, AddressableEntity, AddressableEntityHash, ByteCode, ByteCodeAddr, ByteCodeHash,
+    ByteCodeKind, CLValue, CLValueError, Contract, Digest, EntityAddr, EntityVersions,
+    EntryPointAddr, EntryPointValue, EntryPoints, FeeHandling, Groups, HashAddr, Key, KeyTag,
+    Package, PackageHash, PackageStatus, Phase, ProtocolUpgradeConfig, ProtocolVersion, PublicKey,
+    StoredValue, SystemHashRegistry, URef, U512,
 };
 
 use crate::{
@@ -175,14 +175,14 @@ where
         self.check_next_protocol_version_validity()?;
         self.handle_global_state_updates();
         let system_entity_addresses = self.handle_system_hashes()?;
-        self.migrate_system_account(pre_state_hash)?;
 
         if self.config.enable_addressable_entity() {
+            self.migrate_system_account(pre_state_hash)?;
             self.create_accumulation_purse_if_required(
                 &system_entity_addresses.handle_payment(),
                 self.config.fee_handling(),
             )?;
-            self.refresh_system_entities(&system_entity_addresses)?;
+            self.migrate_or_refresh_system_entities(&system_entity_addresses)?;
         } else {
             self.create_accumulation_purse_if_required_by_contract(
                 &system_entity_addresses.handle_payment(),
@@ -300,20 +300,20 @@ where
     }
 
     /// Bump major version and/or update the entry points for system contracts.
-    pub fn refresh_system_entities(
+    pub fn migrate_or_refresh_system_entities(
         &mut self,
         system_entity_addresses: &SystemHashAddresses,
     ) -> Result<(), ProtocolUpgradeError> {
         debug!("refresh system contracts");
-        self.refresh_system_entity_entry_points(
+        self.migrate_or_refresh_system_entity_entry_points(
             system_entity_addresses.mint(),
             SystemEntityType::Mint,
         )?;
-        self.refresh_system_entity_entry_points(
+        self.migrate_or_refresh_system_entity_entry_points(
             system_entity_addresses.auction(),
             SystemEntityType::Auction,
         )?;
-        self.refresh_system_entity_entry_points(
+        self.migrate_or_refresh_system_entity_entry_points(
             system_entity_addresses.handle_payment(),
             SystemEntityType::HandlePayment,
         )?;
@@ -344,7 +344,7 @@ where
 
     /// Refresh the system contracts with an updated set of entry points,
     /// and bump the contract version at a major version upgrade.
-    fn refresh_system_entity_entry_points(
+    fn migrate_or_refresh_system_entity_entry_points(
         &mut self,
         hash_addr: HashAddr,
         system_entity_type: SystemEntityType,
@@ -652,15 +652,6 @@ where
                 .write(Key::URef(purse_uref), StoredValue::CLValue(purse_cl_value));
             purse_uref
         };
-
-        if !self.config.enable_addressable_entity() {
-            let system_account = Account::create(account_hash, NamedKeys::new(), main_purse);
-            self.tracking_copy.write(
-                Key::Account(account_hash),
-                StoredValue::Account(system_account),
-            );
-            return Ok(());
-        }
 
         let associated_keys = AssociatedKeys::new(account_hash, Weight::new(1));
         let byte_code_hash = ByteCodeHash::default();
