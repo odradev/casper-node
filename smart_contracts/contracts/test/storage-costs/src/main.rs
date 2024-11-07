@@ -10,8 +10,8 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    addressable_entity::NamedKeys, CLType, EntryPoint, EntryPointAccess, EntryPointPayment,
-    EntryPointType, EntryPoints, Key, U512,
+    contracts::NamedKeys, CLType, EntryPoint, EntryPointAccess, EntryPointPayment, EntryPointType,
+    EntryPoints, Key, U512,
 };
 
 const WRITE_FUNCTION_SMALL_NAME: &str = "write_function_small";
@@ -96,7 +96,7 @@ pub extern "C" fn create_contract_user_group_function() {
         .and_then(Key::into_package_hash)
         .expect("should have package hash");
     let _result = storage::create_contract_user_group(
-        contract_package_hash,
+        contract_package_hash.into(),
         LABEL_NAME,
         0,
         Default::default(),
@@ -109,8 +109,9 @@ pub extern "C" fn provision_urefs_function() {
     let contract_package_hash = runtime::get_key(CONTRACT_KEY_NAME)
         .and_then(Key::into_package_hash)
         .expect("should have package hash");
-    let _result = storage::provision_contract_user_group_uref(contract_package_hash, LABEL_NAME)
-        .unwrap_or_revert();
+    let _result =
+        storage::provision_contract_user_group_uref(contract_package_hash.into(), LABEL_NAME)
+            .unwrap_or_revert();
 }
 
 #[no_mangle]
@@ -118,7 +119,8 @@ pub extern "C" fn remove_contract_user_group_function() {
     let contract_package_hash = runtime::get_key(CONTRACT_KEY_NAME)
         .and_then(Key::into_package_hash)
         .expect("should have package hash");
-    storage::remove_contract_user_group(contract_package_hash, LABEL_NAME).unwrap_or_revert();
+    storage::remove_contract_user_group(contract_package_hash.into(), LABEL_NAME)
+        .unwrap_or_revert();
 }
 
 #[no_mangle]
@@ -127,7 +129,7 @@ pub extern "C" fn new_uref_subcall() {
         .and_then(Key::into_package_hash)
         .expect("should have package hash");
     runtime::call_versioned_contract(
-        contract_package_hash,
+        contract_package_hash.into(),
         None,
         NEW_UREF_FUNCTION,
         Default::default(),

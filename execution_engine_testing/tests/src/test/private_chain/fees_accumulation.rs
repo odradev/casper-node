@@ -61,15 +61,7 @@ fn should_finalize_and_accumulate_rewards_purse() {
     )
     .build();
 
-    // let exec_request_1_proposer = exec_request_1.proposer.clone();
-    // let proposer_account_1 = builder
-    //     .get_entity_with_named_keys_by_account_hash(exec_request_1_proposer.to_account_hash())
-    //     .expect("should have proposer account");
     builder.exec(exec_request_1).expect_success().commit();
-    // assert_eq!(
-    //     builder.get_purse_balance(proposer_account_1.main_purse()),
-    //     U512::zero()
-    // );
 
     let handle_payment_2 = builder.get_named_keys(EntityAddr::System(handle_payment.value()));
 
@@ -82,31 +74,6 @@ fn should_finalize_and_accumulate_rewards_purse() {
         TransferRequestBuilder::new(MINIMUM_ACCOUNT_CREATION_BALANCE, *ACCOUNT_1_ADDR)
             .with_initiator(*DEFAULT_ADMIN_ACCOUNT_ADDR)
             .build();
-
-    // TODO - re-enable once payment epic completed.
-    // let exec_request_2_proposer = transfer_request.proposer().clone();
-    // let proposer_account_2 = builder
-    //     .get_entity_by_account_hash(exec_request_2_proposer.to_account_hash())
-    //     .expect("should have proposer account");
-    //
-    // builder
-    //     .transfer_and_commit(transfer_request)
-    //     .expect_success();
-    // assert_eq!(
-    //     builder.get_purse_balance(proposer_account_2.main_purse()),
-    //     U512::zero()
-    // );
-    //
-    // let handle_payment_3 = builder.get_named_keys(EntityAddr::System(handle_payment.value()));
-    //
-    // assert_eq!(
-    //     handle_payment_1, handle_payment_2,
-    //     "none of the named keys should change before and after execution"
-    // );
-    // assert_eq!(
-    //     handle_payment_2, handle_payment_3,
-    //     "none of the named keys should change before and after execution"
-    // );
 }
 
 #[ignore]

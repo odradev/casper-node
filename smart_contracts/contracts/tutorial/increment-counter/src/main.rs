@@ -6,9 +6,10 @@ compile_error!("target arch should be wasm32: compile with '--target wasm32-unkn
 
 extern crate alloc;
 
-use casper_types::{AddressableEntityHash, ApiError, Key, RuntimeArgs};
+use casper_types::{ApiError, Key, RuntimeArgs};
 
 use casper_contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
+use casper_types::contracts::ContractHash;
 
 const COUNTER_KEY: &str = "counter";
 const COUNTER_INC: &str = "counter_inc";
@@ -20,7 +21,7 @@ pub extern "C" fn call() {
     let contract_hash = {
         let counter_uref = runtime::get_key(COUNTER_KEY).unwrap_or_revert_with(ApiError::GetKey);
         if let Key::Hash(hash) = counter_uref {
-            AddressableEntityHash::new(hash)
+            ContractHash::new(hash)
         } else {
             runtime::revert(ApiError::User(66));
         }

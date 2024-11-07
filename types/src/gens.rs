@@ -16,7 +16,7 @@ use crate::{
     },
     addressable_entity::{
         action_thresholds::gens::action_thresholds_arb, associated_keys::gens::associated_keys_arb,
-        MessageTopics, NamedKeyValue, NamedKeys, Parameters, Weight,
+        MessageTopics, NamedKeyValue, Parameters, Weight,
     },
     block::BlockGlobalAddr,
     byte_code::ByteCodeKind,
@@ -25,6 +25,7 @@ use crate::{
     contracts::{
         Contract, ContractHash, ContractPackage, ContractPackageStatus, ContractVersionKey,
         ContractVersions, EntryPoint as ContractEntryPoint, EntryPoints as ContractEntryPoints,
+        NamedKeys,
     },
     crypto::{
         self,
@@ -875,7 +876,7 @@ pub fn stored_value_arb() -> impl Strategy<Value = StoredValue> {
                 StoredValue::MessageTopic(_) => stored_value,
                 StoredValue::Message(_) => stored_value,
                 StoredValue::NamedKey(_) => stored_value,
-                StoredValue::Reservation(_) => stored_value,
+                StoredValue::Prepaid(_) => stored_value,
                 StoredValue::EntryPoint(_) => stored_value,
             })
 }
@@ -1083,7 +1084,7 @@ pub fn pricing_mode_arb() -> impl Strategy<Value = PricingMode> {
         ),
         fixed_pricing_mode_arb(),
         u8_slice_32().prop_map(|receipt| {
-            PricingMode::Reserved {
+            PricingMode::Prepaid {
                 receipt: receipt.into(),
             }
         }),

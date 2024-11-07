@@ -182,7 +182,7 @@ fn should_verify_isolate_host_side_payment_code_is_free() {
         balance_before - transaction_fee,
         "balance before and after should match"
     );
-    assert_eq!(builder.last_exec_gas_cost().value(), U512::zero());
+    assert_eq!(builder.last_exec_gas_consumed().value(), U512::zero());
 }
 
 #[cfg(not(feature = "use-as-wasm"))]
@@ -245,7 +245,7 @@ fn should_verify_isolated_auction_storage_is_free() {
         expected - balance_after
     );
     assert_eq!(
-        builder.last_exec_gas_cost().value(),
+        builder.last_exec_gas_consumed().value(),
         U512::from(DEFAULT_ADD_BID_COST)
     );
 }
@@ -266,7 +266,7 @@ fn should_measure_gas_cost_for_storage_usage_write() {
 
     builder.exec(install_exec_request).expect_success().commit();
 
-    assert!(!builder.last_exec_gas_cost().value().is_zero());
+    assert!(!builder.last_exec_gas_consumed().value().is_zero());
 
     let account = builder
         .get_entity_with_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
@@ -299,7 +299,7 @@ fn should_measure_gas_cost_for_storage_usage_write() {
             .expect_success()
             .commit();
 
-        builder_a.last_exec_gas_cost()
+        builder_a.last_exec_gas_consumed()
     };
 
     let expected_small_write_data =
@@ -339,7 +339,7 @@ fn should_measure_gas_cost_for_storage_usage_write() {
             .expect_success()
             .commit();
 
-        builder_b.last_exec_gas_cost()
+        builder_b.last_exec_gas_consumed()
     };
 
     let expected_large_write_data =
@@ -408,7 +408,7 @@ fn should_measure_unisolated_gas_cost_for_storage_usage_write() {
             .expect_success()
             .commit();
 
-        builder_a.last_exec_gas_cost()
+        builder_a.last_exec_gas_consumed()
     };
 
     let expected_small_write_data =
@@ -448,7 +448,7 @@ fn should_measure_unisolated_gas_cost_for_storage_usage_write() {
             .expect_success()
             .commit();
 
-        builder_b.last_exec_gas_cost()
+        builder_b.last_exec_gas_consumed()
     };
 
     let expected_large_write_data =
@@ -518,7 +518,7 @@ fn should_measure_gas_cost_for_storage_usage_add() {
             .expect_success()
             .commit();
 
-        builder_a.last_exec_gas_cost()
+        builder_a.last_exec_gas_consumed()
     };
 
     let expected_small_add_data =
@@ -558,7 +558,7 @@ fn should_measure_gas_cost_for_storage_usage_add() {
             .expect_success()
             .commit();
 
-        builder_b.last_exec_gas_cost()
+        builder_b.last_exec_gas_consumed()
     };
 
     let expected_large_write_data =
@@ -629,7 +629,7 @@ fn should_measure_unisolated_gas_cost_for_storage_usage_add() {
             .expect_success()
             .commit();
 
-        builder_a.last_exec_gas_cost()
+        builder_a.last_exec_gas_consumed()
     };
 
     let expected_small_add_data =
@@ -669,7 +669,7 @@ fn should_measure_unisolated_gas_cost_for_storage_usage_add() {
             .expect_success()
             .commit();
 
-        builder_b.last_exec_gas_cost()
+        builder_b.last_exec_gas_consumed()
     };
 
     let expected_large_write_data =
@@ -729,7 +729,7 @@ fn should_verify_new_uref_storage_cost() {
 
     assert_eq!(
         // should charge for storage of a u64 behind a URef
-        builder.last_exec_gas_cost(),
+        builder.last_exec_gas_consumed(),
         StorageCosts::default().calculate_gas_cost(
             StoredValue::CLValue(CLValue::from_t(0u64).expect("should create CLValue"))
                 .serialized_length()
@@ -774,7 +774,7 @@ fn should_verify_put_key_is_charging_for_storage() {
 
     assert_eq!(
         // should charge for storage of a named key
-        builder.last_exec_gas_cost(),
+        builder.last_exec_gas_consumed(),
         StorageCosts::default().calculate_gas_cost(
             StoredValue::CLValue(
                 CLValue::from_t(("new_key".to_string(), Key::Hash([0u8; 32]))).unwrap()
@@ -822,11 +822,11 @@ fn should_verify_remove_key_is_not_charging_for_storage() {
     if builder.chainspec().core_config.enable_addressable_entity {
         assert_eq!(
             // should charge zero, because we do not charge for storage when removing a key
-            builder.last_exec_gas_cost(),
+            builder.last_exec_gas_consumed(),
             StorageCosts::default().calculate_gas_cost(0),
         )
     } else {
-        assert!(builder.last_exec_gas_cost() > Gas::zero())
+        assert!(builder.last_exec_gas_consumed() > Gas::zero())
     }
 }
 
@@ -867,7 +867,7 @@ fn should_verify_create_contract_at_hash_is_charging_for_storage() {
 
     assert_eq!(
         // should charge at least enough for storage of a package and unit CLValue (for a URef)
-        builder.last_exec_gas_cost(),
+        builder.last_exec_gas_consumed(),
         StorageCosts::default().calculate_gas_cost(
             StoredValue::ContractPackage(ContractPackage::default()).serialized_length()
                 + StoredValue::CLValue(CLValue::unit()).serialized_length()
@@ -926,7 +926,7 @@ fn should_verify_create_contract_user_group_is_charging_for_storage() {
 
     assert_eq!(
         // should charge for storage of the new package
-        builder.last_exec_gas_cost(),
+        builder.last_exec_gas_consumed(),
         StorageCosts::default()
             .calculate_gas_cost(StoredValue::ContractPackage(package.clone()).serialized_length()),
     );
@@ -949,7 +949,7 @@ fn should_verify_create_contract_user_group_is_charging_for_storage() {
 
     assert!(
         // should charge for storage of the new package and a unit CLValue (for a URef)
-        builder.last_exec_gas_cost() > Gas::zero()
+        builder.last_exec_gas_consumed() > Gas::zero()
     );
 
     let exec_request = ExecuteRequestBuilder::contract_call_by_hash(
@@ -966,7 +966,7 @@ fn should_verify_create_contract_user_group_is_charging_for_storage() {
 
     assert!(
         // should charge for storage of the new package
-        builder.last_exec_gas_cost() > Gas::zero()
+        builder.last_exec_gas_consumed() > Gas::zero()
     )
 }
 
@@ -1027,7 +1027,7 @@ fn should_verify_subcall_new_uref_is_charging_for_storage() {
 
     assert_eq!(
         // should charge for storage of a u64 behind a URef
-        builder.last_exec_gas_cost(),
+        builder.last_exec_gas_consumed(),
         StorageCosts::default().calculate_gas_cost(
             StoredValue::CLValue(CLValue::from_t(0u64).expect("should create CLValue"))
                 .serialized_length()

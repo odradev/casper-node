@@ -23,6 +23,13 @@ pub struct ExecuteRequest {
     pub custom_payment: Option<WasmV1Request>,
 }
 
+impl ExecuteRequest {
+    /// Is install upgrade allowed?
+    pub fn is_install_upgrade_allowed(&self) -> bool {
+        self.session.executable_item.is_install_upgrade_allowed()
+    }
+}
+
 /// Builds an [`ExecuteRequest`].
 #[derive(Debug)]
 pub struct ExecuteRequestBuilder {
@@ -63,7 +70,7 @@ impl ExecuteRequestBuilder {
         let authorization_keys = session_input_data.signers();
         let session = WasmV1Request::new_session(
             block_info,
-            Gas::new(5_000_000_000_000_u64), // TODO - set proper value
+            Gas::new(5_000_000_000_000_u64),
             session_input_data,
         )
         .unwrap();
@@ -86,7 +93,7 @@ impl ExecuteRequestBuilder {
             );
             let request = WasmV1Request::new_custom_payment(
                 block_info,
-                Gas::new(5_000_000_000_000_u64), // TODO - set proper value
+                Gas::new(5_000_000_000_000_u64),
                 session_input_data,
             )
             .unwrap();
@@ -125,10 +132,7 @@ impl ExecuteRequestBuilder {
             0,
         );
         let session = deploy_item
-            .new_session_from_deploy_item(
-                block_info,
-                Gas::new(5_000_000_000_000_u64), // TODO - set proper value
-            )
+            .new_session_from_deploy_item(block_info, Gas::new(5_000_000_000_000_u64))
             .unwrap();
 
         let payment: Option<ExecutableItem>;
@@ -148,10 +152,7 @@ impl ExecuteRequestBuilder {
                 0,
             );
             let request = deploy_item
-                .new_custom_payment_from_deploy_item(
-                    block_info,
-                    Gas::new(5_000_000_000_000_u64), // TODO - set proper value
-                )
+                .new_custom_payment_from_deploy_item(block_info, Gas::new(5_000_000_000_000_u64))
                 .unwrap();
             payment = Some(request.executable_item);
             payment_gas_limit = request.gas_limit;

@@ -366,87 +366,6 @@ fn should_exec_stored_code_by_named_hash() {
     }
 }
 
-// #[ignore]
-// #[test]
-// fn should_fail_payment_stored_at_hash_with_incompatible_major_version() {
-//     let payment_purse_amount = *DEFAULT_PAYMENT;
-//
-//     let default_account_hash = *DEFAULT_ACCOUNT_ADDR;
-//     // first, store payment contract
-//     let exec_request = ExecuteRequestBuilder::standard(
-//         default_account_hash,
-//         STORED_PAYMENT_CONTRACT_NAME,
-//         RuntimeArgs::default(),
-//     )
-//     .build();
-//
-//     let mut builder = LmdbWasmTestBuilder::default();
-//     builder.run_genesis(LOCAL_GENESIS_REQUEST.clone());
-//
-//     builder.exec(exec_request).expect_success().commit();
-//
-//     let default_account = builder
-//         .get_entity_with_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-//         .expect("must have contract associated with default account");
-//
-//     let stored_payment_key = *default_account
-//         .named_keys()
-//         .get(STORED_PAYMENT_CONTRACT_HASH_NAME)
-//         .expect("should have stored payment key");
-//
-//     let _stored_payment = builder
-//         .query(None, stored_payment_key, &[])
-//         .expect("should have stored payement");
-//
-//     let stored_payment_contract_hash = stored_payment_key
-//         .into_entity_hash_addr()
-//         .expect("standard_payment should be an uref");
-//
-//     //
-//     // upgrade with new wasm costs with modified mint for given version to avoid missing wasm
-// costs     // table that's queried early
-//     //
-//     let sem_ver = PROTOCOL_VERSION.value();
-//     let new_protocol_version =
-//         ProtocolVersion::from_parts(sem_ver.major + 1, sem_ver.minor, sem_ver.patch);
-//
-//     let mut upgrade_request = make_upgrade_request(new_protocol_version).build();
-//
-//     builder
-//         .upgrade(&mut upgrade_request)
-//         .expect_upgrade_success();
-//
-//     // next make another deploy that USES stored payment logic
-//     let deploy_item = DeployItemBuilder::new()
-//         .with_address(*DEFAULT_ACCOUNT_ADDR)
-//         .with_session_code(format!("{}.wasm", DO_NOTHING_NAME), RuntimeArgs::default())
-//         .with_stored_payment_hash(
-//             stored_payment_contract_hash.into(),
-//             PAY_ENTRYPOINT,
-//             runtime_args! { ARG_AMOUNT => payment_purse_amount },
-//         )
-//         .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
-//         .with_deploy_hash([2; 32])
-//         .build();
-//
-//     let exec_request_stored_payment =
-// ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
-//
-//     builder.exec(exec_request_stored_payment).commit();
-//
-//     assert!(
-//         builder.is_error(),
-//         "calling a payment module with increased major protocol version should be error"
-//     );
-//
-//     let expected_error = Error::Exec(ExecError::IncompatibleProtocolMajorVersion {
-//         expected: 3,
-//         actual: 2,
-//     });
-//
-//     builder.assert_error(expected_error);
-// }
-
 #[ignore]
 #[test]
 fn should_fail_session_stored_at_named_key_with_incompatible_major_version() {
@@ -542,6 +461,172 @@ fn should_fail_session_stored_at_named_key_with_incompatible_major_version() {
     //     })
     // ))
 }
+
+#[ignore]
+#[test]
+fn should_execute_stored_payment_and_session_code_with_new_major_version() {
+    let payment_purse_amount = *DEFAULT_PAYMENT;
+
+    let mut builder = LmdbWasmTestBuilder::default();
+    builder.run_genesis(LOCAL_GENESIS_REQUEST.clone());
+
+    //
+    // upgrade with new wasm costs with modified mint for given version
+    //
+    let sem_ver = PROTOCOL_VERSION.value();
+    let new_protocol_version =
+        ProtocolVersion::from_parts(sem_ver.major + 1, sem_ver.minor, sem_ver.patch);
+
+    let mut upgrade_request = make_upgrade_request(new_protocol_version).build();
+
+    builder
+        .upgrade(&mut upgrade_request)
+        .expect_upgrade_success();
+
+    // first, store payment contract for v2.0.0
+
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        *DEFAULT_ACCOUNT_ADDR,
+        STORED_PAYMENT_CONTRACT_NAME,
+        RuntimeArgs::default(),
+    )
+    .build();
+
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        *DEFAULT_ACCOUNT_ADDR,
+        &format!("{}_stored.wasm", DO_NOTHING_NAME),
+        RuntimeArgs::default(),
+    )
+    .build();
+
+    // store both contracts
+    builder.exec(exec_request_1).expect_success().commit();
+
+    builder.exec(exec_request_2).expect_success().commit();
+
+    // query both stored contracts by their named keys
+    let default_account = builder
+        .get_entity_with_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
+        .expect("must have contract");
+    let test_payment_stored_hash = default_account
+        .named_keys()
+        .get(STORED_PAYMENT_CONTRACT_HASH_NAME)
+        .expect("standard_payment should be present in named keys")
+        .into_entity_hash_addr()
+        .expect("standard_payment named key should be hash");
+
+    let deploy_item = DeployItemBuilder::new()
+        .with_address(*DEFAULT_ACCOUNT_ADDR)
+        .with_stored_versioned_contract_by_name(
+            DO_NOTHING_CONTRACT_PACKAGE_HASH_NAME,
+            Some(INITIAL_VERSION),
+            ENTRY_FUNCTION_NAME,
+            RuntimeArgs::new(),
+        )
+        .with_stored_payment_hash(
+            test_payment_stored_hash.into(),
+            PAY_ENTRYPOINT,
+            runtime_args! { ARG_AMOUNT => payment_purse_amount },
+        )
+        .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
+        .with_deploy_hash([3; 32])
+        .build();
+
+    let exec_request_stored_payment = ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
+
+    builder
+        .clear_results()
+        .exec(exec_request_stored_payment)
+        .expect_failure();
+
+    let error = builder.get_error().unwrap();
+
+    assert_matches!(error, Error::Exec(ExecError::ForgedReference(_)))
+}
+
+// We are currently not enforcing major version compliance to permit optimistic retro-compatibility
+//  if we start enforcing this in the future, the following tests should be restored and patched up
+//  to whatever the relevant protocol versions are at that time.
+// #[ignore]
+// #[test]
+// fn should_fail_payment_stored_at_hash_with_incompatible_major_version() {
+//     let payment_purse_amount = *DEFAULT_PAYMENT;
+//
+//     let default_account_hash = *DEFAULT_ACCOUNT_ADDR;
+//     // first, store payment contract
+//     let exec_request = ExecuteRequestBuilder::standard(
+//         default_account_hash,
+//         STORED_PAYMENT_CONTRACT_NAME,
+//         RuntimeArgs::default(),
+//     )
+//     .build();
+//
+//     let mut builder = LmdbWasmTestBuilder::default();
+//     builder.run_genesis(LOCAL_GENESIS_REQUEST.clone());
+//
+//     builder.exec(exec_request).expect_success().commit();
+//
+//     let default_account = builder
+//         .get_entity_with_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
+//         .expect("must have contract associated with default account");
+//
+//     let stored_payment_key = *default_account
+//         .named_keys()
+//         .get(STORED_PAYMENT_CONTRACT_HASH_NAME)
+//         .expect("should have stored payment key");
+//
+//     let _stored_payment = builder
+//         .query(None, stored_payment_key, &[])
+//         .expect("should have stored payement");
+//
+//     let stored_payment_contract_hash = stored_payment_key
+//         .into_entity_hash_addr()
+//         .expect("standard_payment should be an uref");
+//
+//     //
+//     // upgrade with new wasm costs with modified mint for given version to avoid missing wasm
+// costs     // table that's queried early
+//     //
+//     let sem_ver = PROTOCOL_VERSION.value();
+//     let new_protocol_version =
+//         ProtocolVersion::from_parts(sem_ver.major + 1, sem_ver.minor, sem_ver.patch);
+//
+//     let mut upgrade_request = make_upgrade_request(new_protocol_version).build();
+//
+//     builder
+//         .upgrade(&mut upgrade_request)
+//         .expect_upgrade_success();
+//
+//     // next make another deploy that USES stored payment logic
+//     let deploy_item = DeployItemBuilder::new()
+//         .with_address(*DEFAULT_ACCOUNT_ADDR)
+//         .with_session_code(format!("{}.wasm", DO_NOTHING_NAME), RuntimeArgs::default())
+//         .with_stored_payment_hash(
+//             stored_payment_contract_hash.into(),
+//             PAY_ENTRYPOINT,
+//             runtime_args! { ARG_AMOUNT => payment_purse_amount },
+//         )
+//         .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
+//         .with_deploy_hash([2; 32])
+//         .build();
+//
+//     let exec_request_stored_payment =
+// ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
+//
+//     builder.exec(exec_request_stored_payment).commit();
+//
+//     assert!(
+//         builder.is_error(),
+//         "calling a payment module with increased major protocol version should be error"
+//     );
+//
+//     let expected_error = Error::Exec(ExecError::IncompatibleProtocolMajorVersion {
+//         expected: 3,
+//         actual: 2,
+//     });
+//
+//     builder.assert_error(expected_error);
+// }
 
 // #[ignore]
 // #[test]
@@ -724,85 +809,3 @@ fn should_fail_session_stored_at_named_key_with_incompatible_major_version() {
 //         error
 //     )
 // }
-
-#[ignore]
-#[test]
-fn should_execute_stored_payment_and_session_code_with_new_major_version() {
-    let payment_purse_amount = *DEFAULT_PAYMENT;
-
-    let mut builder = LmdbWasmTestBuilder::default();
-    builder.run_genesis(LOCAL_GENESIS_REQUEST.clone());
-
-    //
-    // upgrade with new wasm costs with modified mint for given version
-    //
-    let sem_ver = PROTOCOL_VERSION.value();
-    let new_protocol_version =
-        ProtocolVersion::from_parts(sem_ver.major + 1, sem_ver.minor, sem_ver.patch);
-
-    let mut upgrade_request = make_upgrade_request(new_protocol_version).build();
-
-    builder
-        .upgrade(&mut upgrade_request)
-        .expect_upgrade_success();
-
-    // first, store payment contract for v2.0.0
-
-    let exec_request_1 = ExecuteRequestBuilder::standard(
-        *DEFAULT_ACCOUNT_ADDR,
-        STORED_PAYMENT_CONTRACT_NAME,
-        RuntimeArgs::default(),
-    )
-    .build();
-
-    let exec_request_2 = ExecuteRequestBuilder::standard(
-        *DEFAULT_ACCOUNT_ADDR,
-        &format!("{}_stored.wasm", DO_NOTHING_NAME),
-        RuntimeArgs::default(),
-    )
-    .build();
-
-    // store both contracts
-    builder.exec(exec_request_1).expect_success().commit();
-
-    builder.exec(exec_request_2).expect_success().commit();
-
-    // query both stored contracts by their named keys
-    let default_account = builder
-        .get_entity_with_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-        .expect("must have contract");
-    let test_payment_stored_hash = default_account
-        .named_keys()
-        .get(STORED_PAYMENT_CONTRACT_HASH_NAME)
-        .expect("standard_payment should be present in named keys")
-        .into_entity_hash_addr()
-        .expect("standard_payment named key should be hash");
-
-    let deploy_item = DeployItemBuilder::new()
-        .with_address(*DEFAULT_ACCOUNT_ADDR)
-        .with_stored_versioned_contract_by_name(
-            DO_NOTHING_CONTRACT_PACKAGE_HASH_NAME,
-            Some(INITIAL_VERSION),
-            ENTRY_FUNCTION_NAME,
-            RuntimeArgs::new(),
-        )
-        .with_stored_payment_hash(
-            test_payment_stored_hash.into(),
-            PAY_ENTRYPOINT,
-            runtime_args! { ARG_AMOUNT => payment_purse_amount },
-        )
-        .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
-        .with_deploy_hash([3; 32])
-        .build();
-
-    let exec_request_stored_payment = ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
-
-    builder
-        .clear_results()
-        .exec(exec_request_stored_payment)
-        .expect_failure();
-
-    let error = builder.get_error().unwrap();
-
-    assert_matches!(error, Error::Exec(ExecError::ForgedReference(_)))
-}

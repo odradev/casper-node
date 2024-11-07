@@ -5,7 +5,7 @@ use casper_storage::{
     tracking_copy::{TrackingCopy, TrackingCopyExt},
 };
 use casper_types::{
-    addressable_entity::NamedKeys, bytesrepr::Bytes, AddressableEntityHash, EntityVersionKey, Key,
+    bytesrepr::Bytes, contracts::NamedKeys, AddressableEntityHash, EntityVersionKey, Key,
     PackageHash, ProtocolVersion, StoredValue, TransactionInvocationTarget,
 };
 

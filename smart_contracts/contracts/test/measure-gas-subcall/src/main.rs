@@ -10,7 +10,7 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    addressable_entity::Parameters, AddressableEntityHash, ApiError, CLType, CLValue,
+    addressable_entity::Parameters, contracts::ContractHash, ApiError, CLType, CLValue,
     EntityVersion, EntryPoint, EntryPointAccess, EntryPointPayment, EntryPointType, EntryPoints,
     Phase, RuntimeArgs,
 };
@@ -36,7 +36,7 @@ pub extern "C" fn noop_ext() {
     runtime::ret(CLValue::from_t(()).unwrap_or_revert())
 }
 
-fn store() -> (AddressableEntityHash, EntityVersion) {
+fn store() -> (ContractHash, EntityVersion) {
     let entry_points = {
         let mut entry_points = EntryPoints::new();
 

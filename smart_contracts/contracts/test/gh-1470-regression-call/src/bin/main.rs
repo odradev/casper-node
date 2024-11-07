@@ -59,7 +59,7 @@ pub extern "C" fn call() {
             let contract_hash: AddressableEntityHash = runtime::get_named_arg(ARG_CONTRACT_HASH);
 
             runtime::call_contract::<()>(
-                contract_hash,
+                contract_hash.into(),
                 gh_1470_regression::RESTRICTED_DO_NOTHING_ENTRYPOINT,
                 correct_runtime_args,
             );
@@ -69,7 +69,7 @@ pub extern "C" fn call() {
                 runtime::get_named_arg(ARG_CONTRACT_PACKAGE_HASH);
 
             runtime::call_versioned_contract::<()>(
-                contract_package_hash,
+                contract_package_hash.into(),
                 None,
                 gh_1470_regression::RESTRICTED_DO_NOTHING_ENTRYPOINT,
                 correct_runtime_args,
@@ -79,7 +79,7 @@ pub extern "C" fn call() {
             let contract_hash: AddressableEntityHash = runtime::get_named_arg(ARG_CONTRACT_HASH);
 
             runtime::call_contract::<()>(
-                contract_hash,
+                contract_hash.into(),
                 gh_1470_regression::RESTRICTED_DO_NOTHING_ENTRYPOINT,
                 no_runtime_args,
             );
@@ -89,7 +89,7 @@ pub extern "C" fn call() {
                 runtime::get_named_arg(ARG_CONTRACT_PACKAGE_HASH);
 
             runtime::call_versioned_contract::<()>(
-                contract_package_hash,
+                contract_package_hash.into(),
                 None,
                 gh_1470_regression::RESTRICTED_DO_NOTHING_ENTRYPOINT,
                 no_runtime_args,
@@ -99,7 +99,7 @@ pub extern "C" fn call() {
             let contract_hash: AddressableEntityHash = runtime::get_named_arg(ARG_CONTRACT_HASH);
 
             runtime::call_contract::<()>(
-                contract_hash,
+                contract_hash.into(),
                 gh_1470_regression::RESTRICTED_DO_NOTHING_ENTRYPOINT,
                 type_mismatch_runtime_args,
             );
@@ -110,7 +110,7 @@ pub extern "C" fn call() {
                 runtime::get_named_arg(ARG_CONTRACT_PACKAGE_HASH);
 
             runtime::call_versioned_contract::<()>(
-                contract_package_hash,
+                contract_package_hash.into(),
                 None,
                 gh_1470_regression::RESTRICTED_DO_NOTHING_ENTRYPOINT,
                 type_mismatch_runtime_args,
@@ -120,7 +120,7 @@ pub extern "C" fn call() {
             let contract_hash: AddressableEntityHash = runtime::get_named_arg(ARG_CONTRACT_HASH);
 
             runtime::call_contract::<()>(
-                contract_hash,
+                contract_hash.into(),
                 gh_1470_regression::RESTRICTED_DO_NOTHING_ENTRYPOINT,
                 correct_without_optional_args,
             );
@@ -130,7 +130,7 @@ pub extern "C" fn call() {
                 runtime::get_named_arg(ARG_CONTRACT_PACKAGE_HASH);
 
             runtime::call_versioned_contract::<()>(
-                contract_package_hash,
+                contract_package_hash.into(),
                 None,
                 gh_1470_regression::RESTRICTED_DO_NOTHING_ENTRYPOINT,
                 correct_without_optional_args,
@@ -140,7 +140,7 @@ pub extern "C" fn call() {
             let contract_hash: AddressableEntityHash = runtime::get_named_arg(ARG_CONTRACT_HASH);
 
             runtime::call_contract::<()>(
-                contract_hash,
+                contract_hash.into(),
                 gh_1470_regression::RESTRICTED_WITH_EXTRA_ARG_ENTRYPOINT,
                 extra_runtime_args,
             );
@@ -150,7 +150,7 @@ pub extern "C" fn call() {
                 runtime::get_named_arg(ARG_CONTRACT_PACKAGE_HASH);
 
             runtime::call_versioned_contract::<()>(
-                contract_package_hash,
+                contract_package_hash.into(),
                 None,
                 gh_1470_regression::RESTRICTED_WITH_EXTRA_ARG_ENTRYPOINT,
                 extra_runtime_args,
@@ -160,7 +160,7 @@ pub extern "C" fn call() {
             let contract_hash: AddressableEntityHash = runtime::get_named_arg(ARG_CONTRACT_HASH);
 
             runtime::call_contract::<()>(
-                contract_hash,
+                contract_hash.into(),
                 gh_1470_regression::RESTRICTED_DO_NOTHING_ENTRYPOINT,
                 optional_type_mismatch_runtime_args,
             );
@@ -170,7 +170,7 @@ pub extern "C" fn call() {
                 runtime::get_named_arg(ARG_CONTRACT_PACKAGE_HASH);
 
             runtime::call_versioned_contract::<()>(
-                contract_package_hash,
+                contract_package_hash.into(),
                 None,
                 gh_1470_regression::RESTRICTED_DO_NOTHING_ENTRYPOINT,
                 optional_type_mismatch_runtime_args,

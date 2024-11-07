@@ -14,10 +14,10 @@ use crate::{
 };
 use casper_types::{
     account::AccountHash,
-    addressable_entity::{MessageTopics, NamedKeys},
+    addressable_entity::MessageTopics,
     bytesrepr::ToBytes,
     contract_messages::TopicNameHash,
-    contracts::ContractHash,
+    contracts::{ContractHash, NamedKeys},
     global_state::TrieMerkleProof,
     system::{
         mint::{

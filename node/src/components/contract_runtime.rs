@@ -117,7 +117,6 @@ impl ContractRuntime {
         chainspec: Arc<Chainspec>,
         registry: &Registry,
     ) -> Result<Self, ConfigError> {
-        // TODO: This is bogus, get rid of this
         let execution_pre_state = Arc::new(Mutex::new(ExecutionPreState::default()));
 
         let current_gas_price = match chainspec.protocol_config.activation_point {

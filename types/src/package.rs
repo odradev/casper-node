@@ -823,7 +823,6 @@ impl Package {
         }
     }
 
-    // TODO: Check the history of this.
     /// Return the package status itself
     pub fn get_lock_status(&self) -> PackageStatus {
         self.lock_status.clone()

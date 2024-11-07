@@ -1051,7 +1051,7 @@ impl Deploy {
     ) -> Self {
         let payment = ExecutableDeployItem::ModuleBytes {
             module_bytes: Bytes::new(),
-            args: runtime_args! { ARG_AMOUNT => U512::from(3_000_000_000_u64) },
+            args: runtime_args! { ARG_AMOUNT => U512::from(6_000_000_000_000u64) },
         };
         let args = runtime_args! {
             ARG_AUCTION_AMOUNT => amount,
@@ -1324,7 +1324,7 @@ impl GasLimited for Deploy {
                     chainspec.get_max_gas_limit_by_category(LARGE_WASM_LANE_ID)
                 };
                 Gas::new(computation_limit)
-            } // legacy deploys do not support reservations
+            } // legacy deploys do not support prepaid
         };
         Ok(gas_limit)
     }

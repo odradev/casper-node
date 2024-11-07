@@ -11,8 +11,8 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    addressable_entity::NamedKeys, CLType, CLValue, EntryPoint, EntryPointAccess,
-    EntryPointPayment, EntryPointType, EntryPoints, Key, PackageHash, Parameter, URef,
+    contracts::NamedKeys, CLType, CLValue, EntryPoint, EntryPointAccess, EntryPointPayment,
+    EntryPointType, EntryPoints, Key, PackageHash, Parameter, URef,
 };
 
 pub const METHOD_ADD: &str = "add";
@@ -90,7 +90,7 @@ pub extern "C" fn call() {
     };
     // this should overwrite the previous contract obj with the new contract obj at the same uref
     let (new_contract_hash, new_contract_version) = storage::add_contract_version(
-        contract_package,
+        contract_package.into(),
         entry_points,
         NamedKeys::new(),
         BTreeMap::new(),

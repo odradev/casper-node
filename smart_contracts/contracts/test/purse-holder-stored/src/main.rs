@@ -12,8 +12,8 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    CLType, CLValue, EntryPoint, EntryPointAccess, EntryPointPayment, EntryPointType, EntryPoints,
-    Key, Parameter,
+    AddressableEntityHash, CLType, CLValue, EntryPoint, EntryPointAccess, EntryPointPayment,
+    EntryPointType, EntryPoints, Key, Parameter,
 };
 
 pub const METHOD_ADD: &str = "add";
@@ -90,7 +90,7 @@ pub extern "C" fn call() {
     runtime::put_key(CONTRACT_VERSION, storage::new_uref(contract_version).into());
     runtime::put_key(
         PURSE_HOLDER_STORED_CONTRACT_NAME,
-        Key::contract_entity_key(contract_hash),
+        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
     );
     runtime::put_key(ENTRY_POINT_VERSION, storage::new_uref(VERSION).into());
 }

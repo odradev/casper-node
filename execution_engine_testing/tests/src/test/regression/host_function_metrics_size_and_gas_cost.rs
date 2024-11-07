@@ -112,7 +112,7 @@ fn host_function_metrics_has_acceptable_gas_cost() {
         error
     );
 
-    let gas_cost = builder.last_exec_gas_cost().value();
+    let gas_cost = builder.last_exec_gas_consumed().value();
     assert!(
         gas_cost <= U512::from(HOST_FUNCTION_METRICS_MAX_GAS_COST),
         "Performance regression: contract host-function-metrics used {} gas; it should use no more than {} gas.",

@@ -55,7 +55,7 @@ fn exec_and_assert_costs(
     expected_gas_cost: Gas,
 ) {
     builder.exec(exec_request).expect_success().commit();
-    assert_eq!(builder.last_exec_gas_cost(), expected_gas_cost);
+    assert_eq!(builder.last_exec_gas_consumed(), expected_gas_cost);
 }
 
 #[ignore]

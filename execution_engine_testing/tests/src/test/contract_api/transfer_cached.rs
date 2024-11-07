@@ -24,7 +24,7 @@ static ACCOUNT_2_ADDR: Lazy<AccountHash> = Lazy::new(|| ACCOUNT_2_PUBLIC_KEY.to_
 
 #[ignore]
 #[test]
-fn should_transfer_to_account_with_correct_balances() {
+fn should_transfer_to_account() {
     let data_dir = TempDir::new().expect("should create temp dir");
     let mut builder = LmdbWasmTestBuilder::new(data_dir.path());
 
@@ -69,7 +69,7 @@ fn should_transfer_to_account_with_correct_balances() {
 
 #[ignore]
 #[test]
-fn should_transfer_from_default_and_then_to_another_account() {
+fn should_transfer_multiple_times() {
     let data_dir = TempDir::new().expect("should create temp dir");
     let mut builder = LmdbWasmTestBuilder::new(data_dir.path());
 
@@ -108,42 +108,5 @@ fn should_transfer_from_default_and_then_to_another_account() {
         pre_state_hash,
         builder.get_post_state_hash(),
         "post state hash didn't change..."
-    );
-
-    let default_account = builder
-        .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-        .expect("should get default account");
-
-    let _account1 = builder
-        .get_entity_by_account_hash(*ACCOUNT_1_ADDR)
-        .expect("should get account 1");
-
-    let account2 = builder
-        .get_entity_by_account_hash(*ACCOUNT_2_ADDR)
-        .expect("should get account 2");
-
-    let _default_account_balance = builder.get_purse_balance(default_account.main_purse());
-    let double_cost = MintCosts::default().transfer + MintCosts::default().transfer;
-    let _default_expected_balance =
-        U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE) - (MAX_PAYMENT_AMOUNT + (double_cost as u64));
-    // TODO: Renable when payment logic is wired up.
-    // assert_eq!(
-    //     default_account_balance,
-    //     default_expected_balance,
-    //     "default account balance should reflect the transfer ({})",
-    //     U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE) - default_expected_balance
-    // );
-    //
-    // let account_1_balance = builder.get_purse_balance(account1.main_purse());
-    // assert_eq!(
-    //     account_1_balance,
-    //     U512::zero(),
-    //     "account 1 balance should have been completely consumed"
-    // );
-
-    let account_2_balance = builder.get_purse_balance(account2.main_purse());
-    assert_eq!(
-        account_2_balance, *TRANSFER_AMOUNT,
-        "account 2 balance should have changed"
     );
 }

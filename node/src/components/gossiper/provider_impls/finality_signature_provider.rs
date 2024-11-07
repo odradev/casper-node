@@ -43,7 +43,6 @@ impl ItemProvider<FinalitySignatureV2>
         effect_builder: EffectBuilder<REv>,
         item_id: Box<FinalitySignatureId>,
     ) -> Option<Box<FinalitySignatureV2>> {
-        // TODO: Make `get_finality_signature_from_storage` return a boxed copy instead.
         if let Some(FinalitySignature::V2(sig)) = effect_builder
             .get_finality_signature_from_storage(item_id)
             .await

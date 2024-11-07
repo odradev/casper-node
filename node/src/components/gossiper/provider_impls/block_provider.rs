@@ -38,7 +38,6 @@ impl ItemProvider<BlockV2> for Gossiper<{ BlockV2::ID_IS_COMPLETE_ITEM }, BlockV
         effect_builder: EffectBuilder<REv>,
         item_id: BlockHash,
     ) -> Option<Box<BlockV2>> {
-        // TODO: Make `get_block_from_storage` return a boxed block instead of boxing here.
         if let Some(block) = effect_builder.get_block_from_storage(item_id).await {
             block.try_into().ok().map(Box::new)
         } else {

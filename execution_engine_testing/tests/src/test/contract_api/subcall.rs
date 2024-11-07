@@ -11,7 +11,7 @@ const ARG_METHOD_NAME: &str = "method_name";
 
 #[ignore]
 #[test]
-fn should_charge_gas_for_subcall() {
+fn should_enforce_subcall_consumption() {
     const CONTRACT_NAME: &str = "measure_gas_subcall.wasm";
     const DO_NOTHING: &str = "do-nothing";
     const DO_SOMETHING: &str = "do-something";
@@ -48,36 +48,36 @@ fn should_charge_gas_for_subcall() {
 
     builder.exec(no_subcall_request).expect_success().commit();
 
-    let do_nothing_cost = builder.exec_cost(0);
+    let do_nothing_consumed = builder.exec_consumed(0);
 
-    let do_something_cost = builder.exec_cost(1);
+    let do_something_consumed = builder.exec_consumed(1);
 
-    let no_subcall_cost = builder.exec_cost(2);
+    let no_subcall_consumed = builder.exec_consumed(2);
 
     assert_ne!(
-        do_nothing_cost, do_something_cost,
-        "should have different costs"
+        do_nothing_consumed, do_something_consumed,
+        "should have different consumeds"
     );
 
     assert_ne!(
-        no_subcall_cost, do_something_cost,
-        "should have different costs"
+        no_subcall_consumed, do_something_consumed,
+        "should have different consumeds"
     );
 
     assert!(
-        do_nothing_cost < do_something_cost,
-        "should cost more to do something via subcall"
+        do_nothing_consumed < do_something_consumed,
+        "should consume more to do something via subcall"
     );
 
     assert!(
-        no_subcall_cost < do_nothing_cost,
-        "do nothing in a subcall should cost more than no subcall"
+        no_subcall_consumed < do_nothing_consumed,
+        "do nothing in a subcall should consume more than no subcall"
     );
 }
 
 #[ignore]
 #[test]
-fn should_add_all_gas_for_subcall() {
+fn should_add_all_gas_consumed_for_subcall() {
     const CONTRACT_NAME: &str = "add_gas_subcall.wasm";
     const ADD_GAS_FROM_SESSION: &str = "add-gas-from-session";
     const ADD_GAS_VIA_SUBCALL: &str = "add-gas-via-subcall";
@@ -147,23 +147,23 @@ fn should_add_all_gas_for_subcall() {
         .expect_success()
         .commit();
 
-    let add_zero_gas_from_session_cost = builder.exec_cost(0);
-    let add_some_gas_from_session_cost = builder.exec_cost(1);
-    let add_zero_gas_via_subcall_cost = builder.exec_cost(2);
-    let add_some_gas_via_subcall_cost = builder.exec_cost(3);
+    let add_zero_gas_from_session_consumed = builder.exec_consumed(0);
+    let add_some_gas_from_session_consumed = builder.exec_consumed(1);
+    let add_zero_gas_via_subcall_consumed = builder.exec_consumed(2);
+    let add_some_gas_via_subcall_consumed = builder.exec_consumed(3);
 
     let expected_gas = U512::from(StorageCosts::default().gas_per_byte()) * gas_to_add;
     assert!(
-        add_zero_gas_from_session_cost.value() < add_zero_gas_via_subcall_cost.value(),
-        "subcall expected to cost more gas due to storing contract"
+        add_zero_gas_from_session_consumed.value() < add_zero_gas_via_subcall_consumed.value(),
+        "subcall expected to consume more gas due to storing contract"
     );
-    assert!(add_some_gas_from_session_cost.value() > expected_gas);
-    assert!(add_some_gas_via_subcall_cost.value() > expected_gas);
+    assert!(add_some_gas_from_session_consumed.value() > expected_gas);
+    assert!(add_some_gas_via_subcall_consumed.value() > expected_gas);
 }
 
 #[ignore]
 #[test]
-fn expensive_subcall_should_cost_more() {
+fn expensive_subcall_should_consume_more() {
     const DO_NOTHING: &str = "do_nothing_stored.wasm";
     const EXPENSIVE_CALCULATION: &str = "expensive_calculation.wasm";
     const DO_NOTHING_PACKAGE_HASH_KEY_NAME: &str = "do_nothing_package_hash";
@@ -236,12 +236,12 @@ fn expensive_subcall_should_cost_more() {
         .expect_success()
         .commit();
 
-    let do_nothing_cost = builder.exec_cost(2);
+    let do_nothing_consumed = builder.exec_consumed(2);
 
-    let expensive_calculation_cost = builder.exec_cost(3);
+    let expensive_calculation_consumed = builder.exec_consumed(3);
 
     assert!(
-        do_nothing_cost < expensive_calculation_cost,
-        "calculation cost should be higher than doing nothing cost"
+        do_nothing_consumed < expensive_calculation_consumed,
+        "calculation consumed should be higher than doing nothing consumed"
     );
 }

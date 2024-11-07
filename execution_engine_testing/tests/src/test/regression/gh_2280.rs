@@ -76,7 +76,7 @@ fn gh_2280_transfer_should_always_cost_the_same_gas() {
         ExecuteRequestBuilder::standard(account_hash, session_file, faucet_args_1).build();
     builder.exec(fund_request_1).expect_success().commit();
 
-    let gas_cost_1 = builder.last_exec_gas_cost();
+    let gas_cost_1 = builder.last_exec_gas_consumed();
 
     // Next time pay exactly the amount that was reported which should be also the minimum you
     // should be able to pay next time.
@@ -102,7 +102,7 @@ fn gh_2280_transfer_should_always_cost_the_same_gas() {
     let fund_request_2 = ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
     builder.exec(fund_request_2).expect_success().commit();
 
-    let gas_cost_2 = builder.last_exec_gas_cost();
+    let gas_cost_2 = builder.last_exec_gas_consumed();
 
     assert_eq!(gas_cost_1, gas_cost_2);
 
@@ -162,7 +162,7 @@ fn gh_2280_transfer_should_always_cost_the_same_gas() {
 
     builder.exec(fund_request_3).expect_success().commit();
 
-    let gas_cost_3 = builder.last_exec_gas_cost();
+    let gas_cost_3 = builder.last_exec_gas_consumed();
 
     assert!(gas_cost_3 > gas_cost_1);
     assert!(gas_cost_3 > gas_cost_2);
@@ -184,7 +184,7 @@ fn gh_2280_create_purse_should_always_cost_the_same_gas() {
         ExecuteRequestBuilder::standard(account_hash, session_file, create_purse_args_1).build();
     builder.exec(fund_request_1).expect_success().commit();
 
-    let gas_cost_1 = builder.last_exec_gas_cost();
+    let gas_cost_1 = builder.last_exec_gas_consumed();
 
     // Next time pay exactly the amount that was reported which should be also the minimum you
     // should be able to pay next time.
@@ -209,7 +209,7 @@ fn gh_2280_create_purse_should_always_cost_the_same_gas() {
     let fund_request_2 = ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
     builder.exec(fund_request_2).expect_success().commit();
 
-    let gas_cost_2 = builder.last_exec_gas_cost();
+    let gas_cost_2 = builder.last_exec_gas_consumed();
 
     assert_eq!(gas_cost_1, gas_cost_2);
 
@@ -274,7 +274,7 @@ fn gh_2280_create_purse_should_always_cost_the_same_gas() {
 
     builder.exec(fund_request_3).expect_success().commit();
 
-    let gas_cost_3 = builder.last_exec_gas_cost();
+    let gas_cost_3 = builder.last_exec_gas_consumed();
 
     assert!(gas_cost_3 > gas_cost_1);
     assert!(gas_cost_3 > gas_cost_2);
@@ -303,7 +303,7 @@ fn gh_2280_transfer_purse_to_account_should_always_cost_the_same_gas() {
         ExecuteRequestBuilder::standard(account_hash, session_file, faucet_args_1).build();
     builder.exec(fund_request_1).expect_success().commit();
 
-    let gas_cost_1 = builder.last_exec_gas_cost();
+    let gas_cost_1 = builder.last_exec_gas_consumed();
 
     // Next time pay exactly the amount that was reported which should be also the minimum you
     // should be able to pay next time.
@@ -329,7 +329,7 @@ fn gh_2280_transfer_purse_to_account_should_always_cost_the_same_gas() {
     let fund_request_2 = ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
     builder.exec(fund_request_2).expect_success().commit();
 
-    let gas_cost_2 = builder.last_exec_gas_cost();
+    let gas_cost_2 = builder.last_exec_gas_consumed();
 
     assert_eq!(gas_cost_1, gas_cost_2);
 
@@ -393,7 +393,7 @@ fn gh_2280_transfer_purse_to_account_should_always_cost_the_same_gas() {
 
     builder.exec(fund_request_3).expect_success().commit();
 
-    let gas_cost_3 = builder.last_exec_gas_cost();
+    let gas_cost_3 = builder.last_exec_gas_consumed();
 
     assert!(gas_cost_3 > gas_cost_1);
     assert!(gas_cost_3 > gas_cost_2);
@@ -420,7 +420,7 @@ fn gh_2280_stored_transfer_to_account_should_always_cost_the_same_gas() {
     .build();
     builder.exec(fund_request_1).expect_success().commit();
 
-    let gas_cost_1 = builder.last_exec_gas_cost();
+    let gas_cost_1 = builder.last_exec_gas_consumed();
 
     // Next time pay exactly the amount that was reported which should be also the minimum you
     // should be able to pay next time.
@@ -445,7 +445,7 @@ fn gh_2280_stored_transfer_to_account_should_always_cost_the_same_gas() {
     let fund_request_2 = ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
     builder.exec(fund_request_2).expect_success().commit();
 
-    let gas_cost_2 = builder.last_exec_gas_cost();
+    let gas_cost_2 = builder.last_exec_gas_consumed();
 
     assert_eq!(gas_cost_1, gas_cost_2);
 
@@ -508,7 +508,7 @@ fn gh_2280_stored_transfer_to_account_should_always_cost_the_same_gas() {
 
     builder.exec(fund_request_3).expect_success().commit();
 
-    let gas_cost_3 = builder.last_exec_gas_cost();
+    let gas_cost_3 = builder.last_exec_gas_consumed();
 
     assert!(gas_cost_3 > gas_cost_1, "{} <= {}", gas_cost_3, gas_cost_1);
     assert!(gas_cost_3 > gas_cost_2);
@@ -531,7 +531,7 @@ fn gh_2280_stored_faucet_call_should_cost_the_same() {
         ExecuteRequestBuilder::standard(account_hash, session_file, faucet_args_1).build();
     builder.exec(fund_request_1).expect_success().commit();
 
-    let gas_cost_1 = builder.last_exec_gas_cost();
+    let gas_cost_1 = builder.last_exec_gas_consumed();
 
     // Next time pay exactly the amount that was reported which should be also the minimum you
     // should be able to pay next time.
@@ -557,7 +557,7 @@ fn gh_2280_stored_faucet_call_should_cost_the_same() {
     let fund_request_2 = ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
     builder.exec(fund_request_2).expect_success().commit();
 
-    let gas_cost_2 = builder.last_exec_gas_cost();
+    let gas_cost_2 = builder.last_exec_gas_consumed();
 
     assert_eq!(gas_cost_1, gas_cost_2);
 
@@ -621,7 +621,7 @@ fn gh_2280_stored_faucet_call_should_cost_the_same() {
 
     builder.exec(fund_request_3).expect_success().commit();
 
-    let gas_cost_3 = builder.last_exec_gas_cost();
+    let gas_cost_3 = builder.last_exec_gas_consumed();
 
     assert!(gas_cost_3 > gas_cost_1, "{} <= {}", gas_cost_3, gas_cost_1);
     assert!(gas_cost_3 > gas_cost_2);

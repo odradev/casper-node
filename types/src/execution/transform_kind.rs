@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 
 use super::TransformError;
 use crate::{
-    addressable_entity::NamedKeys,
     bytesrepr::{self, FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
+    contracts::NamedKeys,
     CLType, CLTyped, CLValue, Key, StoredValue, StoredValueTypeMismatch, U128, U256, U512,
 };
 
@@ -190,7 +190,7 @@ impl TransformKindV2 {
                     let found = "Message".to_string();
                     Err(StoredValueTypeMismatch::new(expected, found).into())
                 }
-                StoredValue::Reservation(_) => {
+                StoredValue::Prepaid(_) => {
                     let expected = "Contract or Account".to_string();
                     let found = "Reservation".to_string();
                     Err(StoredValueTypeMismatch::new(expected, found).into())

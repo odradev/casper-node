@@ -13,11 +13,9 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    addressable_entity::{EntityKindTag, NamedKeys},
-    api_error,
-    bytesrepr::ToBytes,
-    AccessRights, ApiError, CLType, CLValue, EntryPoint, EntryPointAccess, EntryPointPayment,
-    EntryPointType, EntryPoints, Key, URef,
+    addressable_entity::EntityKindTag, api_error, bytesrepr::ToBytes, contracts::NamedKeys,
+    AccessRights, AddressableEntityHash, ApiError, CLType, CLValue, EntryPoint, EntryPointAccess,
+    EntryPointPayment, EntryPointType, EntryPoints, Key, URef,
 };
 
 pub const DICTIONARY_NAME: &str = "local";
@@ -246,7 +244,10 @@ pub fn delegate() {
         None,
     );
 
-    let entity_key = Key::addressable_entity_key(EntityKindTag::SmartContract, entity_hash);
+    let entity_key = Key::addressable_entity_key(
+        EntityKindTag::SmartContract,
+        AddressableEntityHash::new(entity_hash.value()),
+    );
 
     runtime::put_key(CONTRACT_HASH_NAME, entity_key);
 }

@@ -15,8 +15,9 @@ use crate::{
 };
 use casper_types::{
     addressable_entity::{
-        ActionThresholds, EntityKindTag, MessageTopics, NamedKeyAddr, NamedKeyValue, NamedKeys,
+        ActionThresholds, EntityKindTag, MessageTopics, NamedKeyAddr, NamedKeyValue,
     },
+    contracts::NamedKeys,
     execution::Effects,
     system::{
         auction,

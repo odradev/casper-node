@@ -31,11 +31,6 @@ pub(crate) enum Event<T: FetchItem> {
     /// The result of putting the item to storage.
     PutToStorage { item: Box<T>, peer: NodeId },
     /// A different component rejected an item.
-    // TODO: If having this event is not desirable, the `DeployAcceptorAnnouncement` needs to be
-    //       split in two instead.
-    //
-    // TODO: Remove `allow` as part of https://github.com/casper-network/roadmap/issues/189
-    #[allow(dead_code)]
     GotInvalidRemotely { id: T::Id, source: Source },
     /// An item was not available on the remote peer.
     AbsentRemotely { id: T::Id, peer: NodeId },
