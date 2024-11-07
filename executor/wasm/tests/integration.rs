@@ -20,12 +20,10 @@ use casper_storage::{
     AddressGenerator,
 };
 use casper_types::{
-    account::AccountHash, bytesrepr::ToBytes, BlockHash, BlockTime, ChainspecRegistry, Digest,
-    EntityAddr, GenesisAccount, GenesisConfigBuilder, Key, Motes, Phase, ProtocolVersion,
-    PublicKey, RuntimeArgs, SecretKey, StoredValue, Timestamp, TransactionHash, TransactionV1Hash,
-    U512,
+    account::AccountHash, bytesrepr::ToBytes, BlockHash, ChainspecRegistry, Digest, EntityAddr,
+    GenesisAccount, GenesisConfigBuilder, Key, Motes, Phase, ProtocolVersion, PublicKey,
+    RuntimeArgs, SecretKey, StoredValue, Timestamp, TransactionHash, TransactionV1Hash, U512,
 };
-use digest::block_buffer::Block;
 use fs_extra::dir;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;

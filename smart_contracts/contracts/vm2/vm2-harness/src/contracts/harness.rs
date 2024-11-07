@@ -68,7 +68,7 @@ pub enum CustomError {
     Named { name: String, age: u64 },
     #[error("transfer error {0}")]
     Transfer(String),
-    #[error("custom")]
+    #[error("deposit error {0}")]
     Deposit(CallError),
 }
 
@@ -369,13 +369,23 @@ impl Harness {
                     .with_transferred_value(amount)
                     .try_call(|harness| harness.deposit());
 
-                // dbg!(&result);
-                if let Err(call_error) = result.unwrap().result {
-                    log!("Unable to perform a transfer: {call_error:?}");
-                    return Err(CustomError::Deposit(call_error));
+                match result {
+                    Ok(call_result) => {
+                        if let Err(call_error) = call_result.result {
+                            log!("CallResult: Unable to perform a transfer: {call_error:?}");
+                            return Err(CustomError::Deposit(call_error));
+                        }
+                    }
+                    Err(call_error) => {
+                        log!("try_call: Unable to perform a transfer: {call_error:?}");
+                        return Err(CustomError::Deposit(call_error));
+                    }
                 }
-                // log!("Result of invoking deposit interface on contract {result:?}");
-                // result?;
+
+                // if let Err(call_error) = result.unwrap().result {
+                //     log!("Unable to perform a transfer: {call_error:?}");
+                //     return Err(CustomError::Deposit(call_error));
+                // }
             }
         }
 

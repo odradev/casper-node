@@ -400,7 +400,7 @@ pub enum Entity {
 
 impl Entity {
     /// Get the tag of the entity.
-    pub(crate) fn tag(&self) -> u32 {
+    pub fn tag(&self) -> u32 {
         match self {
             Entity::Account(_) => 0,
             Entity::Contract(_) => 1,

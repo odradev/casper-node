@@ -449,7 +449,7 @@ fn perform_test(flipper_address: Address) {
                     withdraw_result,
                     Err(
                         crate::contracts::token_owner::TokenOwnerError::WithdrawError(
-                            "transfer error callee reverted".to_string()
+                            "deposit error callee reverted".to_string()
                         )
                     )
                 );
@@ -487,7 +487,7 @@ fn perform_test(flipper_address: Address) {
                     withdraw_result,
                     Err(
                         crate::contracts::token_owner::TokenOwnerError::WithdrawError(
-                            "transfer error callee trapped".to_string()
+                            "deposit error callee trapped".to_string()
                         )
                     )
                 );
@@ -529,7 +529,7 @@ fn perform_test(flipper_address: Address) {
                     withdraw_result,
                     Err(
                         crate::contracts::token_owner::TokenOwnerError::WithdrawError(
-                            "transfer error callee reverted".to_string()
+                            "deposit error callee reverted".to_string()
                         )
                     )
                 );
