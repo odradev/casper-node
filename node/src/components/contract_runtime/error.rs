@@ -179,4 +179,6 @@ pub enum BlockExecutionError {
     /// Invalid transaction arguments.
     #[error("Invalid transaction arguments")]
     InvalidTransactionArgs,
+    #[error("Data Access Layer conflicts with chainspec setting: {0}")]
+    InvalidAESetting(bool),
 }
