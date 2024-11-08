@@ -3,8 +3,8 @@
 
 use casper_contract::contract_api::{runtime, storage};
 use casper_types::{
-    addressable_entity::Parameters, CLType, EntryPoint, EntryPointAccess, EntryPointPayment,
-    EntryPointType, EntryPoints, Key,
+    addressable_entity::Parameters, AddressableEntityHash, CLType, EntryPoint, EntryPointAccess,
+    EntryPointPayment, EntryPointType, EntryPoints, Key,
 };
 
 const CONTRACT_HASH_NAME: &str = "contract";
@@ -37,5 +37,8 @@ pub extern "C" fn call() {
     let (contract_hash, _contract_version) =
         storage::new_contract(entry_points, None, None, None, None);
 
-    runtime::put_key(CONTRACT_HASH_NAME, Key::contract_entity_key(contract_hash));
+    runtime::put_key(
+        CONTRACT_HASH_NAME,
+        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
+    );
 }

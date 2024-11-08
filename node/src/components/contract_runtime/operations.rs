@@ -81,6 +81,12 @@ pub fn execute_finalized_block(
     let native_runtime_config = NativeRuntimeConfig::from_chainspec(chainspec);
     let addressable_entity_enabled = chainspec.core_config.enable_addressable_entity();
 
+    if addressable_entity_enabled != data_access_layer.enable_addressable_entity {
+        return Err(BlockExecutionError::InvalidAESetting(
+            data_access_layer.enable_addressable_entity,
+        ));
+    }
+
     // scrape variables from execution pre state
     let parent_hash = execution_pre_state.parent_hash();
     let parent_seed = execution_pre_state.parent_seed();
@@ -653,6 +659,7 @@ pub fn execute_finalized_block(
                 scratch_state.handle_fee(handle_fee_request)
             }
         };
+
         state_root_hash =
             scratch_state.commit_effects(state_root_hash, handle_fee_result.effects().clone())?;
 
@@ -1055,8 +1062,6 @@ pub fn execute_finalized_block(
         last_switch_block_hash,
     ));
 
-    // TODO: this should just use the data_access_layer.query mechanism to avoid
-    // leaking data provisioning abstraction
     let proof_of_checksum_registry = match data_access_layer.tracking_copy(state_root_hash)? {
         Some(tc) => match tc.reader().read_with_proof(&Key::ChecksumRegistry)? {
             Some(proof) => proof,

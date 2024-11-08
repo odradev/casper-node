@@ -16,9 +16,10 @@ use casper_contract::{
 };
 
 use casper_types::{
-    addressable_entity::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, NamedKeys},
+    addressable_entity::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints},
     api_error::ApiError,
     contract_messages::MessageTopicOperation,
+    contracts::NamedKeys,
     CLType, CLTyped, EntryPointPayment, Parameter, RuntimeArgs,
 };
 

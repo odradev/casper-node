@@ -599,8 +599,6 @@ where
                     );
                     None
                 }
-                // TODO: Check what happens on close on our end, i.e. can we distinguish in logs
-                // between a closed connection on our end vs one that failed?
                 Entry::Occupied(occupied) => match occupied.get().state {
                     OutgoingState::Blocked { .. } => {
                         debug!("address already blocked");

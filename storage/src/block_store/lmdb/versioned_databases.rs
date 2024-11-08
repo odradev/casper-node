@@ -175,6 +175,9 @@ where
         txn: &Tx,
         key: &[u8],
     ) -> Result<Option<DbRawBytesSpec>, LmdbExtError> {
+        if key.is_empty() {
+            return Ok(None);
+        }
         let value = txn.get(self.current, &key);
         match value {
             Ok(raw_bytes) => Ok(Some(DbRawBytesSpec::new_current(raw_bytes))),
@@ -583,5 +586,14 @@ mod tests {
             .dbs
             .for_each_value_in_legacy(&mut txn, &mut visitor)
             .unwrap();
+    }
+
+    #[test]
+    fn should_get_on_empty_key() {
+        let fixture = Fixture::new();
+        let txn = fixture.env.begin_ro_txn().unwrap();
+        let key = vec![];
+        let res = fixture.dbs.get_raw(&txn, &key);
+        assert!(matches!(res, Ok(None)));
     }
 }

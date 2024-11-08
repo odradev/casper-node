@@ -663,11 +663,11 @@ fn faucet_costs() {
     // This test will fail if execution costs vary.  The expected costs should not be updated
     // without understanding why the cost has changed.  If the costs do change, it should be
     // reflected in the "Costs by Entry Point" section of the faucet crate's README.md.
-    const EXPECTED_FAUCET_INSTALL_COST: u64 = 141_350_435_590;
+    const EXPECTED_FAUCET_INSTALL_COST: u64 = 141_969_710_490;
 
-    const EXPECTED_FAUCET_SET_VARIABLES_COST: u64 = 134_025_670;
-    const EXPECTED_FAUCET_CALL_BY_INSTALLER_COST: u64 = 2_687_132_903;
-    const EXPECTED_FAUCET_CALL_BY_USER_COST: u64 = 2_615_067_736;
+    const EXPECTED_FAUCET_SET_VARIABLES_COST: u64 = 143_865_670;
+    const EXPECTED_FAUCET_CALL_BY_INSTALLER_COST: u64 = 2_705_894_903;
+    const EXPECTED_FAUCET_CALL_BY_USER_COST: u64 = 2_644_365_736;
 
     let installer_account = AccountHash::new([1u8; 32]);
     let user_account: AccountHash = AccountHash::new([2u8; 32]);
@@ -702,7 +702,7 @@ fn faucet_costs() {
         .expect_success()
         .commit();
 
-    let faucet_install_cost = builder.last_exec_gas_cost();
+    let faucet_install_cost = builder.last_exec_gas_consumed();
 
     let assigned_time_interval = 10_000u64;
     let assigned_distributions_per_interval = 2u64;
@@ -730,7 +730,7 @@ fn faucet_costs() {
         .expect_success()
         .commit();
 
-    let faucet_set_variables_cost = builder.last_exec_gas_cost();
+    let faucet_set_variables_cost = builder.last_exec_gas_consumed();
 
     let user_fund_amount = U512::from(10_000_000_000u64);
 
@@ -753,7 +753,7 @@ fn faucet_costs() {
         .expect_success()
         .commit();
 
-    let faucet_call_by_installer_cost = builder.last_exec_gas_cost();
+    let faucet_call_by_installer_cost = builder.last_exec_gas_consumed();
 
     let faucet_contract_hash = get_faucet_entity_hash(&builder, installer_account);
 
@@ -776,7 +776,7 @@ fn faucet_costs() {
         .expect_success()
         .commit();
 
-    let faucet_call_by_user_cost = builder.last_exec_gas_cost();
+    let faucet_call_by_user_cost = builder.last_exec_gas_consumed();
 
     let mut costs_as_expected = true;
     if faucet_install_cost.value().as_u64() != EXPECTED_FAUCET_INSTALL_COST {

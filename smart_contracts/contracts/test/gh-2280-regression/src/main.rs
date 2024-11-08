@@ -12,10 +12,8 @@ use casper_contract::{
 
 use casper_types::{
     account::AccountHash,
-    addressable_entity::{
-        EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, NamedKeys, Parameter,
-    },
-    CLType, CLTyped, EntryPointPayment, Key, U512,
+    addressable_entity::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Parameter},
+    AddressableEntityHash, CLType, CLTyped, EntryPointPayment, Key, NamedKeys, U512,
 };
 
 const FAUCET_NAME: &str = "faucet";
@@ -89,5 +87,8 @@ pub extern "C" fn call() {
         None,
     );
     runtime::put_key(CONTRACT_VERSION, storage::new_uref(contract_version).into());
-    runtime::put_key(HASH_KEY_NAME, Key::contract_entity_key(contract_hash));
+    runtime::put_key(
+        HASH_KEY_NAME,
+        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
+    );
 }

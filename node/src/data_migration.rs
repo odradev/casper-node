@@ -2,7 +2,6 @@ use std::{env, fs, io, path::PathBuf, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use toml::de::Error as TomlDecodeError;
 use tracing::info;
 
 use casper_types::{
@@ -23,8 +22,6 @@ const CONFIG_ROOT_DIR: &str = "/etc/casper";
 /// Environment variable to override the config root dir.
 const CONFIG_ROOT_DIR_OVERRIDE: &str = "CASPER_CONFIG_DIR";
 
-// TODO - remove once used.
-#[allow(unused)]
 /// Error returned as a result of migrating data.
 #[derive(Debug, Error)]
 pub(crate) enum Error {
@@ -57,24 +54,6 @@ pub(crate) enum Error {
     /// Invalid signature of state hash and version.
     #[error("invalid signature of state hash info")]
     InvalidSignatureOfStateHashInfo,
-
-    /// Error reading config file.
-    #[error("error reading config from {path}: {error}")]
-    ReadConfig {
-        /// The file path.
-        path: String,
-        /// The IO error.
-        error: io::Error,
-    },
-
-    /// Error decoding config file.
-    #[error("error reading config from {path}: {error}")]
-    DecodeConfig {
-        /// The file path.
-        path: String,
-        /// The TOML error.
-        error: TomlDecodeError,
-    },
 
     /// Error loading the secret key.
     #[error("error loading secret key: {0}")]

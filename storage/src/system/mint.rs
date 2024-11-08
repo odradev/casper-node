@@ -218,15 +218,8 @@ pub trait Mint: RuntimeProvider + StorageProvider + SystemProvider {
             }
         }
 
-        if !source.is_readable() {
-            // TODO: I don't think we should check is_readable on the source or the target.
-            // is_writeable(), which is checked for below is what actually matters.
-            // ie it doesn't matter if the initiator can READ the balance, what matters is
-            // if they can transfer the token, which is controlled by having WRITE access.
-            return Err(Error::InvalidAccessRights);
-        }
         if !source.is_writeable() || !target.is_addable() {
-            // TODO: Similarly, I don't think we should enforce is addable on the target
+            // TODO: I don't think we should enforce is addable on the target
             // Unlike other uses of URefs (such as a counter), in this context the value represents
             // a deposit of token. Generally, deposit of a desirable resource is permissive.
             return Err(Error::InvalidAccessRights);
@@ -267,7 +260,7 @@ pub trait Mint: RuntimeProvider + StorageProvider + SystemProvider {
     fn read_base_round_reward(&mut self) -> Result<U512, Error> {
         let total_supply_uref = match self.get_key(TOTAL_SUPPLY_KEY) {
             Some(Key::URef(uref)) => uref,
-            Some(_) => return Err(Error::MissingKey), // TODO
+            Some(_) => return Err(Error::MissingKey),
             None => return Err(Error::MissingKey),
         };
         let total_supply: U512 = self
@@ -276,7 +269,7 @@ pub trait Mint: RuntimeProvider + StorageProvider + SystemProvider {
 
         let round_seigniorage_rate_uref = match self.get_key(ROUND_SEIGNIORAGE_RATE_KEY) {
             Some(Key::URef(uref)) => uref,
-            Some(_) => return Err(Error::MissingKey), // TODO
+            Some(_) => return Err(Error::MissingKey),
             None => return Err(Error::MissingKey),
         };
         let round_seigniorage_rate: Ratio<U512> = self

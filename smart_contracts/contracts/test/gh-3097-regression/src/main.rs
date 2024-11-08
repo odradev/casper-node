@@ -10,8 +10,8 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    addressable_entity::{NamedKeys, Parameters},
-    CLType, EntryPoint, EntryPointAccess, EntryPointPayment, EntryPointType, EntryPoints, Key,
+    addressable_entity::Parameters, contracts::NamedKeys, CLType, EntryPoint, EntryPointAccess,
+    EntryPointPayment, EntryPointType, EntryPoints, Key,
 };
 
 const CONTRACT_PACKAGE_HASH_KEY: &str = "contract_package_hash";

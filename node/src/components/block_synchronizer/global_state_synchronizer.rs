@@ -226,7 +226,6 @@ pub(super) struct GlobalStateSynchronizer {
     max_parallel_trie_fetches: usize,
     trie_accumulator: TrieAccumulator,
     request_state: Option<RequestState>,
-    // TODO: write some smarter cache that purges stale entries and limits memory usage
     tries_awaiting_children: BTreeMap<TrieHash, TrieAwaitingChildren>,
     fetch_queue: FetchQueue,
     in_flight: HashSet<TrieHash>,

@@ -630,6 +630,11 @@ where
                 Some(ControlAnnouncement::ShutdownForUpgrade) => {
                     (Effects::new(), Some(ExitCode::Success), QueueKind::Control)
                 }
+                Some(ControlAnnouncement::ShutdownAfterCatchingUp) => (
+                    Effects::new(),
+                    Some(ExitCode::CleanExitDontRestart),
+                    QueueKind::Control,
+                ),
                 Some(ControlAnnouncement::FatalError { file, line, msg }) => {
                     error!(%file, %line, %msg, "fatal error via control announcement");
                     (Effects::new(), Some(ExitCode::Abort), QueueKind::Control)
@@ -960,7 +965,7 @@ where
     Ev: Send + 'static,
     REv: Send + 'static,
 {
-    // TODO: The double-boxing here is very unfortunate =(.
+    // The double-boxing here is very unfortunate =(.
     (async move {
         let events = effect.await;
         events.into_iter().map(wrap).collect()

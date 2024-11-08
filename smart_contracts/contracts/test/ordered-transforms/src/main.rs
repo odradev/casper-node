@@ -11,7 +11,7 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    addressable_entity::NamedKeys, CLType, CLTyped, EntryPoint, EntryPointAccess,
+    contracts::NamedKeys, AddressableEntityHash, CLType, CLTyped, EntryPoint, EntryPointAccess,
     EntryPointPayment, EntryPointType, EntryPoints, Key, Parameter, URef,
 };
 
@@ -41,7 +41,7 @@ pub extern "C" fn call() {
         storage::new_locked_contract(entry_points, Some(named_keys), None, None, None);
     runtime::put_key(
         "ordered-transforms-contract-hash",
-        Key::contract_entity_key(contract_hash),
+        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
     );
 }
 

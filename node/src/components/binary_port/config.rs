@@ -6,9 +6,9 @@ const DEFAULT_ADDRESS: &str = "0.0.0.0:0";
 /// Default maximum message size.
 const DEFAULT_MAX_MESSAGE_SIZE: u32 = 4 * 1024 * 1024;
 /// Default maximum number of connections.
-const DEFAULT_MAX_CONNECTIONS: usize = 16;
+const DEFAULT_MAX_CONNECTIONS: usize = 5;
 /// Default maximum number of requests per second.
-const DEFAULT_MAX_QPS: usize = 100;
+const DEFAULT_QPS_LIMIT: usize = 110;
 
 /// Binary port server configuration.
 #[derive(Clone, DataSize, Debug, Deserialize, Serialize)]
@@ -46,7 +46,7 @@ impl Config {
             allow_request_speculative_exec: false,
             max_message_size_bytes: DEFAULT_MAX_MESSAGE_SIZE,
             max_connections: DEFAULT_MAX_CONNECTIONS,
-            qps_limit: DEFAULT_MAX_QPS,
+            qps_limit: DEFAULT_QPS_LIMIT,
         }
     }
 }
