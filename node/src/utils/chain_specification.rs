@@ -256,6 +256,8 @@ mod tests {
             emit_message: HostFunction::new(100, [0, 1, 2, 3]),
             cost_increase_per_message: 50,
             get_block_info: HostFunction::new(330, [0, 0]),
+            recover_secp256k1: HostFunction::new(331, [0, 1, 2, 3, 4, 5]),
+            verify_signature: HostFunction::new(332, [0, 1, 2, 3, 4, 5]),
         });
     static EXPECTED_GENESIS_WASM_COSTS: Lazy<WasmConfig> = Lazy::new(|| {
         let wasm_v1_config = WasmV1Config::new(
