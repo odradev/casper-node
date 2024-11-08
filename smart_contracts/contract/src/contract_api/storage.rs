@@ -10,13 +10,13 @@ use alloc::{
 use core::{convert::From, mem::MaybeUninit};
 
 use casper_types::{
-    addressable_entity::{EntryPoints, NamedKeys},
+    addressable_entity::EntryPoints,
     api_error,
     bytesrepr::{self, FromBytes, ToBytes},
     contract_messages::MessageTopicOperation,
-    contracts::ContractVersion,
-    AccessRights, AddressableEntityHash, ApiError, CLTyped, CLValue, EntityVersion, HashAddr, Key,
-    PackageHash, URef, DICTIONARY_ITEM_KEY_MAX_LENGTH, UREF_SERIALIZED_LENGTH,
+    contracts::{ContractHash, ContractPackageHash, ContractVersion, NamedKeys},
+    AccessRights, ApiError, CLTyped, CLValue, EntityVersion, HashAddr, Key, URef,
+    DICTIONARY_ITEM_KEY_MAX_LENGTH, UREF_SERIALIZED_LENGTH,
 };
 
 use crate::{
@@ -114,7 +114,7 @@ pub fn new_contract(
     hash_name: Option<String>,
     uref_name: Option<String>,
     message_topics: Option<BTreeMap<String, MessageTopicOperation>>,
-) -> (AddressableEntityHash, EntityVersion) {
+) -> (ContractHash, EntityVersion) {
     create_contract(
         entry_points,
         named_keys,
@@ -139,7 +139,7 @@ pub fn new_locked_contract(
     hash_name: Option<String>,
     uref_name: Option<String>,
     message_topics: Option<BTreeMap<String, MessageTopicOperation>>,
-) -> (AddressableEntityHash, EntityVersion) {
+) -> (ContractHash, EntityVersion) {
     create_contract(
         entry_points,
         named_keys,
@@ -157,7 +157,7 @@ fn create_contract(
     uref_name: Option<String>,
     message_topics: Option<BTreeMap<String, MessageTopicOperation>>,
     is_locked: bool,
-) -> (AddressableEntityHash, EntityVersion) {
+) -> (ContractHash, EntityVersion) {
     let (contract_package_hash, access_uref) = create_contract_package(is_locked);
 
     if let Some(hash_name) = hash_name {
@@ -183,12 +183,12 @@ fn create_contract(
 /// Create a new (versioned) contract stored under a Key::Hash. Initially there
 /// are no versions; a version must be added via `add_contract_version` before
 /// the contract can be executed.
-pub fn create_contract_package_at_hash() -> (PackageHash, URef) {
+pub fn create_contract_package_at_hash() -> (ContractPackageHash, URef) {
     create_contract_package(false)
 }
 
-fn create_contract_package(is_locked: bool) -> (PackageHash, URef) {
-    let mut hash_addr: HashAddr = PackageHash::default().value();
+fn create_contract_package(is_locked: bool) -> (ContractPackageHash, URef) {
+    let mut hash_addr: HashAddr = ContractPackageHash::default().value();
     let mut access_addr = [0u8; 32];
     unsafe {
         ext_ffi::casper_create_contract_package_at_hash(
@@ -197,7 +197,7 @@ fn create_contract_package(is_locked: bool) -> (PackageHash, URef) {
             is_locked,
         );
     }
-    let contract_package_hash: PackageHash = hash_addr.into();
+    let contract_package_hash: ContractPackageHash = hash_addr.into();
     let access_uref = URef::new(access_addr, AccessRights::READ_ADD_WRITE);
 
     (contract_package_hash, access_uref)
@@ -211,7 +211,7 @@ fn create_contract_package(is_locked: bool) -> (PackageHash, URef) {
 /// function returns the list of new URefs created for the group (the list will
 /// contain `num_new_urefs` elements).
 pub fn create_contract_user_group(
-    contract_package_hash: PackageHash,
+    contract_package_hash: ContractPackageHash,
     group_label: &str,
     num_new_urefs: u8, // number of new urefs to populate the group with
     existing_urefs: BTreeSet<URef>, // also include these existing urefs in the group
@@ -245,7 +245,7 @@ pub fn create_contract_user_group(
 
 /// Extends specified group with a new `URef`.
 pub fn provision_contract_user_group_uref(
-    package_hash: PackageHash,
+    package_hash: ContractPackageHash,
     label: &str,
 ) -> Result<URef, ApiError> {
     let (contract_package_hash_ptr, contract_package_hash_size, _bytes1) =
@@ -271,7 +271,7 @@ pub fn provision_contract_user_group_uref(
 
 /// Removes specified urefs from a named group.
 pub fn remove_contract_user_group_urefs(
-    package_hash: PackageHash,
+    package_hash: ContractPackageHash,
     label: &str,
     urefs: BTreeSet<URef>,
 ) -> Result<(), ApiError> {
@@ -293,7 +293,10 @@ pub fn remove_contract_user_group_urefs(
 }
 
 /// Remove a named group from given contract.
-pub fn remove_contract_user_group(package_hash: PackageHash, label: &str) -> Result<(), ApiError> {
+pub fn remove_contract_user_group(
+    package_hash: ContractPackageHash,
+    label: &str,
+) -> Result<(), ApiError> {
     let (contract_package_hash_ptr, contract_package_hash_size, _bytes1) =
         contract_api::to_ptr(package_hash);
     let (label_ptr, label_size, _bytes3) = contract_api::to_ptr(label);
@@ -310,11 +313,11 @@ pub fn remove_contract_user_group(package_hash: PackageHash, label: &str) -> Res
 
 /// Add version to existing Package.
 pub fn add_contract_version(
-    package_hash: PackageHash,
+    package_hash: ContractPackageHash,
     entry_points: EntryPoints,
     named_keys: NamedKeys,
     message_topics: BTreeMap<String, MessageTopicOperation>,
-) -> (AddressableEntityHash, EntityVersion) {
+) -> (ContractHash, EntityVersion) {
     // Retain the underscore as Wasm transpiliation requires it.
     let (package_hash_ptr, package_hash_size, _package_hash_bytes) =
         contract_api::to_ptr(package_hash);
@@ -350,7 +353,7 @@ pub fn add_contract_version(
         Err(e) => revert(e),
     }
     // output_ptr.truncate(32usize);
-    let entity_hash: AddressableEntityHash = match bytesrepr::deserialize(output_ptr) {
+    let entity_hash: ContractHash = match bytesrepr::deserialize(output_ptr) {
         Ok(hash) => hash,
         Err(err) => panic!("{}", format!("{:?}", err)),
     };
@@ -372,8 +375,8 @@ pub fn add_contract_version(
 ///
 /// Returns a `Result` indicating success or an `ApiError` if the operation fails.
 pub fn disable_contract_version(
-    contract_package_hash: PackageHash,
-    contract_hash: AddressableEntityHash,
+    contract_package_hash: ContractPackageHash,
+    contract_hash: ContractHash,
 ) -> Result<(), ApiError> {
     let (contract_package_hash_ptr, contract_package_hash_size, _bytes1) =
         contract_api::to_ptr(contract_package_hash);
@@ -403,8 +406,8 @@ pub fn disable_contract_version(
 ///
 /// Returns a `Result` indicating success or an `ApiError` if the operation fails.
 pub fn enable_contract_version(
-    contract_package_hash: PackageHash,
-    contract_hash: AddressableEntityHash,
+    contract_package_hash: ContractPackageHash,
+    contract_hash: ContractHash,
 ) -> Result<(), ApiError> {
     let (contract_package_hash_ptr, contract_package_hash_size, _bytes1) =
         contract_api::to_ptr(contract_package_hash);

@@ -7,9 +7,10 @@ use alloc::string::ToString;
 
 use casper_contract::contract_api::{runtime, storage};
 use casper_types::{
-    addressable_entity::{NamedKeys, Parameters},
-    AddressableEntityHash, CLType, EntityVersion, EntryPoint, EntryPointAccess, EntryPointPayment,
-    EntryPointType, EntryPoints, Key, RuntimeArgs,
+    addressable_entity::Parameters,
+    contracts::{ContractHash, ContractVersion},
+    AddressableEntityHash, CLType, EntryPoint, EntryPointAccess, EntryPointPayment, EntryPointType,
+    EntryPoints, Key, NamedKeys, RuntimeArgs,
 };
 
 const ENTRY_POINT_NAME: &str = "contract_ext";
@@ -52,7 +53,7 @@ pub extern "C" fn contract_ext() {
     }
 }
 
-fn store(named_keys: NamedKeys) -> (AddressableEntityHash, EntityVersion) {
+fn store(named_keys: NamedKeys) -> (ContractHash, ContractVersion) {
     // extern "C" fn call(named_keys: NamedKeys) {
     let entry_points = {
         let mut entry_points = EntryPoints::new();
@@ -73,29 +74,32 @@ fn store(named_keys: NamedKeys) -> (AddressableEntityHash, EntityVersion) {
     storage::new_contract(entry_points, Some(named_keys), None, None, None)
 }
 
-fn install() -> AddressableEntityHash {
+fn install() -> ContractHash {
     let (contract_hash, _contract_version) = store(NamedKeys::new());
 
     let mut keys = NamedKeys::new();
     keys.insert(
         CONTRACT_KEY.to_string(),
-        Key::contract_entity_key(contract_hash),
+        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
     );
     let (contract_hash, _contract_version) = store(keys);
 
     let mut keys_2 = NamedKeys::new();
     keys_2.insert(
         CONTRACT_KEY.to_string(),
-        Key::contract_entity_key(contract_hash),
+        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
     );
     let (contract_hash, _contract_version) = store(keys_2);
 
-    runtime::put_key(CONTRACT_KEY, Key::contract_entity_key(contract_hash));
+    runtime::put_key(
+        CONTRACT_KEY,
+        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
+    );
 
     contract_hash
 }
 
-fn dispatch(contract_hash: AddressableEntityHash) {
+fn dispatch(contract_hash: ContractHash) {
     runtime::call_contract(contract_hash, "contract_ext", RuntimeArgs::default())
 }
 

@@ -6,10 +6,15 @@ use serde::Serialize;
 
 #[cfg(test)]
 use casper_types::testing::TestRng;
+#[cfg(any(feature = "testing", test))]
+use strum::IntoEnumIterator;
+#[cfg(any(feature = "testing", test))]
+use strum_macros::EnumIter;
 
 /// An identifier of a record type.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize)]
 #[repr(u16)]
+#[cfg_attr(any(feature = "testing", test), derive(EnumIter))]
 pub enum RecordId {
     /// Refers to `BlockHeader` record.
     BlockHeader = 0,
@@ -43,6 +48,10 @@ impl RecordId {
             7 => RecordId::FinalizedTransactionApprovals,
             _ => unreachable!(),
         }
+    }
+    #[cfg(any(feature = "testing", test))]
+    pub fn all() -> impl Iterator<Item = RecordId> {
+        RecordId::iter()
     }
 }
 

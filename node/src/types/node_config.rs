@@ -20,6 +20,9 @@ pub enum SyncHandling {
     Ttl,
     /// Don't attempt to sync historical blocks.
     NoSync,
+    /// Don't attempt to sync historical blocks and shut down node instead of switching to KeepUp
+    /// after acquiring the first complete block
+    CompleteBlock,
 }
 
 impl SyncHandling {
@@ -36,6 +39,11 @@ impl SyncHandling {
     /// Don't Sync?
     pub fn is_no_sync(&self) -> bool {
         matches!(self, SyncHandling::NoSync)
+    }
+
+    /// Don't Sync and shut down?
+    pub fn is_complete_block(&self) -> bool {
+        matches!(self, SyncHandling::CompleteBlock)
     }
 }
 

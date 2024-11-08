@@ -18,7 +18,7 @@ use regex::Regex;
 use stats_alloc::{StatsAlloc, INSTRUMENTED_SYSTEM};
 use structopt::StructOpt;
 use toml::{value::Table, Value};
-use tracing::info;
+use tracing::{error, info};
 
 use casper_types::{Chainspec, ChainspecRawBytes};
 
@@ -79,6 +79,11 @@ pub enum Cli {
         /// Path to configuration file of this version of node.
         #[structopt(long)]
         new_config: PathBuf,
+    },
+    /// Verify that a given config file can be parsed.
+    ValidateConfig {
+        /// Path to configuration file.
+        config: PathBuf,
     },
 }
 
@@ -236,6 +241,21 @@ impl Cli {
                     new_config,
                 )?;
                 Ok(ExitCode::Success as i32)
+            }
+            Cli::ValidateConfig { config } => {
+                info!(build_version = %crate::VERSION_STRING.as_str(), config_file = ?config, "validating config file");
+                match Self::init(&config, vec![]) {
+                    Ok(_config) => {
+                        info!(build_version = %crate::VERSION_STRING.as_str(), config_file = ?config, "config file is valid");
+                        Ok(ExitCode::Success as i32)
+                    }
+                    Err(err) => {
+                        // initialize manually in case of error to avoid double initialization
+                        logging::init_with_config(&Default::default())?;
+                        error!(build_version = %crate::VERSION_STRING.as_str(), config_file = ?config, "config file is not valid");
+                        Err(err)
+                    }
+                }
             }
         }
     }

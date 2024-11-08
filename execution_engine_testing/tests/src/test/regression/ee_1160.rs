@@ -55,12 +55,6 @@ fn ee_1160_transfer_larger_than_balance_should_fail() {
     builder.transfer_and_commit(no_wasm_transfer_request_1);
 
     let last_result = builder.get_exec_result_owned(0).unwrap();
-    // TODO: reenable when new payment logic is added
-    // assert_eq!(
-    //     balance_before - wasmless_transfer_motes.value(),
-    //     balance_after
-    // );
-    //assert_eq!(last_result.cost(), wasmless_transfer_gas_cost);
 
     assert!(
         last_result.error().is_some(),
@@ -86,12 +80,6 @@ fn ee_1160_large_wasmless_transfer_should_avoid_overflow() {
     builder.transfer_and_commit(no_wasm_transfer_request_1);
 
     let last_result = builder.get_exec_result_owned(0).unwrap();
-    // TODO: reenable when new payment logic is added
-    // assert_eq!(
-    //     balance_before - wasmless_transfer_motes.value(),
-    //     balance_after
-    // );
-    // assert_eq!(last_result.cost(), wasmless_transfer_gas_cost);
 
     assert!(
         last_result.error().is_some(),

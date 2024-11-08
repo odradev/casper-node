@@ -11,12 +11,12 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    addressable_entity::NamedKeys,
     bytesrepr::FromBytes,
+    contracts::{ContractPackageHash, NamedKeys},
     runtime_args,
     system::auction::{self, DelegationRate},
     CLType, CLTyped, CLValue, EntryPoint, EntryPointAccess, EntryPointPayment, EntryPointType,
-    EntryPoints, Key, PackageHash, Parameter, PublicKey, RuntimeArgs, U512,
+    EntryPoints, Key, Parameter, PublicKey, RuntimeArgs, U512,
 };
 
 const METHOD_ADD_BID_PROXY_CALL_1: &str = "add_bid_proxy_call_1";
@@ -110,7 +110,7 @@ pub extern "C" fn withdraw_proxy_call_1() {
 fn forward_call_to_this<T: CLTyped + FromBytes>(entry_point: &str, runtime_args: RuntimeArgs) -> T {
     let this = runtime::get_key(PACKAGE_HASH_NAME)
         .and_then(Key::into_package_addr)
-        .map(PackageHash::new)
+        .map(ContractPackageHash::new)
         .unwrap_or_revert();
     runtime::call_versioned_contract(this, None, entry_point, runtime_args)
 }

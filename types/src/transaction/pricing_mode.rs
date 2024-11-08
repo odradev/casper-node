@@ -66,9 +66,9 @@ pub enum PricingMode {
         /// if the current gas price is greater than this number"
         gas_price_tolerance: u8,
     },
-    /// The payment for this transaction was previously reserved, as proven by
+    /// The payment for this transaction was previously paid, as proven by
     /// the receipt hash (this is for future use, not currently implemented).
-    Reserved {
+    Prepaid {
         /// Pre-paid receipt.
         receipt: Digest,
     },
@@ -88,7 +88,7 @@ impl PricingMode {
                 gas_price_tolerance: rng.gen(),
                 additional_computation_factor: 1,
             },
-            2 => PricingMode::Reserved { receipt: rng.gen() },
+            2 => PricingMode::Prepaid { receipt: rng.gen() },
             _ => unreachable!(),
         }
     }
@@ -117,7 +117,7 @@ impl PricingMode {
                     additional_computation_factor.serialized_length(),
                 ]
             }
-            PricingMode::Reserved { receipt } => {
+            PricingMode::Prepaid { receipt } => {
                 vec![
                     crate::bytesrepr::U8_SERIALIZED_LENGTH,
                     receipt.serialized_length(),
@@ -189,9 +189,9 @@ impl PricingMode {
                 };
                 Gas::new(U512::from(computation_limit))
             }
-            PricingMode::Reserved { receipt } => {
+            PricingMode::Prepaid { receipt } => {
                 return Err(PricingModeError::InvalidPricingMode {
-                    price_mode: PricingMode::Reserved { receipt: *receipt },
+                    price_mode: PricingMode::Prepaid { receipt: *receipt },
                 });
             }
         };
@@ -213,7 +213,7 @@ impl PricingMode {
                 Motes::from_gas(gas_limit, gas_price)
                     .ok_or(PricingModeError::UnableToCalculateGasCost)?
             }
-            PricingMode::Reserved { .. } => {
+            PricingMode::Prepaid { .. } => {
                 Motes::zero() // prepaid
             }
         };
@@ -228,7 +228,7 @@ impl PricingMode {
                 additional_computation_factor,
                 ..
             } => *additional_computation_factor,
-            PricingMode::Reserved { .. } => 0,
+            PricingMode::Prepaid { .. } => 0,
         }
     }
 }
@@ -313,7 +313,7 @@ impl ToBytes for PricingMode {
                     &additional_computation_factor,
                 )?
                 .binary_payload_bytes(),
-            PricingMode::Reserved { receipt } => {
+            PricingMode::Prepaid { receipt } => {
                 CalltableSerializationEnvelopeBuilder::new(self.serialized_field_lengths())?
                     .add_field(TAG_FIELD_INDEX, &RESERVED_VARIANT_TAG)?
                     .add_field(RESERVED_RECEIPT_INDEX, &receipt)?
@@ -375,7 +375,7 @@ impl FromBytes for PricingMode {
                 if window.is_some() {
                     return Err(Formatting);
                 }
-                Ok(PricingMode::Reserved { receipt })
+                Ok(PricingMode::Prepaid { receipt })
             }
             _ => Err(Formatting),
         };
@@ -397,7 +397,7 @@ impl Display for PricingMode {
                     payment_amount, gas_price, standard_payment
                 )
             }
-            PricingMode::Reserved { receipt } => write!(formatter, "reserved: {}", receipt),
+            PricingMode::Prepaid { receipt } => write!(formatter, "reserved: {}", receipt),
             PricingMode::Fixed {
                 gas_price_tolerance,
                 additional_computation_factor,

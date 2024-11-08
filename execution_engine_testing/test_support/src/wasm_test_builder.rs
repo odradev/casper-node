@@ -51,9 +51,9 @@ use casper_storage::{
 
 use casper_types::{
     account::AccountHash,
-    addressable_entity::{EntityKindTag, MessageTopics, NamedKeyAddr, NamedKeys},
+    addressable_entity::{EntityKindTag, MessageTopics, NamedKeyAddr},
     bytesrepr::{self, FromBytes},
-    contracts::ContractHash,
+    contracts::{ContractHash, NamedKeys},
     execution::Effects,
     global_state::TrieMerkleProof,
     runtime_args,
@@ -66,7 +66,7 @@ use casper_types::{
         mint::{MINT_GAS_HOLD_HANDLING_KEY, MINT_GAS_HOLD_INTERVAL_KEY},
         AUCTION, HANDLE_PAYMENT, MINT, STANDARD_PAYMENT,
     },
-    AccessRights, AddressableEntity, AddressableEntityHash, AuctionCosts, BlockGlobalAddr,
+    AccessRights, Account, AddressableEntity, AddressableEntityHash, AuctionCosts, BlockGlobalAddr,
     BlockTime, ByteCode, ByteCodeAddr, ByteCodeHash, CLTyped, CLValue, Contract, Digest,
     EntityAddr, EntryPoints, EraId, FeeHandling, Gas, HandlePaymentCosts, HashAddr,
     HoldBalanceHandling, InitiatorAddr, Key, KeyTag, MintCosts, Motes, Package, PackageHash, Phase,
@@ -749,11 +749,9 @@ where
         let post_state = maybe_post_state
             .or(self.post_state_hash)
             .expect("builder must have a post-state hash");
-        let result = self.data_access_layer.total_supply(TotalSupplyRequest::new(
-            post_state,
-            protocol_version,
-            DEFAULT_ENABLE_ENTITY,
-        ));
+        let result = self
+            .data_access_layer
+            .total_supply(TotalSupplyRequest::new(post_state, protocol_version));
         if let TotalSupplyResult::Success { total_supply } = result {
             total_supply
         } else {
@@ -777,7 +775,6 @@ where
                 .round_seigniorage_rate(RoundSeigniorageRateRequest::new(
                     post_state,
                     protocol_version,
-                    DEFAULT_ENABLE_ENTITY,
                 ));
         if let RoundSeigniorageRateResult::Success { rate } = result {
             rate
@@ -1424,6 +1421,15 @@ where
         self
     }
 
+    /// Returns the `Account` if present.
+    pub fn get_account(&self, account_hash: AccountHash) -> Option<Account> {
+        let stored_value = self
+            .query(None, Key::Account(account_hash), &[])
+            .expect("must have stored value");
+
+        stored_value.into_account()
+    }
+
     /// Returns the "handle payment" contract, panics if it can't be found.
     pub fn get_handle_payment_contract(&self) -> EntityWithNamedKeys {
         let hash = self
@@ -1656,8 +1662,8 @@ where
         }
     }
 
-    /// Returns execution cost.
-    pub fn exec_cost(&self, index: usize) -> Gas {
+    /// Returns how much gas execution consumed / used.
+    pub fn exec_consumed(&self, index: usize) -> Gas {
         self.exec_results
             .get(index)
             .map(WasmV1Result::consumed)
@@ -1665,7 +1671,7 @@ where
     }
 
     /// Returns the `Gas` cost of the last exec.
-    pub fn last_exec_gas_cost(&self) -> Gas {
+    pub fn last_exec_gas_consumed(&self) -> Gas {
         self.exec_results
             .last()
             .map(WasmV1Result::consumed)
@@ -2061,7 +2067,7 @@ where
 
     /// Calculates refunded amount from a last execution request.
     pub fn calculate_refund_amount(&self, payment_amount: U512) -> U512 {
-        let gas_amount = Motes::from_gas(self.last_exec_gas_cost(), DEFAULT_GAS_PRICE)
+        let gas_amount = Motes::from_gas(self.last_exec_gas_consumed(), DEFAULT_GAS_PRICE)
             .expect("should create motes from gas");
 
         let refund_ratio = match self.chainspec.core_config.refund_handling {

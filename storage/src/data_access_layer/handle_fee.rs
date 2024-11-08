@@ -139,7 +139,7 @@ impl HandleFeeRequest {
 pub enum HandleFeeResult {
     /// Invalid state root hash.
     RootNotFound,
-    /// Handle  request succeeded.
+    /// Handle request succeeded.
     Success {
         /// Handle fee effects.
         effects: Effects,

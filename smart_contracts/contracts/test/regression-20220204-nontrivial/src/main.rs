@@ -38,7 +38,7 @@ pub extern "C" fn call() {
     nontrivial_arg.insert("anything".to_string(), Key::from(main_purse_modified));
 
     runtime::call_contract::<()>(
-        contract_hash,
+        contract_hash.into(),
         &entrypoint,
         runtime_args! {
             ARG_PURSE => nontrivial_arg,

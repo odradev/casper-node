@@ -6,8 +6,8 @@ extern crate alloc;
 use alloc::{collections::BTreeSet, string::ToString};
 use casper_contract::contract_api::{runtime, storage};
 use casper_types::{
-    account::AccountHash, addressable_entity::Parameters, ApiError, CLType, EntryPoint,
-    EntryPointAccess, EntryPointPayment, EntryPointType, EntryPoints, Key,
+    account::AccountHash, addressable_entity::Parameters, AddressableEntityHash, ApiError, CLType,
+    EntryPoint, EntryPointAccess, EntryPointPayment, EntryPointType, EntryPoints, Key,
 };
 
 const ROLE_A_KEYS: [AccountHash; 3] = [
@@ -104,5 +104,8 @@ pub extern "C" fn call() {
         None,
     );
 
-    runtime::put_key(CONTRACT_KEY, Key::contract_entity_key(contract_hash));
+    runtime::put_key(
+        CONTRACT_KEY,
+        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
+    );
 }

@@ -2,7 +2,7 @@
 
 mod account_hash;
 pub mod action_thresholds;
-mod action_type;
+pub mod action_type;
 pub mod associated_keys;
 mod error;
 mod weight;
@@ -22,16 +22,14 @@ pub use self::{
     account_hash::{AccountHash, ACCOUNT_HASH_FORMATTED_STRING_PREFIX, ACCOUNT_HASH_LENGTH},
     action_thresholds::ActionThresholds,
     action_type::ActionType,
-    associated_keys::AssociatedKeys,
-    error::FromStrError,
+    associated_keys::{AddKeyFailure, AssociatedKeys, RemoveKeyFailure, UpdateKeyFailure},
+    error::{FromStrError, SetThresholdFailure, TryFromIntError},
     weight::Weight,
 };
 
 use crate::{
-    addressable_entity::{
-        AddKeyFailure, NamedKeys, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
-    },
     bytesrepr::{self, FromBytes, ToBytes},
+    contracts::NamedKeys,
     AccessRights, Key, URef,
 };
 #[cfg(feature = "json-schema")]
@@ -389,9 +387,9 @@ mod tests {
     use crate::{
         account::{
             Account, AccountHash, ActionThresholds, ActionType, AssociatedKeys, RemoveKeyFailure,
-            UpdateKeyFailure, Weight,
+            TryFromIntError, UpdateKeyFailure, Weight,
         },
-        addressable_entity::{NamedKeys, TryFromIntError},
+        contracts::NamedKeys,
         AccessRights, URef,
     };
     use std::{collections::BTreeSet, convert::TryFrom, iter::FromIterator, vec::Vec};

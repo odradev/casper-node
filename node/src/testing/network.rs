@@ -400,6 +400,29 @@ where
             .unwrap_or_else(|_| panic!("network did not settle on condition within {:?}", within))
     }
 
+    /// Runs the main loop of every reactor until a specified node returns the expected exit code.
+    ///
+    /// Panics if the node does not exit inside of `within`, or if any node returns an unexpected
+    /// exit code.
+    pub(crate) async fn settle_on_node_exit(
+        &mut self,
+        rng: &mut TestRng,
+        node_id: &NodeId,
+        expected: ExitCode,
+        within: Duration,
+    ) {
+        time::timeout(
+            within,
+            self.settle_on_node_exit_indefinitely(rng, node_id, expected),
+        )
+        .await
+        .unwrap_or_else(|elapsed| {
+            panic!(
+                "network did not settle on condition within {within:?}, time elapsed: {elapsed:?}",
+            )
+        })
+    }
+
     /// Keeps cranking the network until every reactor's specified component is in the given state.
     ///
     /// # Panics
@@ -484,6 +507,46 @@ where
                         panic!(
                             "unexpected exit: expected {:?}, got {:?}",
                             expected, exit_code
+                        )
+                    }
+                    TryCrankOutcome::Exited => (),
+                }
+            }
+
+            if event_count == 0 {
+                // No events processed, wait for a bit to avoid 100% cpu usage.
+                Instant::advance_time(POLL_INTERVAL.as_millis() as u64);
+                time::sleep(POLL_INTERVAL).await;
+            }
+        }
+    }
+
+    async fn settle_on_node_exit_indefinitely(
+        &mut self,
+        rng: &mut TestRng,
+        node_id: &NodeId,
+        expected: ExitCode,
+    ) {
+        'outer: loop {
+            let mut event_count = 0;
+            for node in self.nodes.values_mut() {
+                let current_node_id = node.reactor().node_id();
+                match node
+                    .try_crank(rng)
+                    .instrument(error_span!("crank", node_id = %node_id))
+                    .await
+                {
+                    TryCrankOutcome::NoEventsToProcess => (),
+                    TryCrankOutcome::ProcessedAnEvent => event_count += 1,
+                    TryCrankOutcome::ShouldExit(exit_code)
+                        if (exit_code == expected && current_node_id == *node_id) =>
+                    {
+                        debug!(?expected, ?node_id, "node exited with expected code");
+                        break 'outer;
+                    }
+                    TryCrankOutcome::ShouldExit(exit_code) => {
+                        panic!(
+                            "unexpected exit: expected {expected:?} for node {node_id:?}, got {exit_code:?} for node {current_node_id:?}",
                         )
                     }
                     TryCrankOutcome::Exited => (),
