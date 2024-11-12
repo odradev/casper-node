@@ -132,6 +132,8 @@ pub enum BinaryRequest {
         /// Transaction to execute.
         transaction: Transaction,
     },
+    /// Minimalistic request to keep the connection alive if the client wants to have a long running connection.
+    KeepAliveRequest,
 }
 
 impl BinaryRequest {
@@ -141,6 +143,7 @@ impl BinaryRequest {
             BinaryRequest::Get(_) => BinaryRequestTag::Get,
             BinaryRequest::TryAcceptTransaction { .. } => BinaryRequestTag::TryAcceptTransaction,
             BinaryRequest::TrySpeculativeExec { .. } => BinaryRequestTag::TrySpeculativeExec,
+            BinaryRequest::KeepAliveRequest { .. } => BinaryRequestTag::KeepAliveRequest,
         }
     }
 
@@ -154,6 +157,7 @@ impl BinaryRequest {
             BinaryRequestTag::TrySpeculativeExec => Self::TrySpeculativeExec {
                 transaction: Transaction::random(rng),
             },
+            BinaryRequestTag::KeepAliveRequest => Self::KeepAliveRequest,
         }
     }
 }
@@ -170,6 +174,7 @@ impl ToBytes for BinaryRequest {
             BinaryRequest::Get(inner) => inner.write_bytes(writer),
             BinaryRequest::TryAcceptTransaction { transaction } => transaction.write_bytes(writer),
             BinaryRequest::TrySpeculativeExec { transaction } => transaction.write_bytes(writer),
+            BinaryRequest::KeepAliveRequest => Ok(()),
         }
     }
 
@@ -178,6 +183,7 @@ impl ToBytes for BinaryRequest {
             BinaryRequest::Get(inner) => inner.serialized_length(),
             BinaryRequest::TryAcceptTransaction { transaction } => transaction.serialized_length(),
             BinaryRequest::TrySpeculativeExec { transaction } => transaction.serialized_length(),
+            BinaryRequest::KeepAliveRequest => 0,
         }
     }
 }
@@ -202,6 +208,7 @@ impl TryFrom<(BinaryRequestTag, &[u8])> for BinaryRequest {
                 let (transaction, remainder) = FromBytes::from_bytes(bytes)?;
                 (BinaryRequest::TrySpeculativeExec { transaction }, remainder)
             }
+            BinaryRequestTag::KeepAliveRequest => (BinaryRequest::KeepAliveRequest, bytes),
         };
         if !remainder.is_empty() {
             return Err(bytesrepr::Error::LeftOverBytes);
@@ -220,16 +227,19 @@ pub enum BinaryRequestTag {
     TryAcceptTransaction = 1,
     /// Request to execute a transaction speculatively.
     TrySpeculativeExec = 2,
+    /// A minimalistic request-response to keep the connection alive.
+    KeepAliveRequest = 3,
 }
 
 impl BinaryRequestTag {
     /// Creates a random `BinaryRequestTag`.
     #[cfg(test)]
     pub fn random(rng: &mut TestRng) -> Self {
-        match rng.gen_range(0..3) {
+        match rng.gen_range(0..4) {
             0 => BinaryRequestTag::Get,
             1 => BinaryRequestTag::TryAcceptTransaction,
             2 => BinaryRequestTag::TrySpeculativeExec,
+            3 => BinaryRequestTag::KeepAliveRequest,
             _ => unreachable!(),
         }
     }
@@ -243,6 +253,7 @@ impl TryFrom<u8> for BinaryRequestTag {
             0 => Ok(BinaryRequestTag::Get),
             1 => Ok(BinaryRequestTag::TryAcceptTransaction),
             2 => Ok(BinaryRequestTag::TrySpeculativeExec),
+            3 => Ok(BinaryRequestTag::KeepAliveRequest),
             _ => Err(InvalidBinaryRequestTag),
         }
     }
