@@ -41,7 +41,8 @@ impl TransactionFootprint {
         chainspec: &Chainspec,
         transaction: &Transaction,
     ) -> Result<Self, InvalidTransaction> {
-        let transaction = MetaTransaction::from(transaction, &chainspec.transaction_config)?;
+        let transaction =
+            MetaTransaction::from_transaction(transaction, &chainspec.transaction_config)?;
         Self::new_from_meta_transaction(chainspec, &transaction)
     }
 

@@ -584,6 +584,10 @@ impl StateProvider for ScratchGlobalState {
         txn.commit()?;
         Ok(missing_descendants)
     }
+
+    fn enable_entity(&self) -> bool {
+        self.enable_addressable_entity
+    }
 }
 
 #[cfg(test)]

@@ -21,8 +21,9 @@ use super::{Block, BlockBodyV2, BlockConversionError, RewardedSignatures};
 use crate::testing::TestRng;
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes},
+    transaction::TransactionHash,
     BlockHash, BlockHeaderV2, BlockValidationError, Digest, EraEndV2, EraId, ProtocolVersion,
-    PublicKey, Timestamp, TransactionHash,
+    PublicKey, Timestamp,
 };
 #[cfg(feature = "json-schema")]
 use crate::{TransactionV1Hash, AUCTION_LANE_ID, INSTALL_UPGRADE_LANE_ID, MINT_LANE_ID};

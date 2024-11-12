@@ -6,6 +6,7 @@ mod tests;
 
 use std::{collections::BTreeSet, fmt::Debug, sync::Arc};
 
+use casper_types::{InvalidTransaction, InvalidTransactionV1};
 use datasize::DataSize;
 use prometheus::Registry;
 use tracing::{debug, error, trace};
@@ -15,10 +16,10 @@ use casper_storage::data_access_layer::{balance::BalanceHandling, BalanceRequest
 use casper_types::{
     account::AccountHash, addressable_entity::AddressableEntity, system::auction::ARG_AMOUNT,
     AddressableEntityHash, AddressableEntityIdentifier, BlockHeader, Chainspec, EntityAddr,
-    EntityVersion, EntityVersionKey, EntryPoint, EntryPointAddr, ExecutableDeployItem,
+    EntityKind, EntityVersion, EntityVersionKey, EntryPoint, EntryPointAddr, ExecutableDeployItem,
     ExecutableDeployItemIdentifier, InitiatorAddr, Key, Package, PackageAddr, PackageHash,
     PackageIdentifier, Timestamp, Transaction, TransactionEntryPoint, TransactionInvocationTarget,
-    TransactionTarget, DEFAULT_ENTRY_POINT_NAME, U512,
+    TransactionRuntime, TransactionTarget, DEFAULT_ENTRY_POINT_NAME, U512,
 };
 
 use crate::{
@@ -113,7 +114,8 @@ impl TransactionAcceptor {
         debug!(%source, %input_transaction, "checking transaction before accepting");
         let verification_start_timestamp = Timestamp::now();
         let transaction_config = &self.chainspec.as_ref().transaction_config;
-        let maybe_meta_transaction = MetaTransaction::from(&input_transaction, transaction_config);
+        let maybe_meta_transaction =
+            MetaTransaction::from_transaction(&input_transaction, transaction_config);
         let meta_transaction = match maybe_meta_transaction {
             Ok(transaction) => transaction,
             Err(err) => {
@@ -127,13 +129,28 @@ impl TransactionAcceptor {
                 );
             }
         };
+
         let event_metadata = Box::new(EventMetadata::new(
             input_transaction,
-            meta_transaction,
+            meta_transaction.clone(),
             source,
             maybe_responder,
             verification_start_timestamp,
         ));
+
+        if meta_transaction.is_install_or_upgrade()
+            && meta_transaction.is_v2_wasm()
+            && meta_transaction.seed().is_none()
+        {
+            return self.reject_transaction(
+                effect_builder,
+                *event_metadata,
+                Error::InvalidTransaction(InvalidTransaction::V1(
+                    InvalidTransactionV1::MissingSeed,
+                )),
+            );
+        }
+
         let is_config_compliant = event_metadata
             .meta_transaction
             .is_config_compliant(
@@ -565,13 +582,16 @@ impl TransactionAcceptor {
         contract_hash: AddressableEntityHash,
         maybe_contract: Option<AddressableEntity>,
     ) -> Effects<Event> {
-        if maybe_contract.is_none() {
-            let error = Error::parameter_failure(
-                &block_header,
-                ParameterFailure::NoSuchContractAtHash { contract_hash },
-            );
-            return self.reject_transaction(effect_builder, *event_metadata, error);
-        }
+        let addressable_entity = match maybe_contract {
+            Some(addressable_entity) => addressable_entity,
+            None => {
+                let error = Error::parameter_failure(
+                    &block_header,
+                    ParameterFailure::NoSuchContractAtHash { contract_hash },
+                );
+                return self.reject_transaction(effect_builder, *event_metadata, error);
+            }
+        };
 
         let maybe_entry_point_name = match &event_metadata.meta_transaction {
             MetaTransaction::Deploy(deploy) if is_payment => {
@@ -616,6 +636,7 @@ impl TransactionAcceptor {
                             block_header,
                             is_payment,
                             entry_point_name,
+                            addressable_entity,
                             maybe_entry_point: entry_point_result.into_v1_entry_point(),
                         }),
                     Err(_) => {
@@ -627,6 +648,7 @@ impl TransactionAcceptor {
                     }
                 }
             }
+
             None => {
                 if is_payment {
                     return self.verify_body(effect_builder, event_metadata, block_header);
@@ -636,6 +658,7 @@ impl TransactionAcceptor {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn handle_get_entry_point_result<REv: ReactorEventT>(
         &self,
         effect_builder: EffectBuilder<REv>,
@@ -643,31 +666,43 @@ impl TransactionAcceptor {
         block_header: Box<BlockHeader>,
         is_payment: bool,
         entry_point_name: String,
+        addressable_entity: AddressableEntity,
         maybe_entry_point: Option<EntryPoint>,
     ) -> Effects<Event> {
-        let entry_point = match maybe_entry_point {
-            Some(entry_point) => entry_point,
-            None => {
-                let error = Error::parameter_failure(
-                    &block_header,
-                    ParameterFailure::NoSuchEntryPoint { entry_point_name },
-                );
-                return self.reject_transaction(effect_builder, *event_metadata, error);
+        match addressable_entity.kind() {
+            EntityKind::SmartContract(TransactionRuntime::VmCasperV1)
+            | EntityKind::Account(_)
+            | EntityKind::System(_) => {
+                let entry_point = match maybe_entry_point {
+                    Some(entry_point) => entry_point,
+                    None => {
+                        let error = Error::parameter_failure(
+                            &block_header,
+                            ParameterFailure::NoSuchEntryPoint { entry_point_name },
+                        );
+                        return self.reject_transaction(effect_builder, *event_metadata, error);
+                    }
+                };
+
+                if entry_point_name != *entry_point.name() {
+                    let error = Error::parameter_failure(
+                        &block_header,
+                        ParameterFailure::NoSuchEntryPoint { entry_point_name },
+                    );
+                    return self.reject_transaction(effect_builder, *event_metadata, error);
+                };
+
+                if is_payment {
+                    return self.verify_body(effect_builder, event_metadata, block_header);
+                }
+                self.validate_transaction_cryptography(effect_builder, event_metadata)
             }
-        };
-
-        if entry_point_name != *entry_point.name() {
-            let error = Error::parameter_failure(
-                &block_header,
-                ParameterFailure::NoSuchEntryPoint { entry_point_name },
-            );
-            return self.reject_transaction(effect_builder, *event_metadata, error);
-        };
-
-        if is_payment {
-            return self.verify_body(effect_builder, event_metadata, block_header);
+            EntityKind::SmartContract(TransactionRuntime::VmCasperV2) => {
+                // Engine V2 does not store entrypoint information on chain and relies entirely on
+                // the Wasm itself.
+                self.validate_transaction_cryptography(effect_builder, event_metadata)
+            }
         }
-        self.validate_transaction_cryptography(effect_builder, event_metadata)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -991,6 +1026,7 @@ impl<REv: ReactorEventT> Component<REv> for TransactionAcceptor {
                 block_header,
                 is_payment,
                 entry_point_name,
+                addressable_entity,
                 maybe_entry_point,
             } => self.handle_get_entry_point_result(
                 effect_builder,
@@ -998,6 +1034,7 @@ impl<REv: ReactorEventT> Component<REv> for TransactionAcceptor {
                 block_header,
                 is_payment,
                 entry_point_name,
+                addressable_entity,
                 maybe_entry_point,
             ),
             Event::PutToStorageResult {

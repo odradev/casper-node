@@ -19,4 +19,15 @@ pub(crate) const DEFAULT_MAX_READERS: u32 = 512;
 
 pub(crate) const DEFAULT_MAX_QUERY_DEPTH: u64 = 5;
 
+/// The global state reader.
+pub trait GlobalStateReader:
+    state::StateReader<casper_types::Key, casper_types::StoredValue, Error = error::Error>
+{
+}
+
+impl<R: state::StateReader<casper_types::Key, casper_types::StoredValue, Error = error::Error>>
+    GlobalStateReader for R
+{
+}
+
 pub(crate) const DEFAULT_ENABLE_ENTITY: bool = false;

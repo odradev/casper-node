@@ -3,6 +3,7 @@ use std::collections::BTreeSet;
 use crate::{
     data_access_layer::BalanceIdentifier,
     system::runtime_native::{Config as NativeRuntimeConfig, TransferConfig},
+    tracking_copy::TrackingCopyCache,
 };
 use casper_types::{
     account::AccountHash, execution::Effects, Digest, InitiatorAddr, ProtocolVersion, RuntimeArgs,
@@ -231,6 +232,8 @@ pub enum TransferResult {
         transfers: Vec<Transfer>,
         /// Effects of transfer.
         effects: Effects,
+        /// Cached tracking copy operations.
+        cache: TrackingCopyCache,
     },
     /// Transfer failed
     Failure(TransferError),

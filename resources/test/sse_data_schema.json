@@ -1658,10 +1658,10 @@
           "description": "The original payment model, where the creator of the transaction specifies how much they will pay, at what gas price.",
           "type": "object",
           "required": [
-            "Classic"
+            "PaymentLimited"
           ],
           "properties": {
-            "Classic": {
+            "PaymentLimited": {
               "type": "object",
               "required": [
                 "gas_price_tolerance",
@@ -3520,10 +3520,10 @@
           "description": "A version 1 transfer.",
           "type": "object",
           "required": [
-            "Transfer"
+            "LegacyTransfer"
           ],
           "properties": {
-            "Transfer": {
+            "LegacyTransfer": {
               "$ref": "#/definitions/TransferV1"
             }
           },
@@ -3713,6 +3713,24 @@
           "properties": {
             "EntryPoint": {
               "$ref": "#/definitions/EntryPointValue"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Raw bytes. Similar to a [`crate::StoredValue::CLValue`] but does not incur overhead of a [`crate::CLValue`] and [`crate::CLType`].",
+          "type": "object",
+          "required": [
+            "RawBytes"
+          ],
+          "properties": {
+            "RawBytes": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint8",
+                "minimum": 0.0
+              }
             }
           },
           "additionalProperties": false
@@ -4488,6 +4506,13 @@
           "enum": [
             "V1CasperWasm"
           ]
+        },
+        {
+          "description": "Byte code to be executed with the version 2 Casper execution engine.",
+          "type": "string",
+          "enum": [
+            "V2CasperWasm"
+          ]
         }
       ]
     },
@@ -4593,19 +4618,6 @@
             }
           },
           "additionalProperties": false
-        },
-        {
-          "description": "Entrypoints to be executed against the V2 Casper VM.",
-          "type": "object",
-          "required": [
-            "V2CasperVm"
-          ],
-          "properties": {
-            "V2CasperVm": {
-              "$ref": "#/definitions/EntryPointV2"
-            }
-          },
-          "additionalProperties": false
         }
       ]
     },
@@ -4669,28 +4681,6 @@
           ]
         }
       ]
-    },
-    "EntryPointV2": {
-      "description": "The entry point for the V2 Casper VM.",
-      "type": "object",
-      "required": [
-        "flags",
-        "function_index"
-      ],
-      "properties": {
-        "function_index": {
-          "description": "The selector.",
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0.0
-        },
-        "flags": {
-          "description": "The flags.",
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0.0
-        }
-      }
     },
     "TransformError": {
       "description": "Error type for applying and combining transforms.\n\nA `TypeMismatch` occurs when a transform cannot be applied because the types are not compatible (e.g. trying to add a number to a string).",

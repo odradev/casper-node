@@ -283,6 +283,12 @@ pub enum ErrorCode {
     /// Too many requests per second.
     #[error("request was throttled")]
     RequestThrottled = 88,
+    /// Expected named arguments.
+    #[error("expected named arguments")]
+    ExpectedNamedArguments = 89,
+    /// Invalid transaction runtime.
+    #[error("invalid transaction runtime")]
+    InvalidTransactionRuntime = 90,
 }
 
 impl TryFrom<u16> for ErrorCode {
@@ -379,6 +385,8 @@ impl TryFrom<u16> for ErrorCode {
             86 => Ok(ErrorCode::ReceivedV1Transaction),
             87 => Ok(ErrorCode::PurseNotFound),
             88 => Ok(ErrorCode::RequestThrottled),
+            89 => Ok(ErrorCode::ExpectedNamedArguments),
+            90 => Ok(ErrorCode::InvalidTransactionRuntime),
             _ => Err(UnknownErrorCode),
         }
     }
@@ -517,7 +525,11 @@ impl From<InvalidTransactionV1> for ErrorCode {
             InvalidTransactionV1::GasPriceToleranceTooLow { .. } => {
                 ErrorCode::GasPriceToleranceTooLow
             }
-            _ => ErrorCode::InvalidTransactionUnspecified,
+            InvalidTransactionV1::ExpectedNamedArguments => ErrorCode::ExpectedNamedArguments,
+            InvalidTransactionV1::InvalidTransactionRuntime { .. } => {
+                ErrorCode::InvalidTransactionRuntime
+            }
+            _other => ErrorCode::InvalidTransactionUnspecified,
         }
     }
 }

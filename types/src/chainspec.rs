@@ -44,8 +44,6 @@ pub use activation_point::ActivationPoint;
 pub use chainspec_raw_bytes::ChainspecRawBytes;
 #[cfg(any(feature = "testing", test))]
 pub use core_config::DEFAULT_FEE_HANDLING;
-#[cfg(any(feature = "testing", test))]
-pub use core_config::DEFAULT_GAS_HOLD_BALANCE_HANDLING;
 #[cfg(any(feature = "std", test))]
 pub use core_config::DEFAULT_REFUND_HANDLING;
 pub use core_config::{

@@ -197,7 +197,7 @@ impl BlockValidationState {
                 .transaction_v1_config
                 .get_max_transaction_count(supported_lane);
             if lane_count_limit < transactions as u64 {
-                warn!("too many transactions in category: {lane_count_limit}");
+                warn!("too many transactions in lane: {lane_count_limit}");
                 return Err(());
             }
         }

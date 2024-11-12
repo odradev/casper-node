@@ -22,6 +22,10 @@ use casper_types::{
     InvalidTransactionV1, ProtocolVersion, PublicKey, Transaction, TransactionHash, U512,
 };
 
+use self::wasm_v2_request::{WasmV2Error, WasmV2Result};
+
+use super::operations::wasm_v2_request;
+
 /// Request for validator weights for a specific era.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValidatorWeightsByEraIdRequest {
@@ -168,6 +172,11 @@ impl ExecutionArtifactBuilder {
         Ok(self)
     }
 
+    pub fn with_error_message(&mut self, error_message: String) -> &mut Self {
+        self.error_message = Some(error_message);
+        self
+    }
+
     pub fn with_set_refund_purse_result(
         &mut self,
         handle_refund_result: &HandleRefundResult,
@@ -304,6 +313,7 @@ impl ExecutionArtifactBuilder {
         if let TransferResult::Success {
             mut transfers,
             effects,
+            cache: _,
         } = transfer_result
         {
             self.with_appended_transfers(&mut transfers)
@@ -344,6 +354,35 @@ impl ExecutionArtifactBuilder {
         };
         let execution_result = ExecutionResult::V2(result);
         ExecutionArtifact::new(self.hash, self.header, execution_result, self.messages)
+    }
+
+    /// Adds the error message from a `InvalidRequest` to the artifact.
+    pub(crate) fn with_invalid_wasm_v2_request(
+        &mut self,
+        ire: wasm_v2_request::InvalidRequest,
+    ) -> &mut Self {
+        if self.error_message.is_none() {
+            self.error_message = Some(format!("{}", ire));
+        }
+        self
+    }
+
+    /// Adds the result from a `WasmV2Result` to the artifact.
+    pub(crate) fn with_wasm_v2_result(&mut self, result: WasmV2Result) -> &mut Self {
+        self.with_added_consumed(Gas::from(result.gas_usage().gas_spent()));
+
+        // TODO: Use system message to notify about contract hash
+
+        self.with_appended_effects(result.effects().clone());
+
+        self
+    }
+
+    /// Adds the error message from a `WasmV2Error` to the artifact.
+    #[inline]
+    pub(crate) fn with_wasm_v2_error(&mut self, error: WasmV2Error) -> &mut Self {
+        self.with_error_message(error.to_string());
+        self
     }
 }
 

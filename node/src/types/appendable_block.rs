@@ -156,16 +156,16 @@ impl AppendableBlock {
         } = self;
 
         fn collate(
-            category: u8,
+            lane: u8,
             collater: &mut BTreeMap<u8, Vec<(TransactionHash, BTreeSet<Approval>)>>,
             items: &BTreeMap<TransactionHash, TransactionFootprint>,
         ) {
             let mut ret = vec![];
-            for (x, y) in items.iter().filter(|(_, y)| y.lane_id == category) {
+            for (x, y) in items.iter().filter(|(_, y)| y.lane_id == lane) {
                 ret.push((*x, y.approvals.clone()));
             }
             if !ret.is_empty() {
-                collater.insert(category, ret);
+                collater.insert(lane, ret);
             }
         }
 
@@ -196,10 +196,10 @@ impl AppendableBlock {
         self.timestamp
     }
 
-    fn category_count(&self, category: u8) -> usize {
+    fn category_lane(&self, lane: u8) -> usize {
         self.transactions
             .iter()
-            .filter(|(_, f)| f.lane_id == category)
+            .filter(|(_, f)| f.lane_id == lane)
             .count()
     }
 
@@ -212,9 +212,9 @@ impl AppendableBlock {
 impl Display for AppendableBlock {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         let total_count = self.transactions.len();
-        let mint_count = self.category_count(MINT_LANE_ID);
-        let auction_count = self.category_count(AUCTION_LANE_ID);
-        let install_upgrade_count = self.category_count(INSTALL_UPGRADE_LANE_ID);
+        let mint_count = self.category_lane(MINT_LANE_ID);
+        let auction_count = self.category_lane(AUCTION_LANE_ID);
+        let install_upgrade_count = self.category_lane(INSTALL_UPGRADE_LANE_ID);
         let wasm_count = total_count - mint_count - auction_count - install_upgrade_count;
         let total_gas_limit: Gas = self
             .transactions

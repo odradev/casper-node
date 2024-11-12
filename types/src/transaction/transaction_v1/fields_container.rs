@@ -4,12 +4,12 @@ use crate::testing::TestRng;
 use crate::{
     bytesrepr::{Bytes, ToBytes},
     transaction::transaction_v1::*,
-    RuntimeArgs, TransactionEntryPoint, TransactionScheduling, TransactionTarget,
+    TransactionEntryPoint, TransactionScheduling, TransactionTarget,
 };
 #[cfg(any(feature = "testing", test))]
 use crate::{
-    PublicKey, TransactionInvocationTarget, TransactionRuntime, TransferTarget, AUCTION_LANE_ID,
-    INSTALL_UPGRADE_LANE_ID, MINT_LANE_ID,
+    PublicKey, RuntimeArgs, TransactionInvocationTarget, TransactionRuntime, TransferTarget,
+    AUCTION_LANE_ID, INSTALL_UPGRADE_LANE_ID, MINT_LANE_ID,
 };
 #[cfg(any(feature = "std", feature = "testing", test))]
 use alloc::collections::BTreeMap;
@@ -24,6 +24,10 @@ pub(crate) const TARGET_MAP_KEY: u16 = 1;
 pub(crate) const ENTRY_POINT_MAP_KEY: u16 = 2;
 #[cfg(any(feature = "std", feature = "testing", feature = "gens", test))]
 pub(crate) const SCHEDULING_MAP_KEY: u16 = 3;
+#[cfg(any(feature = "std", feature = "testing", feature = "gens", test))]
+pub(crate) const TRANSFERRED_VALUE_MAP_KEY: u16 = 4;
+#[cfg(any(feature = "std", feature = "testing", feature = "gens", test))]
+pub(crate) const SEED_MAP_KEY: u16 = 5;
 
 #[cfg(any(feature = "std", feature = "testing", feature = "gens", test))]
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -33,7 +37,7 @@ pub(crate) enum FieldsContainerError {
 
 #[cfg(any(feature = "std", feature = "testing", feature = "gens", test))]
 pub(crate) struct FieldsContainer {
-    pub(super) args: RuntimeArgs,
+    pub(super) args: TransactionArgs,
     pub(super) target: TransactionTarget,
     pub(super) entry_point: TransactionEntryPoint,
     pub(super) scheduling: TransactionScheduling,
@@ -42,7 +46,7 @@ pub(crate) struct FieldsContainer {
 #[cfg(any(feature = "std", feature = "testing", feature = "gens", test))]
 impl FieldsContainer {
     pub(crate) fn new(
-        args: RuntimeArgs,
+        args: TransactionArgs,
         target: TransactionTarget,
         entry_point: TransactionEntryPoint,
         scheduling: TransactionScheduling,
@@ -89,6 +93,49 @@ impl FieldsContainer {
                 }
             })?,
         );
+
+        let transferred_value;
+        let seed;
+
+        match self.target {
+            TransactionTarget::Session {
+                transferred_value: value,
+                seed: maybe_seed,
+                ..
+            } => {
+                transferred_value = value;
+                seed = maybe_seed;
+            }
+            TransactionTarget::Stored {
+                transferred_value: value,
+                ..
+            } => {
+                transferred_value = value;
+                seed = None;
+            }
+            TransactionTarget::Native => {
+                transferred_value = 0;
+                seed = None;
+            }
+        }
+
+        map.insert(
+            TRANSFERRED_VALUE_MAP_KEY,
+            transferred_value.to_bytes().map(Into::into).map_err(|_| {
+                FieldsContainerError::CouldNotSerializeField {
+                    field_index: TRANSFERRED_VALUE_MAP_KEY,
+                }
+            })?,
+        );
+        map.insert(
+            SEED_MAP_KEY,
+            seed.to_bytes().map(Into::into).map_err(|_| {
+                FieldsContainerError::CouldNotSerializeField {
+                    field_index: SEED_MAP_KEY,
+                }
+            })?,
+        );
+
         Ok(map)
     }
 
@@ -104,7 +151,7 @@ impl FieldsContainer {
                 let args = arg_handling::new_transfer_args(amount, maybe_source, target, maybe_id)
                     .unwrap();
                 FieldsContainer::new(
-                    args,
+                    TransactionArgs::Named(args),
                     TransactionTarget::Native,
                     TransactionEntryPoint::Transfer,
                     TransactionScheduling::random(rng),
@@ -125,7 +172,7 @@ impl FieldsContainer {
                 )
                 .unwrap();
                 FieldsContainer::new(
-                    args,
+                    TransactionArgs::Named(args),
                     TransactionTarget::Native,
                     TransactionEntryPoint::AddBid,
                     TransactionScheduling::random(rng),
@@ -136,7 +183,7 @@ impl FieldsContainer {
                 let amount = rng.gen::<u64>();
                 let args = arg_handling::new_withdraw_bid_args(public_key, amount).unwrap();
                 FieldsContainer::new(
-                    args,
+                    TransactionArgs::Named(args),
                     TransactionTarget::Native,
                     TransactionEntryPoint::WithdrawBid,
                     TransactionScheduling::random(rng),
@@ -148,7 +195,7 @@ impl FieldsContainer {
                 let amount = rng.gen::<u64>();
                 let args = arg_handling::new_delegate_args(delegator, validator, amount).unwrap();
                 FieldsContainer::new(
-                    args,
+                    TransactionArgs::Named(args),
                     TransactionTarget::Native,
                     TransactionEntryPoint::Delegate,
                     TransactionScheduling::random(rng),
@@ -160,7 +207,7 @@ impl FieldsContainer {
                 let amount = rng.gen::<u64>();
                 let args = arg_handling::new_undelegate_args(delegator, validator, amount).unwrap();
                 FieldsContainer::new(
-                    args,
+                    TransactionArgs::Named(args),
                     TransactionTarget::Native,
                     TransactionEntryPoint::Undelegate,
                     TransactionScheduling::random(rng),
@@ -175,7 +222,7 @@ impl FieldsContainer {
                     arg_handling::new_redelegate_args(delegator, validator, amount, new_validator)
                         .unwrap();
                 FieldsContainer::new(
-                    args,
+                    TransactionArgs::Named(args),
                     TransactionTarget::Native,
                     TransactionEntryPoint::Redelegate,
                     TransactionScheduling::random(rng),
@@ -190,9 +237,11 @@ impl FieldsContainer {
                     is_install_upgrade,
                     module_bytes: Bytes::from(buffer),
                     runtime: TransactionRuntime::VmCasperV1,
+                    transferred_value: rng.gen(),
+                    seed: rng.gen(),
                 };
                 FieldsContainer::new(
-                    RuntimeArgs::random(rng),
+                    TransactionArgs::Named(RuntimeArgs::random(rng)),
                     target,
                     TransactionEntryPoint::Call,
                     TransactionScheduling::random(rng),
@@ -221,7 +270,7 @@ impl FieldsContainer {
         let maybe_id = rng.gen::<bool>().then(|| rng.gen());
         let args = arg_handling::new_transfer_args(amount, maybe_source, target, maybe_id).unwrap();
         FieldsContainer::new(
-            args,
+            TransactionArgs::Named(args),
             TransactionTarget::Native,
             TransactionEntryPoint::Transfer,
             TransactionScheduling::random(rng),
@@ -234,9 +283,11 @@ impl FieldsContainer {
             module_bytes: Bytes::from(rng.random_vec(0..100)),
             runtime: TransactionRuntime::VmCasperV1,
             is_install_upgrade: true,
+            transferred_value: 0,
+            seed: None,
         };
         FieldsContainer::new(
-            RuntimeArgs::random(rng),
+            TransactionArgs::Named(RuntimeArgs::random(rng)),
             target,
             TransactionEntryPoint::Call,
             TransactionScheduling::random(rng),
@@ -259,7 +310,7 @@ impl FieldsContainer {
         )
         .unwrap();
         FieldsContainer::new(
-            args,
+            TransactionArgs::Named(args),
             TransactionTarget::Native,
             TransactionEntryPoint::AddBid,
             TransactionScheduling::random(rng),
@@ -271,9 +322,10 @@ impl FieldsContainer {
         let target = TransactionTarget::Stored {
             id: TransactionInvocationTarget::random(rng),
             runtime: TransactionRuntime::VmCasperV1,
+            transferred_value: rng.gen(),
         };
         FieldsContainer::new(
-            RuntimeArgs::random(rng),
+            TransactionArgs::Named(RuntimeArgs::random(rng)),
             target,
             TransactionEntryPoint::Custom(rng.random_string(1..11)),
             TransactionScheduling::random(rng),

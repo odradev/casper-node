@@ -6,7 +6,7 @@ use super::{
     super::{InitiatorAddr, TransactionRuntime, TransactionScheduling, TransactionTarget},
     arg_handling,
     fields_container::FieldsContainerError,
-    InitiatorAddrAndSecretKey, PricingMode, TransactionV1,
+    InitiatorAddrAndSecretKey, PricingMode, TransactionArgs, TransactionV1,
 };
 use crate::{
     bytesrepr::Bytes, transaction::FieldsContainer, AddressableEntityHash, CLValue, CLValueError,
@@ -68,9 +68,10 @@ use rand::Rng;
 /// ## Phantom Data
 /// - `_phantom_data`: Ensures the correct lifetime `'a` is respected for the builder, helping with
 ///   proper borrowing and memory safety.
+#[derive(Debug)]
 pub struct TransactionV1Builder<'a> {
     /// Arguments passed to the transaction's runtime.
-    args: RuntimeArgs,
+    args: TransactionArgs,
     /// The target of the transaction (e.g., native).
     target: TransactionTarget,
     /// Defines how the transaction is scheduled (e.g., standard, immediate).
@@ -111,8 +112,6 @@ impl<'a> TransactionV1Builder<'a> {
         gas_price_tolerance: 5,
         additional_computation_factor: 0,
     };
-    /// The default runtime for transactions, i.e. Casper Version 1 Virtual Machine.
-    pub const DEFAULT_RUNTIME: TransactionRuntime = TransactionRuntime::VmCasperV1;
     /// The default scheduling for transactions, i.e. `Standard`.
     pub const DEFAULT_SCHEDULING: TransactionScheduling = TransactionScheduling::Standard;
 
@@ -160,7 +159,7 @@ impl<'a> TransactionV1Builder<'a> {
         let timestamp = Timestamp::zero();
 
         TransactionV1Builder {
-            args: RuntimeArgs::new(),
+            args: TransactionArgs::Named(RuntimeArgs::new()),
             entry_point: TransactionEntryPoint::Transfer,
             target: TransactionTarget::Native,
             scheduling: TransactionScheduling::Standard,
@@ -187,7 +186,7 @@ impl<'a> TransactionV1Builder<'a> {
     ) -> Result<Self, CLValueError> {
         let args = arg_handling::new_transfer_args(amount, maybe_source, target, maybe_id)?;
         let mut builder = TransactionV1Builder::new();
-        builder.args = args;
+        builder.args = TransactionArgs::Named(args);
         builder.target = TransactionTarget::Native;
         builder.entry_point = TransactionEntryPoint::Transfer;
         builder.scheduling = Self::DEFAULT_SCHEDULING;
@@ -210,7 +209,7 @@ impl<'a> TransactionV1Builder<'a> {
             maximum_delegation_amount,
         )?;
         let mut builder = TransactionV1Builder::new();
-        builder.args = args;
+        builder.args = TransactionArgs::Named(args);
         builder.target = TransactionTarget::Native;
         builder.entry_point = TransactionEntryPoint::AddBid;
         builder.scheduling = Self::DEFAULT_SCHEDULING;
@@ -225,7 +224,7 @@ impl<'a> TransactionV1Builder<'a> {
     ) -> Result<Self, CLValueError> {
         let args = arg_handling::new_withdraw_bid_args(public_key, amount)?;
         let mut builder = TransactionV1Builder::new();
-        builder.args = args;
+        builder.args = TransactionArgs::Named(args);
         builder.target = TransactionTarget::Native;
         builder.entry_point = TransactionEntryPoint::WithdrawBid;
         builder.scheduling = Self::DEFAULT_SCHEDULING;
@@ -240,7 +239,7 @@ impl<'a> TransactionV1Builder<'a> {
     ) -> Result<Self, CLValueError> {
         let args = arg_handling::new_delegate_args(delegator, validator, amount)?;
         let mut builder = TransactionV1Builder::new();
-        builder.args = args;
+        builder.args = TransactionArgs::Named(args);
         builder.target = TransactionTarget::Native;
         builder.entry_point = TransactionEntryPoint::Delegate;
         builder.scheduling = Self::DEFAULT_SCHEDULING;
@@ -255,7 +254,7 @@ impl<'a> TransactionV1Builder<'a> {
     ) -> Result<Self, CLValueError> {
         let args = arg_handling::new_undelegate_args(delegator, validator, amount)?;
         let mut builder = TransactionV1Builder::new();
-        builder.args = args;
+        builder.args = TransactionArgs::Named(args);
         builder.target = TransactionTarget::Native;
         builder.entry_point = TransactionEntryPoint::Undelegate;
         builder.scheduling = Self::DEFAULT_SCHEDULING;
@@ -271,7 +270,7 @@ impl<'a> TransactionV1Builder<'a> {
     ) -> Result<Self, CLValueError> {
         let args = arg_handling::new_redelegate_args(delegator, validator, amount, new_validator)?;
         let mut builder = TransactionV1Builder::new();
-        builder.args = args;
+        builder.args = TransactionArgs::Named(args);
         builder.target = TransactionTarget::Native;
         builder.entry_point = TransactionEntryPoint::Redelegate;
         builder.scheduling = Self::DEFAULT_SCHEDULING;
@@ -281,13 +280,16 @@ impl<'a> TransactionV1Builder<'a> {
     fn new_targeting_stored<E: Into<String>>(
         id: TransactionInvocationTarget,
         entry_point: E,
+        runtime: TransactionRuntime,
+        transferred_value: u64,
     ) -> Self {
         let target = TransactionTarget::Stored {
             id,
-            runtime: Self::DEFAULT_RUNTIME,
+            runtime,
+            transferred_value,
         };
         let mut builder = TransactionV1Builder::new();
-        builder.args = RuntimeArgs::new();
+        builder.args = TransactionArgs::Named(RuntimeArgs::new());
         builder.target = target;
         builder.entry_point = TransactionEntryPoint::Custom(entry_point.into());
         builder.scheduling = Self::DEFAULT_SCHEDULING;
@@ -299,9 +301,11 @@ impl<'a> TransactionV1Builder<'a> {
     pub fn new_targeting_invocable_entity<E: Into<String>>(
         hash: AddressableEntityHash,
         entry_point: E,
+        runtime: TransactionRuntime,
+        transferred_value: u64,
     ) -> Self {
         let id = TransactionInvocationTarget::new_invocable_entity(hash);
-        Self::new_targeting_stored(id, entry_point)
+        Self::new_targeting_stored(id, entry_point, runtime, transferred_value)
     }
 
     /// Returns a new `TransactionV1Builder` suitable for building a transaction targeting a stored
@@ -309,9 +313,11 @@ impl<'a> TransactionV1Builder<'a> {
     pub fn new_targeting_invocable_entity_via_alias<A: Into<String>, E: Into<String>>(
         alias: A,
         entry_point: E,
+        runtime: TransactionRuntime,
+        transferred_value: u64,
     ) -> Self {
         let id = TransactionInvocationTarget::new_invocable_entity_alias(alias.into());
-        Self::new_targeting_stored(id, entry_point)
+        Self::new_targeting_stored(id, entry_point, runtime, transferred_value)
     }
 
     /// Returns a new `TransactionV1Builder` suitable for building a transaction targeting a
@@ -320,9 +326,11 @@ impl<'a> TransactionV1Builder<'a> {
         hash: PackageHash,
         version: Option<EntityVersion>,
         entry_point: E,
+        runtime: TransactionRuntime,
+        transferred_value: u64,
     ) -> Self {
         let id = TransactionInvocationTarget::new_package(hash, version);
-        Self::new_targeting_stored(id, entry_point)
+        Self::new_targeting_stored(id, entry_point, runtime, transferred_value)
     }
 
     /// Returns a new `TransactionV1Builder` suitable for building a transaction targeting a
@@ -331,21 +339,31 @@ impl<'a> TransactionV1Builder<'a> {
         alias: A,
         version: Option<EntityVersion>,
         entry_point: E,
+        runtime: TransactionRuntime,
+        transferred_value: u64,
     ) -> Self {
         let id = TransactionInvocationTarget::new_package_alias(alias.into(), version);
-        Self::new_targeting_stored(id, entry_point)
+        Self::new_targeting_stored(id, entry_point, runtime, transferred_value)
     }
 
     /// Returns a new `TransactionV1Builder` suitable for building a transaction for running session
     /// logic, i.e. compiled Wasm.
-    pub fn new_session(is_install_upgrade: bool, module_bytes: Bytes) -> Self {
+    pub fn new_session(
+        is_install_upgrade: bool,
+        module_bytes: Bytes,
+        runtime: TransactionRuntime,
+        transferred_value: u64,
+        seed: Option<[u8; 32]>,
+    ) -> Self {
         let target = TransactionTarget::Session {
             is_install_upgrade,
             module_bytes,
-            runtime: Self::DEFAULT_RUNTIME,
+            runtime,
+            transferred_value,
+            seed,
         };
         let mut builder = TransactionV1Builder::new();
-        builder.args = RuntimeArgs::new();
+        builder.args = TransactionArgs::Named(RuntimeArgs::new());
         builder.target = target;
         builder.entry_point = TransactionEntryPoint::Call;
         builder.scheduling = Self::DEFAULT_SCHEDULING;
@@ -367,7 +385,7 @@ impl<'a> TransactionV1Builder<'a> {
             chain_name: Some(rng.random_string(5..10)),
             timestamp: Timestamp::random(rng),
             ttl: TimeDiff::from_millis(ttl_millis),
-            args: RuntimeArgs::random(rng),
+            args: TransactionArgs::Named(RuntimeArgs::random(rng)),
             target: fields.target,
             entry_point: fields.entry_point,
             scheduling: fields.scheduling,
@@ -491,7 +509,14 @@ impl<'a> TransactionV1Builder<'a> {
 
     /// Appends the given runtime arg into the body's `args`.
     pub fn with_runtime_arg<K: Into<String>>(mut self, key: K, cl_value: CLValue) -> Self {
-        self.args.insert_cl_value(key, cl_value);
+        match &mut self.args {
+            TransactionArgs::Named(args) => {
+                args.insert_cl_value(key, cl_value);
+            }
+            TransactionArgs::Bytesrepr(raw_bytes) => {
+                panic!("Cannot append named args to unnamed args: {:?}", raw_bytes)
+            }
+        }
         self
     }
 
@@ -500,13 +525,23 @@ impl<'a> TransactionV1Builder<'a> {
     /// NOTE: this overwrites any existing runtime args.  To append to existing args, use
     /// [`TransactionV1Builder::with_runtime_arg`].
     pub fn with_runtime_args(mut self, args: RuntimeArgs) -> Self {
+        self.args = TransactionArgs::Named(args);
+        self
+    }
+
+    /// Sets the runtime args in the transaction.
+    pub fn with_chunked_args(mut self, args: Bytes) -> Self {
+        self.args = TransactionArgs::Bytesrepr(args);
+        self
+    }
+
+    /// Sets the transaction args in the transaction.
+    pub fn with_transaction_args(mut self, args: TransactionArgs) -> Self {
         self.args = args;
         self
     }
 
     /// Sets the runtime for the transaction.
-    ///
-    /// If not provided, the runtime will be set to [`Self::DEFAULT_RUNTIME`].
     ///
     /// NOTE: This has no effect for native transactions, i.e. where the `body.target` is
     /// `TransactionTarget::Native`.
@@ -534,6 +569,12 @@ impl<'a> TransactionV1Builder<'a> {
     /// If not provided, the scheduling will be set to [`Self::DEFAULT_SCHEDULING`].
     pub fn with_scheduling(mut self, scheduling: TransactionScheduling) -> Self {
         self.scheduling = scheduling;
+        self
+    }
+
+    /// Sets the entry point for the transaction.
+    pub fn with_entry_point(mut self, entry_point: TransactionEntryPoint) -> Self {
+        self.entry_point = entry_point;
         self
     }
 

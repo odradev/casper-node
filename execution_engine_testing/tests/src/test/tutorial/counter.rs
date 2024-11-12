@@ -80,3 +80,21 @@ fn should_run_counter_example() {
 
     builder.exec(call_request_1).expect_success().commit();
 }
+
+// #[test]
+// fn gen_fixture() {
+//     lmdb_fixture::generate_fixture(
+//         "counter_contract",
+//         LOCAL_GENESIS_REQUEST.clone(),
+//         |builder| {
+//             let install_request_1 = ExecuteRequestBuilder::standard(
+//                 *DEFAULT_ACCOUNT_ADDR,
+//                 COUNTER_INSTALLER_WASM,
+//                 RuntimeArgs::default(),
+//             )
+//             .build();
+//             builder.exec(install_request_1).expect_success().commit();
+//         },
+//     )
+//     .expect("should gen fixture");
+// }

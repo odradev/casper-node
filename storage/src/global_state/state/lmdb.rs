@@ -423,6 +423,10 @@ impl StateProvider for LmdbGlobalState {
         txn.commit()?;
         Ok(missing_hashes)
     }
+
+    fn enable_entity(&self) -> bool {
+        self.enable_entity
+    }
 }
 
 impl ScratchProvider for DataAccessLayer<LmdbGlobalState> {

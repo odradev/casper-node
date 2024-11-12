@@ -3,10 +3,10 @@ use std::{collections::BTreeSet, convert::TryFrom};
 use serde::Serialize;
 use thiserror::Error;
 
-use casper_storage::data_access_layer::TransferResult;
+use casper_storage::{data_access_layer::TransferResult, tracking_copy::TrackingCopyCache};
 use casper_types::{
     account::AccountHash, bytesrepr::Bytes, contract_messages::Messages, execution::Effects,
-    BlockHash, BlockTime, DeployHash, Digest, ExecutableDeployItem, Gas, InitiatorAddr,
+    BlockHash, BlockTime, CLValue, DeployHash, Digest, ExecutableDeployItem, Gas, InitiatorAddr,
     PackageHash, Phase, PricingMode, RuntimeArgs, TransactionEntryPoint, TransactionHash,
     TransactionInvocationTarget, TransactionTarget, TransactionV1Hash, Transfer,
 };
@@ -461,10 +461,15 @@ pub struct WasmV1Result {
     messages: Messages,
     /// Did the wasm execute successfully?
     error: Option<EngineError>,
+    /// Result captured from a ret call.
+    ret: Option<CLValue>,
+    /// Tracking copy cache captured during execution.
+    cache: Option<TrackingCopyCache>,
 }
 
 impl WasmV1Result {
     /// Creates a new instance.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         limit: Gas,
         consumed: Gas,
@@ -472,6 +477,8 @@ impl WasmV1Result {
         transfers: Vec<Transfer>,
         messages: Messages,
         error: Option<EngineError>,
+        ret: Option<CLValue>,
+        cache: Option<TrackingCopyCache>,
     ) -> Self {
         WasmV1Result {
             limit,
@@ -480,6 +487,8 @@ impl WasmV1Result {
             transfers,
             messages,
             error,
+            ret,
+            cache,
         }
     }
 
@@ -508,9 +517,19 @@ impl WasmV1Result {
         &self.effects
     }
 
+    /// Tracking copy cache captured during execution.
+    pub fn cache(&self) -> Option<&TrackingCopyCache> {
+        self.cache.as_ref()
+    }
+
     /// Messages emitted during execution.
     pub fn messages(&self) -> &Messages {
         &self.messages
+    }
+
+    /// Result captured from a ret call.
+    pub fn ret(&self) -> Option<&CLValue> {
+        self.ret.as_ref()
     }
 
     /// Root not found.
@@ -522,6 +541,8 @@ impl WasmV1Result {
             limit: gas_limit,
             consumed: Gas::zero(),
             error: Some(EngineError::RootNotFound(state_hash)),
+            ret: None,
+            cache: None,
         }
     }
 
@@ -534,6 +555,8 @@ impl WasmV1Result {
             limit: gas_limit,
             consumed: Gas::zero(),
             error: Some(error),
+            ret: None,
+            cache: None,
         }
     }
 
@@ -546,6 +569,8 @@ impl WasmV1Result {
             limit: gas_limit,
             consumed: Gas::zero(),
             error: Some(EngineError::InvalidExecutableItem(error)),
+            ret: None,
+            cache: None,
         }
     }
 
@@ -564,13 +589,19 @@ impl WasmV1Result {
         // this is NOT true of wasm based operations however.
         match transfer_result {
             TransferResult::RootNotFound => None,
-            TransferResult::Success { transfers, effects } => Some(WasmV1Result {
+            TransferResult::Success {
+                transfers,
+                effects,
+                cache,
+            } => Some(WasmV1Result {
                 transfers,
                 limit: consumed,
                 consumed,
                 effects,
                 messages: Messages::default(),
                 error: None,
+                ret: None,
+                cache: Some(cache),
             }),
             TransferResult::Failure(te) => {
                 Some(WasmV1Result {
@@ -580,6 +611,8 @@ impl WasmV1Result {
                     effects: Effects::default(), // currently not returning effects on failure
                     messages: Messages::default(),
                     error: Some(EngineError::Transfer(te)),
+                    ret: None,
+                    cache: None,
                 })
             }
         }
@@ -772,7 +805,6 @@ impl TryFrom<&SessionDataV1<'_>> for SessionInfo {
                     kind,
                     module_bytes: module_bytes.clone(),
                 };
-
                 ExecutableInfo {
                     item,
                     entry_point: DEFAULT_ENTRY_POINT.to_owned(),
@@ -784,7 +816,6 @@ impl TryFrom<&SessionDataV1<'_>> for SessionInfo {
         Ok(SessionInfo(session))
     }
 }
-
 /// New type for hanging payment specific impl's off of.
 struct PaymentInfo(ExecutableInfo);
 
@@ -893,7 +924,7 @@ impl TryFrom<&SessionDataV1<'_>> for PaymentInfo {
     fn try_from(v1_txn: &SessionDataV1) -> Result<Self, Self::Error> {
         let transaction_hash = TransactionHash::V1(*v1_txn.hash());
         match v1_txn.pricing_mode() {
-            mode @ PricingMode::Classic {
+            mode @ PricingMode::PaymentLimited {
                 standard_payment, ..
             } => {
                 if *standard_payment {

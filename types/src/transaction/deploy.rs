@@ -51,8 +51,8 @@ use crate::{
         METHOD_REDELEGATE, METHOD_UNDELEGATE, METHOD_WITHDRAW_BID,
     },
     testing::TestRng,
-    AddressableEntityHash, RuntimeArgs, URef, DEFAULT_MAX_PAYMENT_MOTES,
-    DEFAULT_MIN_TRANSFER_MOTES,
+    transaction::RuntimeArgs,
+    AddressableEntityHash, URef, DEFAULT_MAX_PAYMENT_MOTES, DEFAULT_MIN_TRANSFER_MOTES,
 };
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes},
@@ -403,6 +403,12 @@ impl Deploy {
         at: Timestamp,
     ) -> Result<(), InvalidDeploy> {
         let config = &chainspec.transaction_config;
+
+        if !config.runtime_config.vm_casper_v1 {
+            // Not config compliant if V1 runtime is disabled.
+            return Err(InvalidDeploy::InvalidRuntime);
+        }
+
         // We're assuming that Deploy can have a maximum size of an InstallUpgrade transaction.
         //  We're passing 0 as transaction size since determining max transaction size for
         //  InstallUpgrade doesn't rely on the size of transaction
@@ -413,6 +419,7 @@ impl Deploy {
 
         let header = self.header();
         let chain_name = &chainspec.network_config.name;
+
         if header.chain_name() != chain_name {
             debug!(
                 deploy_hash = %self.hash(),

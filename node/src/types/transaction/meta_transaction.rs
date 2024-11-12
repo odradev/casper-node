@@ -1,24 +1,21 @@
 mod meta_transaction_v1;
-mod tranasction_lane;
 mod transaction_header;
+mod transaction_lane;
 pub(crate) use transaction_header::*;
 
 use casper_execution_engine::engine_state::{SessionDataDeploy, SessionDataV1, SessionInputData};
 use casper_types::{
     account::AccountHash, bytesrepr::ToBytes, Approval, Chainspec, Deploy, Digest,
     ExecutableDeployItem, Gas, GasLimited, HashAddr, InitiatorAddr, InvalidTransaction, Phase,
-    PricingMode, RuntimeArgs, TimeDiff, Timestamp, Transaction, TransactionConfig,
+    PricingMode, TimeDiff, Timestamp, Transaction, TransactionArgs, TransactionConfig,
     TransactionEntryPoint, TransactionHash, TransactionTarget, INSTALL_UPGRADE_LANE_ID,
     LARGE_WASM_LANE_ID, MINT_LANE_ID,
 };
 use core::fmt::{self, Debug, Display, Formatter};
-#[cfg(feature = "datasize")]
-use datasize::DataSize;
 pub(crate) use meta_transaction_v1::MetaTransactionV1;
 use serde::Serialize;
-use std::collections::BTreeSet;
+use std::{borrow::Cow, collections::BTreeSet};
 
-#[cfg_attr(feature = "datasize", derive(DataSize))]
 #[derive(Clone, Debug, Serialize)]
 pub(crate) enum MetaTransaction {
     Deploy(Deploy),
@@ -95,7 +92,7 @@ impl MetaTransaction {
         match self {
             MetaTransaction::Deploy(deploy) => deploy.payment().is_standard_payment(Phase::Payment),
             MetaTransaction::V1(v1) => {
-                if let PricingMode::Classic {
+                if let PricingMode::PaymentLimited {
                     standard_payment, ..
                 } = v1.pricing_mode()
                 {
@@ -124,10 +121,12 @@ impl MetaTransaction {
     }
 
     /// The session args.
-    pub fn session_args(&self) -> &RuntimeArgs {
+    pub fn session_args(&self) -> Cow<TransactionArgs> {
         match self {
-            MetaTransaction::Deploy(deploy) => deploy.session().args(),
-            MetaTransaction::V1(transaction_v1) => transaction_v1.args(),
+            MetaTransaction::Deploy(deploy) => {
+                Cow::Owned(TransactionArgs::Named(deploy.session().args().clone()))
+            }
+            MetaTransaction::V1(transaction_v1) => Cow::Borrowed(transaction_v1.args()),
         }
     }
 
@@ -203,15 +202,15 @@ impl MetaTransaction {
         None
     }
 
-    pub fn from(
+    /// Create a new `MetaTransaction` from a `Transaction`.
+    pub fn from_transaction(
         transaction: &Transaction,
         transaction_config: &TransactionConfig,
     ) -> Result<Self, InvalidTransaction> {
         match transaction {
             Transaction::Deploy(deploy) => Ok(MetaTransaction::Deploy(deploy.clone())),
-            Transaction::V1(v1) => {
-                MetaTransactionV1::from(v1, transaction_config).map(MetaTransaction::V1)
-            }
+            Transaction::V1(v1) => MetaTransactionV1::from_transaction_v1(v1, transaction_config)
+                .map(MetaTransaction::V1),
         }
     }
 
@@ -254,7 +253,7 @@ impl MetaTransaction {
             }
             MetaTransaction::V1(v1) => {
                 let data = SessionDataV1::new(
-                    v1.args(),
+                    v1.args().as_named().expect("V1 wasm args should be named and validated at the transaction acceptor level"),
                     v1.target(),
                     v1.entry_point(),
                     v1.transaction_lane() == INSTALL_UPGRADE_LANE_ID,
@@ -274,6 +273,43 @@ impl MetaTransaction {
         match self {
             MetaTransaction::Deploy(deploy) => deploy.serialized_length(),
             MetaTransaction::V1(v1) => v1.serialized_length(),
+        }
+    }
+
+    pub fn is_v2_wasm(&self) -> bool {
+        match self {
+            MetaTransaction::Deploy(_) => false,
+            MetaTransaction::V1(v1) => v1.is_v2_wasm(),
+        }
+    }
+
+    pub(crate) fn seed(&self) -> Option<[u8; 32]> {
+        match self {
+            MetaTransaction::Deploy(_) => None,
+            MetaTransaction::V1(v1) => v1.seed(),
+        }
+    }
+
+    pub(crate) fn is_install_or_upgrade(&self) -> bool {
+        match self {
+            MetaTransaction::Deploy(_) => false,
+            MetaTransaction::V1(meta_transaction_v1) => {
+                meta_transaction_v1.transaction_lane() == INSTALL_UPGRADE_LANE_ID
+            }
+        }
+    }
+
+    pub(crate) fn transferred_value(&self) -> Option<u64> {
+        match self {
+            MetaTransaction::Deploy(_) => None,
+            MetaTransaction::V1(v1) => Some(v1.transferred_value()),
+        }
+    }
+
+    pub(crate) fn target(&self) -> Option<TransactionTarget> {
+        match self {
+            MetaTransaction::Deploy(_) => None,
+            MetaTransaction::V1(v1) => Some(v1.target().clone()),
         }
     }
 }
@@ -296,8 +332,8 @@ mod proptests {
     proptest! {
         #[test]
         fn construction_roundtrip(transaction in legal_transaction_arb()) {
-            let maybe_transaction = MetaTransaction::from(&transaction, &TransactionConfig::default());
-            assert!(maybe_transaction.is_ok());
+            let maybe_transaction = MetaTransaction::from_transaction(&transaction, &TransactionConfig::default());
+            prop_assert!(maybe_transaction.is_ok(), "{:?}", maybe_transaction);
         }
     }
 }

@@ -188,4 +188,8 @@ where
     fn missing_children(&self, trie_raw: &[u8]) -> Result<Vec<Digest>, GlobalStateError> {
         self.state.missing_children(trie_raw)
     }
+
+    fn enable_entity(&self) -> bool {
+        self.state.enable_entity()
+    }
 }

@@ -40,7 +40,7 @@ use crate::{Chainspec, Gas, Motes, AUCTION_LANE_ID, MINT_LANE_ID, U512};
 pub enum PricingMode {
     /// The original payment model, where the creator of the transaction
     /// specifies how much they will pay, at what gas price.
-    Classic {
+    PaymentLimited {
         /// User-specified payment amount.
         payment_amount: u64,
         /// User-specified gas_price tolerance (minimum 1).
@@ -78,8 +78,8 @@ impl PricingMode {
     /// Returns a random `PricingMode.
     #[cfg(any(feature = "testing", test))]
     pub fn random(rng: &mut TestRng) -> Self {
-        match rng.gen_range(0..3) {
-            0 => PricingMode::Classic {
+        match rng.gen_range(0..=2) {
+            0 => PricingMode::PaymentLimited {
                 payment_amount: rng.gen(),
                 gas_price_tolerance: 1,
                 standard_payment: true,
@@ -93,9 +93,20 @@ impl PricingMode {
         }
     }
 
+    /// Returns standard payment flag, if it is a `PaymentLimited` variant.
+    pub fn is_standard_payment(&self) -> bool {
+        match self {
+            PricingMode::PaymentLimited {
+                standard_payment, ..
+            } => *standard_payment,
+            PricingMode::Fixed { .. } => true,
+            PricingMode::Prepaid { .. } => true,
+        }
+    }
+
     fn serialized_field_lengths(&self) -> Vec<usize> {
         match self {
-            PricingMode::Classic {
+            PricingMode::PaymentLimited {
                 payment_amount,
                 gas_price_tolerance,
                 standard_payment,
@@ -136,7 +147,7 @@ impl PricingMode {
     ) -> Result<Gas, PricingModeError> {
         let costs = chainspec.system_costs_config;
         let gas = match self {
-            PricingMode::Classic { payment_amount, .. } => Gas::new(*payment_amount),
+            PricingMode::PaymentLimited { payment_amount, .. } => Gas::new(*payment_amount),
             PricingMode::Fixed { .. } => {
                 let computation_limit = {
                     if lane_id == MINT_LANE_ID {
@@ -209,7 +220,7 @@ impl PricingMode {
     ) -> Result<Motes, PricingModeError> {
         let gas_limit = self.gas_limit(chainspec, entry_point, lane_id)?;
         let motes = match self {
-            PricingMode::Classic { .. } | PricingMode::Fixed { .. } => {
+            PricingMode::PaymentLimited { .. } | PricingMode::Fixed { .. } => {
                 Motes::from_gas(gas_limit, gas_price)
                     .ok_or(PricingModeError::UnableToCalculateGasCost)?
             }
@@ -223,7 +234,7 @@ impl PricingMode {
     /// Returns gas cost.
     pub fn additional_computation_factor(&self) -> u8 {
         match self {
-            PricingMode::Classic { .. } => 0,
+            PricingMode::PaymentLimited { .. } => 0,
             PricingMode::Fixed {
                 additional_computation_factor,
                 ..
@@ -277,10 +288,10 @@ impl From<PricingModeError> for InvalidTransactionV1 {
 }
 const TAG_FIELD_INDEX: u16 = 0;
 
-const CLASSIC_VARIANT_TAG: u8 = 0;
-const CLASSIC_PAYMENT_AMOUNT_INDEX: u16 = 1;
-const CLASSIC_GAS_PRICE_TOLERANCE_INDEX: u16 = 2;
-const CLASSIC_STANDARD_PAYMENT_INDEX: u16 = 3;
+const PAYMENT_LIMITED_VARIANT_TAG: u8 = 0;
+const PAYMENT_LIMITED_PAYMENT_AMOUNT_INDEX: u16 = 1;
+const PAYMENT_LIMITED_GAS_PRICE_TOLERANCE_INDEX: u16 = 2;
+const PAYMENT_LIMITED_STANDARD_PAYMENT_INDEX: u16 = 3;
 
 const FIXED_VARIANT_TAG: u8 = 1;
 const FIXED_GAS_PRICE_TOLERANCE_INDEX: u16 = 1;
@@ -292,15 +303,18 @@ const RESERVED_RECEIPT_INDEX: u16 = 1;
 impl ToBytes for PricingMode {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         match self {
-            PricingMode::Classic {
+            PricingMode::PaymentLimited {
                 payment_amount,
                 gas_price_tolerance,
                 standard_payment,
             } => CalltableSerializationEnvelopeBuilder::new(self.serialized_field_lengths())?
-                .add_field(TAG_FIELD_INDEX, &CLASSIC_VARIANT_TAG)?
-                .add_field(CLASSIC_PAYMENT_AMOUNT_INDEX, &payment_amount)?
-                .add_field(CLASSIC_GAS_PRICE_TOLERANCE_INDEX, &gas_price_tolerance)?
-                .add_field(CLASSIC_STANDARD_PAYMENT_INDEX, &standard_payment)?
+                .add_field(TAG_FIELD_INDEX, &PAYMENT_LIMITED_VARIANT_TAG)?
+                .add_field(PAYMENT_LIMITED_PAYMENT_AMOUNT_INDEX, &payment_amount)?
+                .add_field(
+                    PAYMENT_LIMITED_GAS_PRICE_TOLERANCE_INDEX,
+                    &gas_price_tolerance,
+                )?
+                .add_field(PAYMENT_LIMITED_STANDARD_PAYMENT_INDEX, &standard_payment)?
                 .binary_payload_bytes(),
             PricingMode::Fixed {
                 gas_price_tolerance,
@@ -333,20 +347,20 @@ impl FromBytes for PricingMode {
         window.verify_index(TAG_FIELD_INDEX)?;
         let (tag, window) = window.deserialize_and_maybe_next::<u8>()?;
         let to_ret = match tag {
-            CLASSIC_VARIANT_TAG => {
+            PAYMENT_LIMITED_VARIANT_TAG => {
                 let window = window.ok_or(Formatting)?;
-                window.verify_index(CLASSIC_PAYMENT_AMOUNT_INDEX)?;
+                window.verify_index(PAYMENT_LIMITED_PAYMENT_AMOUNT_INDEX)?;
                 let (payment_amount, window) = window.deserialize_and_maybe_next::<u64>()?;
                 let window = window.ok_or(Formatting)?;
-                window.verify_index(CLASSIC_GAS_PRICE_TOLERANCE_INDEX)?;
+                window.verify_index(PAYMENT_LIMITED_GAS_PRICE_TOLERANCE_INDEX)?;
                 let (gas_price_tolerance, window) = window.deserialize_and_maybe_next::<u8>()?;
                 let window = window.ok_or(Formatting)?;
-                window.verify_index(CLASSIC_STANDARD_PAYMENT_INDEX)?;
+                window.verify_index(PAYMENT_LIMITED_STANDARD_PAYMENT_INDEX)?;
                 let (standard_payment, window) = window.deserialize_and_maybe_next::<bool>()?;
                 if window.is_some() {
                     return Err(Formatting);
                 }
-                Ok(PricingMode::Classic {
+                Ok(PricingMode::PaymentLimited {
                     payment_amount,
                     gas_price_tolerance,
                     standard_payment,
@@ -386,7 +400,7 @@ impl FromBytes for PricingMode {
 impl Display for PricingMode {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         match self {
-            PricingMode::Classic {
+            PricingMode::PaymentLimited {
                 payment_amount,
                 gas_price_tolerance: gas_price,
                 standard_payment,
@@ -413,14 +427,28 @@ impl Display for PricingMode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{bytesrepr, testing::TestRng};
+    use crate::bytesrepr;
 
     #[test]
-    fn bytesrepr_roundtrip() {
-        let rng = &mut TestRng::new();
-        for _ in 0..10 {
-            bytesrepr::test_serialization_roundtrip(&PricingMode::random(rng));
+    fn test_to_bytes_and_from_bytes() {
+        let classic = PricingMode::PaymentLimited {
+            payment_amount: 100,
+            gas_price_tolerance: 1,
+            standard_payment: true,
+        };
+        match classic {
+            PricingMode::PaymentLimited { .. } => {}
+            PricingMode::Fixed { .. } => {}
+            PricingMode::Prepaid { .. } => {}
         }
+        bytesrepr::test_serialization_roundtrip(&classic);
+        bytesrepr::test_serialization_roundtrip(&PricingMode::Fixed {
+            gas_price_tolerance: 2,
+            additional_computation_factor: 1,
+        });
+        bytesrepr::test_serialization_roundtrip(&PricingMode::Prepaid {
+            receipt: Digest::hash(b"prepaid"),
+        });
     }
 
     use crate::gens::pricing_mode_arb;

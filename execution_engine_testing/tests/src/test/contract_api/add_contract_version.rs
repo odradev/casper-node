@@ -7,7 +7,7 @@ use casper_execution_engine::{
     execution::ExecError,
 };
 use casper_types::{
-    ApiError, BlockTime, InitiatorAddr, PricingMode, RuntimeArgs, Transaction,
+    ApiError, BlockTime, InitiatorAddr, PricingMode, RuntimeArgs, Transaction, TransactionArgs,
     TransactionEntryPoint, TransactionTarget, TransactionV1Builder,
 };
 
@@ -38,15 +38,21 @@ fn try_add_contract_version(is_install_upgrade: bool, should_succeed: bool) {
 
     let module_bytes = utils::read_wasm_file(CONTRACT);
 
-    let txn = TransactionV1Builder::new_session(is_install_upgrade, module_bytes)
-        .with_secret_key(&DEFAULT_ACCOUNT_SECRET_KEY)
-        .with_chain_name(CHAIN_NAME)
-        .build()
-        .unwrap();
+    let txn = TransactionV1Builder::new_session(
+        is_install_upgrade,
+        module_bytes,
+        casper_types::TransactionRuntime::VmCasperV1,
+        0,
+        None,
+    )
+    .with_secret_key(&DEFAULT_ACCOUNT_SECRET_KEY)
+    .with_chain_name(CHAIN_NAME)
+    .build()
+    .unwrap();
 
     let txn_request = {
         let initiator_addr = txn.initiator_addr().clone();
-        let is_standard_payment = if let PricingMode::Classic {
+        let is_standard_payment = if let PricingMode::PaymentLimited {
             standard_payment, ..
         } = txn.pricing_mode()
         {
@@ -54,7 +60,10 @@ fn try_add_contract_version(is_install_upgrade: bool, should_succeed: bool) {
         } else {
             true
         };
-        let args = txn.deserialize_field::<RuntimeArgs>(ARGS_MAP_KEY).unwrap();
+        let tx_args = txn
+            .deserialize_field::<TransactionArgs>(ARGS_MAP_KEY)
+            .unwrap();
+        let args = tx_args.as_named().unwrap();
         let target = txn
             .deserialize_field::<TransactionTarget>(TARGET_MAP_KEY)
             .unwrap();
@@ -65,7 +74,7 @@ fn try_add_contract_version(is_install_upgrade: bool, should_succeed: bool) {
         let session_input_data = to_v1_session_input_data(
             is_standard_payment,
             initiator_addr,
-            &args,
+            args,
             &target,
             &entry_point,
             &wrapped,

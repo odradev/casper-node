@@ -215,9 +215,9 @@ impl SecretKey {
 
     /// Constructs a new secp256k1 variant from a byte slice.
     pub fn secp256k1_from_bytes<T: AsRef<[u8]>>(bytes: T) -> Result<Self, Error> {
-        Ok(SecretKey::Secp256k1(
-            Secp256k1SecretKey::from_slice(bytes.as_ref()).map_err(|_| Error::SignatureError)?,
-        ))
+        Ok(SecretKey::Secp256k1(Secp256k1SecretKey::from_slice(
+            bytes.as_ref(),
+        )?))
     }
 
     /// Generates a new ed25519 variant using the system's secure random number generator.

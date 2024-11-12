@@ -67,10 +67,11 @@ use crate::{
     contract_messages::TopicNameHash,
     contracts::{Contract, ContractHash},
     system::SystemEntityType,
+    transaction::TransactionRuntime,
     uref::{self, URef},
     AccessRights, ApiError, CLType, CLTyped, CLValue, CLValueError, ContextAccessRights, HashAddr,
-    Key, NamedKeys, PackageHash, ProtocolVersion, PublicKey, Tagged, TransactionRuntime,
-    BLAKE2B_DIGEST_LENGTH, KEY_HASH_LENGTH,
+    Key, NamedKeys, PackageHash, ProtocolVersion, PublicKey, Tagged, BLAKE2B_DIGEST_LENGTH,
+    KEY_HASH_LENGTH,
 };
 
 /// Maximum number of distinct user groups.
@@ -1259,6 +1260,9 @@ static ADDRESSABLE_ENTITY: Lazy<AddressableEntity> = Lazy::new(|| {
         action_thresholds,
     }
 });
+
+/// The address for an AddressableEntity which contains the 32 bytes and tagging information.
+pub type ContractAddress = PackageHash;
 
 /// Methods and type signatures supported by a contract.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
