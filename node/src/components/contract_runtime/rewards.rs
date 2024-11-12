@@ -18,6 +18,7 @@ use num_traits::{CheckedAdd, CheckedMul, ToPrimitive};
 use tracing::trace;
 
 use crate::{
+    contract_runtime::metrics::Metrics,
     effect::{
         requests::{ContractRuntimeRequest, StorageRequest},
         EffectBuilder,
@@ -28,7 +29,6 @@ use casper_types::{
     Block, Chainspec, CoreConfig, Digest, EraId, ProtocolVersion, PublicKey, RewardedSignatures,
     U512,
 };
-use crate::contract_runtime::metrics::Metrics;
 
 pub(crate) trait ReactorEventT:
     Send + From<StorageRequest> + From<ContractRuntimeRequest>
@@ -419,33 +419,43 @@ pub(crate) async fn fetch_data_and_calculate_rewards_for_era<REv: ReactorEventT>
         )
         .await?;
 
-        let cited_blocks_count_current_era = rewards_info
-            .blocks_from_era(current_era_id)
-            .count();
+        let cited_blocks_count_current_era = rewards_info.blocks_from_era(current_era_id).count();
 
-        let reward_per_round_current_era = rewards_info.eras_info.get(&current_era_id).expect("expected EraInfo").reward_per_round;
+        let reward_per_round_current_era = rewards_info
+            .eras_info
+            .get(&current_era_id)
+            .expect("expected EraInfo")
+            .reward_per_round;
 
         let rewards = rewards_for_era(rewards_info, current_era_id, &chainspec.core_config);
 
         // Calculate and push reward metric(s)
         match &rewards {
             Ok(rewards_map) => {
-                let expected_total_seigniorage = reward_per_round_current_era.to_integer() * U512::from(cited_blocks_count_current_era as u64);
-                let actual_total_seigniorage = rewards_map
-                    .iter()
-                    .fold(U512::zero(), |acc, (_, rewards_vec)| {
-                        let current_era_reward = rewards_vec.first().expect("expected current era reward amount");
-                        acc + current_era_reward
-                    });
-                let seigniorage_target_fraction = Ratio::new(actual_total_seigniorage.as_u128(), expected_total_seigniorage.as_u128());
-                metrics
-                    .seigniorage_target_fraction
-                    .set(Ratio::to_f64(&seigniorage_target_fraction).expect("expected fraction as float"))
+                let expected_total_seigniorage = reward_per_round_current_era.to_integer()
+                    * U512::from(cited_blocks_count_current_era as u64);
+                let actual_total_seigniorage =
+                    rewards_map
+                        .iter()
+                        .fold(U512::zero(), |acc, (_, rewards_vec)| {
+                            let current_era_reward = rewards_vec
+                                .first()
+                                .expect("expected current era reward amount");
+                            acc + current_era_reward
+                        });
+                let seigniorage_target_fraction = Ratio::new(
+                    actual_total_seigniorage.as_u128(),
+                    expected_total_seigniorage.as_u128(),
+                );
+                metrics.seigniorage_target_fraction.set(
+                    Ratio::to_f64(&seigniorage_target_fraction)
+                        .expect("expected fraction as float"),
+                )
             }
             Err(_) => (),
         }
 
-        return rewards;
+        rewards
     }
 }
 

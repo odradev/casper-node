@@ -183,7 +183,10 @@ impl Metrics {
         let exec_queue_size = IntGauge::new(EXEC_QUEUE_SIZE_NAME, EXEC_QUEUE_SIZE_HELP)?;
         registry.register(Box::new(exec_queue_size.clone()))?;
 
-        let seigniorage_target_fraction = Gauge::new(SEIGNIORAGE_TARGET_FRACTION, SEIGNIORAGE_TARGET_FRACTION_HELP)?;
+        let seigniorage_target_fraction = Gauge::new(
+            SEIGNIORAGE_TARGET_FRACTION,
+            SEIGNIORAGE_TARGET_FRACTION_HELP,
+        )?;
         registry.register(Box::new(seigniorage_target_fraction.clone()))?;
 
         Ok(Metrics {
