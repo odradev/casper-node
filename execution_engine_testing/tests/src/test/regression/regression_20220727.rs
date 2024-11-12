@@ -194,14 +194,14 @@ fn test_element_section(
         writeln!(
             wat,
             r#"(module
-            (table {table_init} {max} anyfunc)"#
+            (table {table_init} {max} funcref)"#
         )
         .unwrap();
     } else {
         writeln!(
             wat,
             r#"(module
-            (table {table_init} anyfunc)"#
+            (table {table_init} funcref)"#
         )
         .unwrap();
     }
@@ -225,6 +225,8 @@ fn test_element_section(
     }
     wat += ")\n";
     wat += ")";
+
+    std::fs::write("/tmp/elem.wat", &wat).unwrap();
 
     let module_bytes = wat::parse_str(wat).unwrap();
     let exec_request = ExecuteRequestBuilder::module_bytes(
@@ -334,7 +336,7 @@ fn make_arbitrary_br_table(size: usize) -> Result<Vec<u8>, Box<dyn std::error::E
     writeln!(src, r#"(export "call" (func $call))"#)?;
     writeln!(src, r#"(func $switch_like (param $p i32) (result i32)"#)?;
 
-    let mut bottom = ";;\n(get_local $p)\n".to_string();
+    let mut bottom = ";;\n(local.get $p)\n".to_string();
     bottom += "(br_table\n";
 
     for (br_table_offset, n) in (0..=size - 1).rev().enumerate() {

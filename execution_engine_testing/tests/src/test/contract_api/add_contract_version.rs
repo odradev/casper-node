@@ -7,7 +7,7 @@ use casper_execution_engine::{
     execution::ExecError,
 };
 use casper_types::{
-    ApiError, BlockTime, InitiatorAddr, PricingMode, RuntimeArgs, Transaction,
+    ApiError, BlockTime, InitiatorAddr, PricingMode, RuntimeArgs, Transaction, TransactionArgs,
     TransactionEntryPoint, TransactionTarget, TransactionV1Builder,
 };
 
@@ -60,7 +60,10 @@ fn try_add_contract_version(is_install_upgrade: bool, should_succeed: bool) {
         } else {
             true
         };
-        let args = txn.deserialize_field::<RuntimeArgs>(ARGS_MAP_KEY).unwrap();
+        let tx_args = txn
+            .deserialize_field::<TransactionArgs>(ARGS_MAP_KEY)
+            .unwrap();
+        let args = tx_args.as_named().unwrap();
         let target = txn
             .deserialize_field::<TransactionTarget>(TARGET_MAP_KEY)
             .unwrap();
