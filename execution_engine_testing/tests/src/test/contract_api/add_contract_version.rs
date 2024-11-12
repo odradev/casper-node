@@ -74,7 +74,7 @@ fn try_add_contract_version(is_install_upgrade: bool, should_succeed: bool) {
         let session_input_data = to_v1_session_input_data(
             is_standard_payment,
             initiator_addr,
-            &args,
+            args,
             &target,
             &entry_point,
             &wrapped,
