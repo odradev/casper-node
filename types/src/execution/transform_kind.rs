@@ -120,7 +120,7 @@ impl TransformKindV2 {
                     let found = format!("{:?}", cl_value.cl_type());
                     Err(StoredValueTypeMismatch::new(expected, found).into())
                 }
-                StoredValue::Package(_) => {
+                StoredValue::SmartContract(_) => {
                     let expected = "Contract or Account".to_string();
                     let found = "ContractPackage".to_string();
                     Err(StoredValueTypeMismatch::new(expected, found).into())

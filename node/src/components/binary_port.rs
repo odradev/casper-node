@@ -792,7 +792,7 @@ where
             Ok(Some(Either::Left(ValueWithProof::new(contract, proof))))
         }
         (other, _) => {
-            let Some((Key::Package(addr), _)) = other
+            let Some((Key::SmartContract(addr), _)) = other
                 .as_cl_value()
                 .and_then(|cl_val| cl_val.to_t::<(Key, URef)>().ok())
             else {
@@ -819,13 +819,15 @@ where
         + From<ContractRuntimeRequest>
         + From<ReactorInfoRequest>,
 {
-    let key = Key::Package(package_addr);
+    let key = Key::SmartContract(package_addr);
     let Some(result) = get_global_state_item(effect_builder, state_root_hash, key, vec![]).await?
     else {
         return Ok(None);
     };
     match result.into_inner() {
-        (StoredValue::Package(contract), proof) => Ok(Some(ValueWithProof::new(contract, proof))),
+        (StoredValue::SmartContract(contract), proof) => {
+            Ok(Some(ValueWithProof::new(contract, proof)))
+        }
         other => {
             debug!(
                 ?other,

@@ -480,7 +480,7 @@ pub fn execute_finalized_block(
                         );
                         match result {
                             Ok(wasm_v2_result) => {
-                                info!(contract_hash=wasm_v2_result.contract_hash().map(base16::encode_lower).unwrap_or_default(),
+                                info!(contract_hash=wasm_v2_result.smart_contract_addr().map(base16::encode_lower).unwrap_or_default(),
                                       pre_state_root_hash=%state_root_hash,
                                       post_state_root_hash=%wasm_v2_result.post_state_hash(),
                                       "install contract result");

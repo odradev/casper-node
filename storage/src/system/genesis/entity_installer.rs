@@ -728,9 +728,10 @@ where
             .borrow_mut()
             .write(entity_key, StoredValue::AddressableEntity(entity));
 
-        self.tracking_copy
-            .borrow_mut()
-            .write(package_hash.into(), StoredValue::Package(contract_package));
+        self.tracking_copy.borrow_mut().write(
+            package_hash.into(),
+            StoredValue::SmartContract(contract_package),
+        );
 
         if let Some(account_hash) = maybe_account_hash {
             let entity_by_account = CLValue::from_t(entity_key)

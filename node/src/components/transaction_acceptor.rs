@@ -555,7 +555,7 @@ impl TransactionAcceptor {
                     })
             }
             NextStep::GetPackage(package_addr, maybe_package_version) => {
-                let key = Key::Package(package_addr);
+                let key = Key::SmartContract(package_addr);
                 effect_builder
                     .get_package(*block_header.state_root_hash(), key)
                     .event(move |maybe_package| Event::GetPackageResult {

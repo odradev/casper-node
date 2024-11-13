@@ -462,6 +462,8 @@ where
                      entry_point_len: u32,
                      input_ptr: u32,
                      input_len: u32,
+                     seed_ptr: u32,
+                     seed_len: u32,
                      result_ptr: u32| {
                         let wasmer_caller = WasmerCaller { env };
 
@@ -474,6 +476,8 @@ where
                             entry_point_len,
                             input_ptr,
                             input_len,
+                            seed_ptr,
+                            seed_len,
                             result_ptr,
                         ) {
                             Ok(host_result) => Ok(u32_from_host_result(host_result)),

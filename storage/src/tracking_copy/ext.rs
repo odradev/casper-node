@@ -688,8 +688,8 @@ where
                 "ContractPackage".to_string(),
                 other.type_name(),
             ))),
-            None => match self.read(&Key::Package(package_hash))? {
-                Some(StoredValue::Package(contract_package)) => Ok(contract_package),
+            None => match self.read(&Key::SmartContract(package_hash))? {
+                Some(StoredValue::SmartContract(contract_package)) => Ok(contract_package),
                 Some(other) => Err(TrackingCopyError::TypeMismatch(
                     StoredValueTypeMismatch::new("Package".to_string(), other.type_name()),
                 )),

@@ -15,6 +15,23 @@ use casper_sdk::{
 
 use contracts::token_owner::TokenOwnerContractRef;
 
+#[derive(Default)]
+struct Seed {
+    value: u64,
+}
+
+impl Seed {
+    fn next_seed(&mut self) -> [u8; 32] {
+        let current_value = {
+            let mut value: [u8; 32] = Default::default();
+            value[32 - 8..].copy_from_slice(&self.value.to_be_bytes());
+            value
+        };
+        self.value += 1;
+        current_value
+    }
+}
+
 fn next_test(counter: &mut u32, name: &str) -> u32 {
     let current = *counter;
     log!("Test {}. Running test: {name}", current);
@@ -22,7 +39,7 @@ fn next_test(counter: &mut u32, name: &str) -> u32 {
     current
 }
 
-fn perform_test(flipper_address: Address) {
+fn perform_test(seed: &mut Seed, flipper_address: Address) {
     use casper_sdk::ContractBuilder;
     use contracts::harness::{CustomError, INITIAL_GREETING};
 
@@ -40,6 +57,7 @@ fn perform_test(flipper_address: Address) {
         next_test(&mut counter, "Traps and reverts");
 
         let contract_handle = ContractBuilder::<HarnessRef>::new()
+            .with_seed(&seed.next_seed())
             .create(|| HarnessRef::initialize())
             .expect("Should create");
         log!("success");
@@ -152,6 +170,7 @@ fn perform_test(flipper_address: Address) {
         next_test(&mut counter, "Constructor with args");
 
         let contract_handle = ContractBuilder::<HarnessRef>::new()
+            .with_seed(&seed.next_seed())
             .create(|| HarnessRef::constructor_with_args("World".into()))
             .expect("Should create");
         log!("success 2");
@@ -176,6 +195,7 @@ fn perform_test(flipper_address: Address) {
         next_test(&mut counter, "Failing constructor");
 
         let error = match ContractBuilder::<HarnessRef>::new()
+            .with_seed(&seed.next_seed())
             .create(|| HarnessRef::failing_constructor("World".to_string()))
         {
             Ok(_) => panic!("Constructor that reverts should fail to create"),
@@ -184,6 +204,7 @@ fn perform_test(flipper_address: Address) {
         assert_eq!(error, CallError::CalleeReverted);
 
         let error = match ContractBuilder::<HarnessRef>::new()
+            .with_seed(&seed.next_seed())
             .create(|| HarnessRef::trapping_constructor())
         {
             Ok(_) => panic!("Constructor that traps should fail to create"),
@@ -201,11 +222,9 @@ fn perform_test(flipper_address: Address) {
 
         let contract_handle = ContractBuilder::<HarnessRef>::new()
             .with_transferred_value(1)
+            .with_seed(&seed.next_seed())
             .create(|| HarnessRef::payable_constructor())
             .expect("Should create");
-
-        // Harness::create(0, HarnessRef::constructor_with_args("Payable".to_string()))
-        //     .expect("Should create");
 
         assert_eq!(contract_handle.balance(), 1);
 
@@ -255,6 +274,7 @@ fn perform_test(flipper_address: Address) {
 
         let contract_handle = ContractBuilder::<HarnessRef>::new()
             .with_transferred_value(0)
+            .with_seed(&seed.next_seed())
             .create(|| HarnessRef::payable_constructor())
             .expect("Should create");
 
@@ -331,6 +351,7 @@ fn perform_test(flipper_address: Address) {
 
         let harness = ContractBuilder::<HarnessRef>::new()
             .with_transferred_value(0)
+            .with_seed(&seed.next_seed())
             .create(|| HarnessRef::constructor_with_args("Contract".into()))
             .expect("Should create");
 
@@ -338,6 +359,7 @@ fn perform_test(flipper_address: Address) {
 
         let token_owner = ContractBuilder::<TokenOwnerContractRef>::new()
             .with_transferred_value(initial_balance)
+            .with_seed(&seed.next_seed())
             .create(|| TokenOwnerContractRef::token_owner_initialize())
             .expect("Should create");
         assert_eq!(token_owner.balance(), initial_balance);
@@ -566,7 +588,8 @@ fn perform_test(flipper_address: Address) {
 
 #[casper(export)]
 pub fn call(flipper_address: Address) {
-    perform_test(flipper_address);
+    let mut seed = Seed::default();
+    perform_test(&mut seed, flipper_address);
 }
 
 #[casper(export)]

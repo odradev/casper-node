@@ -5,7 +5,6 @@ use casper_executor_wasm_interface::{executor::ExecuteError, GasUsage, HostError
 use casper_storage::{global_state::error::Error as GlobalStateError, AddressGenerator};
 use casper_types::{
     account::AccountHash,
-    contracts::{ContractHash, ContractPackageHash},
     execution::Effects,
     BlockHash, BlockTime, Digest, TransactionHash,
 };
@@ -180,12 +179,8 @@ impl InstallContractRequestBuilder {
 /// Result of executing a Wasm contract.
 #[derive(Debug)]
 pub struct InstallContractResult {
-    /// Contract package hash.
-    pub(crate) contract_package_hash: ContractPackageHash,
-    /// Contract hash.
-    pub(crate) contract_hash: ContractHash,
-    /// Version
-    pub(crate) version: u32,
+    /// Smart contract address.
+    pub(crate) smart_contract_addr: [u8; 32],
     /// Gas usage.
     pub(crate) gas_usage: GasUsage,
     /// Effects produced by the execution.
@@ -198,24 +193,16 @@ impl InstallContractResult {
         &self.effects
     }
 
-    pub fn contract_package_hash(&self) -> &ContractPackageHash {
-        &self.contract_package_hash
-    }
-
-    pub fn contract_hash(&self) -> &ContractHash {
-        &self.contract_hash
-    }
-
-    pub fn version(&self) -> &u32 {
-        &self.version
-    }
-
     pub fn gas_usage(&self) -> &GasUsage {
         &self.gas_usage
     }
 
     pub fn post_state_hash(&self) -> Digest {
         self.post_state_hash
+    }
+
+    pub fn smart_contract_addr(&self) -> &[u8; 32] {
+        &self.smart_contract_addr
     }
 }
 

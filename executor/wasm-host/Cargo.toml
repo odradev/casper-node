@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+base16 = "0.2.1"
 bytes = "1.6.0"
 casper-executor-wasm-common = { path = "../wasm-common" }
 casper-executor-wasm-interface = { path = "../wasm-interface" }

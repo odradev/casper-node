@@ -198,7 +198,7 @@ impl<T: StateReader> StateTracker<T> {
         contract_package.insert_entity_version(self.protocol_version.value().major, entity_hash);
         self.write_entry(
             package_hash.into(),
-            StoredValue::Package(contract_package.clone()),
+            StoredValue::SmartContract(contract_package.clone()),
         );
 
         let entity_key = addressable_entity.entity_key(entity_hash);

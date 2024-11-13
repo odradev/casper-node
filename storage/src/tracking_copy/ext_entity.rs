@@ -785,7 +785,7 @@ where
             self.write(entity_key, StoredValue::AddressableEntity(updated_entity));
         }
 
-        let package_key = Key::Package(
+        let package_key = Key::SmartContract(
             legacy_package_key
                 .into_hash_addr()
                 .ok_or(Self::Error::UnexpectedKeyVariant(legacy_package_key))?,
@@ -794,7 +794,7 @@ where
         let access_key_value =
             CLValue::from_t((package_key, access_uref)).map_err(Self::Error::CLValue)?;
         self.write(legacy_package_key, StoredValue::CLValue(access_key_value));
-        self.write(package_key, StoredValue::Package(package));
+        self.write(package_key, StoredValue::SmartContract(package));
         Ok(())
     }
 

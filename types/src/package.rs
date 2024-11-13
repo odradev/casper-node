@@ -221,6 +221,12 @@ impl EntityVersions {
     pub fn version_count(&self) -> usize {
         self.0.len()
     }
+
+    /// Returns the latest entity version key if it exists.
+    pub fn latest(&self) -> Option<&AddressableEntityHash> {
+        let (_, value) = self.0.last_key_value()?;
+        Some(value)
+    }
 }
 
 impl ToBytes for EntityVersions {
@@ -783,7 +789,7 @@ impl Package {
     }
 
     /// Gets the next available entity version for the given protocol version
-    fn next_entity_version_for(&self, protocol_version: ProtocolVersionMajor) -> EntityVersion {
+    pub fn next_entity_version_for(&self, protocol_version: ProtocolVersionMajor) -> EntityVersion {
         let current_version = self
             .versions
             .0

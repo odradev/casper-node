@@ -797,6 +797,13 @@ impl EntityAddr {
 
         Err(FromStrError::InvalidPrefix)
     }
+
+    pub fn into_smart_contract(&self) -> Option<[u8; 32]> {
+        match self {
+            EntityAddr::SmartContract(addr) => Some(*addr),
+            _ => None,
+        }
+    }
 }
 
 impl ToBytes for EntityAddr {
