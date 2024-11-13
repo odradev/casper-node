@@ -132,7 +132,8 @@ pub enum BinaryRequest {
         /// Transaction to execute.
         transaction: Transaction,
     },
-    /// Minimalistic request to keep the connection alive if the client wants to have a long running connection.
+    /// Minimalistic request to keep the connection alive if the client wants to have a long
+    /// running connection.
     KeepAliveRequest,
 }
 
