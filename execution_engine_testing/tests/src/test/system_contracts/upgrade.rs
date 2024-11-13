@@ -3,12 +3,13 @@ use std::collections::BTreeMap;
 use num_rational::Ratio;
 
 use casper_engine_test_support::{
-    ChainspecConfig, ExecuteRequestBuilder, LmdbWasmTestBuilder, UpgradeRequestBuilder,
-    DEFAULT_ACCOUNT_ADDR, DEFAULT_MAX_ASSOCIATED_KEYS, DEFAULT_UNBONDING_DELAY,
-    LOCAL_GENESIS_REQUEST,
+    utils, ChainspecConfig, ExecuteRequestBuilder, LmdbWasmTestBuilder, UpgradeRequestBuilder,
+    DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_SECRET_KEY, DEFAULT_MAX_ASSOCIATED_KEYS,
+    DEFAULT_UNBONDING_DELAY, LOCAL_GENESIS_REQUEST,
 };
 
 use crate::{lmdb_fixture, lmdb_fixture::ENTRY_REGISTRY_SPECIAL_ADDRESS};
+use casper_execution_engine::engine_state::{SessionDataV1, SessionInputData};
 use casper_types::{
     account::{AccountHash, ACCOUNT_HASH_LENGTH},
     contracts::NamedKeys,
@@ -24,7 +25,7 @@ use casper_types::{
         mint::ROUND_SEIGNIORAGE_RATE_KEY,
     },
     Account, AddressableEntityHash, CLValue, CoreConfig, EntityAddr, EraId, Key, ProtocolVersion,
-    StorageCosts, StoredValue, SystemHashRegistry, U256, U512,
+    StorageCosts, StoredValue, SystemHashRegistry, TransactionV1Builder, U256, U512,
 };
 use rand::Rng;
 
@@ -893,27 +894,30 @@ fn should_migrate_seigniorage_snapshot_to_new_version() {
 #[ignore]
 #[test]
 fn should_allow_1x_user_to_install_in_2x() {
-    // let (mut builder, lmdb_fixture_state, _temp_dir) =
-    //     lmdb_fixture::builder_from_global_state_fixture(lmdb_fixture::RELEASE_1_5_8);
+    let (mut builder, lmdb_fixture_state, _temp_dir) =
+        lmdb_fixture::builder_from_global_state_fixture_with_enable_ae(
+            lmdb_fixture::RELEASE_1_5_8,
+            true,
+        );
     println!("got fixture");
-    // let old_protocol_version = lmdb_fixture_state.genesis_protocol_version();
-    //
-    // let mut upgrade_request = UpgradeRequestBuilder::new()
-    //     .with_current_protocol_version(old_protocol_version)
-    //     .with_new_protocol_version(ProtocolVersion::from_parts(2, 0, 0))
-    //     .with_activation_point(DEFAULT_ACTIVATION_POINT)
-    //     .with_enable_addressable_entity(true)
-    //     .build();
-    //
-    // builder
-    //     .upgrade(&mut upgrade_request)
-    //     .expect_upgrade_success();
-    //
-    // let account_as_1x = builder
-    //     .query(None, Key::Account(*DEFAULT_ACCOUNT_ADDR), &[])
-    //     .expect("must have stored value")
-    //     .as_account()
-    //     .is_some();
-    //
-    // assert!(account_as_1x)
+    let old_protocol_version = lmdb_fixture_state.genesis_protocol_version();
+
+    let mut upgrade_request = UpgradeRequestBuilder::new()
+        .with_current_protocol_version(old_protocol_version)
+        .with_new_protocol_version(ProtocolVersion::from_parts(2, 0, 0))
+        .with_activation_point(DEFAULT_ACTIVATION_POINT)
+        .with_enable_addressable_entity(true)
+        .build();
+
+    builder
+        .upgrade(&mut upgrade_request)
+        .expect_upgrade_success();
+
+    let account_as_1x = builder
+        .query(None, Key::Account(*DEFAULT_ACCOUNT_ADDR), &[])
+        .expect("must have stored value")
+        .as_account()
+        .is_some();
+
+    assert!(account_as_1x);
 }

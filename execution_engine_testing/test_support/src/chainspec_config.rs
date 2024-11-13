@@ -233,6 +233,11 @@ impl ChainspecConfig {
         self
     }
 
+    pub fn with_enable_addressable_entity(mut self, enable_addressable_entity: bool) -> Self {
+        self.core_config.enable_addressable_entity = enable_addressable_entity;
+        self
+    }
+
     /// Returns the `max_associated_keys` setting from the core config.
     pub fn max_associated_keys(&self) -> u32 {
         self.core_config.max_associated_keys

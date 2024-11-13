@@ -1,5 +1,6 @@
+use crate::lmdb_fixture;
 use casper_engine_test_support::{
-    utils, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
+    utils, ExecuteRequestBuilder, LmdbWasmTestBuilder, UpgradeRequestBuilder, DEFAULT_ACCOUNT_ADDR,
     DEFAULT_ACCOUNT_SECRET_KEY, LOCAL_GENESIS_REQUEST,
 };
 use casper_execution_engine::{
@@ -7,8 +8,8 @@ use casper_execution_engine::{
     execution::ExecError,
 };
 use casper_types::{
-    ApiError, BlockTime, InitiatorAddr, PricingMode, RuntimeArgs, Transaction, TransactionArgs,
-    TransactionEntryPoint, TransactionTarget, TransactionV1Builder,
+    ApiError, BlockTime, EraId, InitiatorAddr, Key, PricingMode, ProtocolVersion, RuntimeArgs,
+    Transaction, TransactionArgs, TransactionEntryPoint, TransactionTarget, TransactionV1Builder,
 };
 
 const CONTRACT: &str = "do_nothing_stored.wasm";
@@ -32,8 +33,11 @@ fn should_allow_add_contract_version_via_deploy() {
     builder.exec(deploy_request).expect_success().commit();
 }
 
-fn try_add_contract_version(is_install_upgrade: bool, should_succeed: bool) {
-    let mut builder = LmdbWasmTestBuilder::default();
+fn try_add_contract_version(
+    is_install_upgrade: bool,
+    should_succeed: bool,
+    mut builder: LmdbWasmTestBuilder,
+) {
     builder.run_genesis(LOCAL_GENESIS_REQUEST.clone()).commit();
 
     let module_bytes = utils::read_wasm_file(CONTRACT);
@@ -150,11 +154,43 @@ fn to_v1_session_input_data<'a>(
 #[ignore]
 #[test]
 fn should_allow_add_contract_version_via_transaction_v1_installer_upgrader() {
-    try_add_contract_version(true, true)
+    try_add_contract_version(true, true, LmdbWasmTestBuilder::default())
 }
 
 #[ignore]
 #[test]
 fn should_disallow_add_contract_version_via_transaction_v1_standard() {
-    try_add_contract_version(false, false)
+    try_add_contract_version(false, false, LmdbWasmTestBuilder::default())
+}
+
+#[ignore]
+#[test]
+fn should_allow_1x_user_to_add_contract_version_via_transaction_v1_installer_upgrader() {
+    let (mut builder, lmdb_fixture_state, _temp_dir) =
+        lmdb_fixture::builder_from_global_state_fixture_with_enable_ae(
+            lmdb_fixture::RELEASE_1_5_8,
+            true,
+        );
+    println!("got fixture");
+    let old_protocol_version = lmdb_fixture_state.genesis_protocol_version();
+
+    let mut upgrade_request = UpgradeRequestBuilder::new()
+        .with_current_protocol_version(old_protocol_version)
+        .with_new_protocol_version(ProtocolVersion::from_parts(2, 0, 0))
+        .with_activation_point(EraId::new(1))
+        .with_enable_addressable_entity(true)
+        .build();
+
+    builder
+        .upgrade(&mut upgrade_request)
+        .expect_upgrade_success();
+
+    let account_as_1x = builder
+        .query(None, Key::Account(*DEFAULT_ACCOUNT_ADDR), &[])
+        .expect("must have stored value")
+        .as_account()
+        .is_some();
+
+    assert!(account_as_1x);
+    try_add_contract_version(true, true, builder)
 }
