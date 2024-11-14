@@ -92,7 +92,7 @@ impl BidKind {
             BidKind::Delegator(delegator_bid) => {
                 let validator = delegator_bid.validator_public_key().to_account_hash();
                 let delegator = delegator_bid.delegator_public_key().to_account_hash();
-                BidAddr::Delegator {
+                BidAddr::DelegatedAccount {
                     validator,
                     delegator,
                 }
@@ -108,7 +108,7 @@ impl BidKind {
             BidKind::Reservation(reservation_bid) => {
                 let validator = reservation_bid.validator_public_key().to_account_hash();
                 let delegator = reservation_bid.delegator_public_key().to_account_hash();
-                BidAddr::Reservation {
+                BidAddr::ReservedDelegationAccount {
                     validator,
                     delegator,
                 }

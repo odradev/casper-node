@@ -64,7 +64,7 @@ impl ToBytes for KeyPrefix {
         match self {
             KeyPrefix::DelegatorBidAddrsByValidator(validator) => {
                 writer.push(KeyTag::BidAddr as u8);
-                writer.push(BidAddrTag::Delegator as u8);
+                writer.push(BidAddrTag::DelegatedAccount as u8);
                 validator.write_bytes(writer)?;
             }
             KeyPrefix::MessageEntriesByEntity(hash_addr) => {
@@ -112,7 +112,7 @@ impl FromBytes for KeyPrefix {
             tag if tag == KeyTag::BidAddr as u8 => {
                 let (bid_addr_tag, remainder) = u8::from_bytes(remainder)?;
                 match bid_addr_tag {
-                    tag if tag == BidAddrTag::Delegator as u8 => {
+                    tag if tag == BidAddrTag::DelegatedAccount as u8 => {
                         let (validator, remainder) = AccountHash::from_bytes(remainder)?;
                         (
                             KeyPrefix::DelegatorBidAddrsByValidator(validator),
@@ -217,7 +217,7 @@ mod tests {
 
         for (key, prefix) in [
             (
-                Key::BidAddr(BidAddr::new_delegator_addr((hash1, hash2))),
+                Key::BidAddr(BidAddr::new_delegator_account_addr((hash1, hash2))),
                 KeyPrefix::DelegatorBidAddrsByValidator(AccountHash::new(hash1)),
             ),
             (

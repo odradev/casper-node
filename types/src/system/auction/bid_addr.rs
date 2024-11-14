@@ -3,7 +3,7 @@ use crate::{
     bytesrepr,
     bytesrepr::{FromBytes, ToBytes},
     system::auction::error::Error,
-    EraId, Key, KeyTag, PublicKey,
+    EraId, Key, KeyTag, PublicKey, URefAddr,
 };
 use alloc::vec::Vec;
 use core::fmt::{Debug, Display, Formatter};
@@ -20,10 +20,11 @@ use serde::{Deserialize, Serialize};
 
 const UNIFIED_TAG: u8 = 0;
 const VALIDATOR_TAG: u8 = 1;
-const DELEGATOR_TAG: u8 = 2;
-
+const DELEGATED_ACCOUNT_TAG: u8 = 2;
+const DELEGATED_PURSE_TAG: u8 = 3;
 const CREDIT_TAG: u8 = 4;
-const RESERVATION_TAG: u8 = 5;
+const RESERVATION_ACCOUNT_TAG: u8 = 5;
+const RESERVATION_PURSE_TAG: u8 = 6;
 
 /// Serialization tag for BidAddr variants.
 #[derive(
@@ -38,14 +39,18 @@ pub enum BidAddrTag {
     /// BidAddr for validator bid.
     #[default]
     Validator = VALIDATOR_TAG,
-    /// BidAddr for delegator bid.
-    Delegator = DELEGATOR_TAG,
+    /// BidAddr for delegated account bid.
+    DelegatedAccount = DELEGATED_ACCOUNT_TAG,
+    /// BidAddr for delegated purse bid.
+    DelegatedPurse = DELEGATED_PURSE_TAG,
 
     /// BidAddr for auction credit.
     Credit = CREDIT_TAG,
 
-    /// BidAddr for reservation bid.
-    Reservation = RESERVATION_TAG,
+    /// BidAddr for reserved delegation account bid.
+    ReservedDelegationAccount = RESERVATION_ACCOUNT_TAG,
+    /// BidAddr for reserved delegation purse bid.
+    ReservedDelegationPurse = RESERVATION_PURSE_TAG,
 }
 
 impl Display for BidAddrTag {
@@ -53,10 +58,12 @@ impl Display for BidAddrTag {
         let tag = match self {
             BidAddrTag::Unified => UNIFIED_TAG,
             BidAddrTag::Validator => VALIDATOR_TAG,
-            BidAddrTag::Delegator => DELEGATOR_TAG,
+            BidAddrTag::DelegatedAccount => DELEGATED_ACCOUNT_TAG,
+            BidAddrTag::DelegatedPurse => DELEGATED_PURSE_TAG,
 
             BidAddrTag::Credit => CREDIT_TAG,
-            BidAddrTag::Reservation => RESERVATION_TAG,
+            BidAddrTag::ReservedDelegationAccount => RESERVATION_ACCOUNT_TAG,
+            BidAddrTag::ReservedDelegationPurse => RESERVATION_PURSE_TAG,
         };
         write!(f, "{}", base16::encode_lower(&[tag]))
     }
@@ -75,15 +82,21 @@ impl BidAddrTag {
         if value == VALIDATOR_TAG {
             return Some(BidAddrTag::Validator);
         }
-        if value == DELEGATOR_TAG {
-            return Some(BidAddrTag::Delegator);
+        if value == DELEGATED_ACCOUNT_TAG {
+            return Some(BidAddrTag::DelegatedAccount);
+        }
+        if value == DELEGATED_PURSE_TAG {
+            return Some(BidAddrTag::DelegatedPurse);
         }
 
         if value == CREDIT_TAG {
             return Some(BidAddrTag::Credit);
         }
-        if value == RESERVATION_TAG {
-            return Some(BidAddrTag::Reservation);
+        if value == RESERVATION_ACCOUNT_TAG {
+            return Some(BidAddrTag::ReservedDelegationAccount);
+        }
+        if value == RESERVATION_PURSE_TAG {
+            return Some(BidAddrTag::ReservedDelegationPurse);
         }
 
         None
@@ -99,14 +112,20 @@ pub enum BidAddr {
     Unified(AccountHash),
     /// Validator BidAddr.
     Validator(AccountHash),
-    /// Delegator BidAddr.
-    Delegator {
+    /// Delegated account BidAddr.
+    DelegatedAccount {
         /// The validator addr.
         validator: AccountHash,
         /// The delegator addr.
         delegator: AccountHash,
     },
-
+    /// Delegated purse BidAddr.
+    DelegatedPurse {
+        /// The validator addr.
+        validator: AccountHash,
+        /// The delegated purse addr.
+        delegator: URefAddr,
+    },
     /// Validator credit BidAddr.
     Credit {
         /// The validator addr.
@@ -114,12 +133,19 @@ pub enum BidAddr {
         /// The era id.
         era_id: EraId,
     },
-    /// Reservation BidAddr
-    Reservation {
+    /// Reserved delegation account BidAddr
+    ReservedDelegationAccount {
         /// The validator addr.
         validator: AccountHash,
         /// The delegator addr.
         delegator: AccountHash,
+    },
+    /// Reserved delegation purse BidAddr
+    ReservedDelegationPurse {
+        /// The validator addr.
+        validator: AccountHash,
+        /// The delegated purse addr.
+        delegator: URefAddr,
     },
 }
 
@@ -137,23 +163,23 @@ impl BidAddr {
         BidAddr::Validator(AccountHash::new(validator))
     }
 
-    /// Constructs a new [`BidAddr::Delegator`] instance from the [`AccountHash`] pair of a
+    /// Constructs a new [`BidAddr::DelegatedAccount`] instance from the [`AccountHash`] pair of a
     /// validator and a delegator.
-    pub const fn new_delegator_addr(
+    pub const fn new_delegator_account_addr(
         pair: ([u8; ACCOUNT_HASH_LENGTH], [u8; ACCOUNT_HASH_LENGTH]),
     ) -> Self {
-        BidAddr::Delegator {
+        BidAddr::DelegatedAccount {
             validator: AccountHash::new(pair.0),
             delegator: AccountHash::new(pair.1),
         }
     }
 
-    /// Constructs a new [`BidAddr::Reservation`] instance from the [`AccountHash`] pair of a
-    /// validator and a delegator.
-    pub const fn new_reservation_addr(
+    /// Constructs a new [`BidAddr::ReservedDelegationAccount`] instance from the [`AccountHash`]
+    /// pair of a validator and a delegator.
+    pub const fn new_reservation_account_addr(
         pair: ([u8; ACCOUNT_HASH_LENGTH], [u8; ACCOUNT_HASH_LENGTH]),
     ) -> Self {
-        BidAddr::Reservation {
+        BidAddr::ReservedDelegationAccount {
             validator: AccountHash::new(pair.0),
             delegator: AccountHash::new(pair.1),
         }
@@ -170,12 +196,20 @@ impl BidAddr {
         maybe_delegator: Option<&PublicKey>,
     ) -> Self {
         if let Some(delegator) = maybe_delegator {
-            BidAddr::Delegator {
+            BidAddr::DelegatedAccount {
                 validator: AccountHash::from(validator),
                 delegator: AccountHash::from(delegator),
             }
         } else {
             BidAddr::Validator(AccountHash::from(validator))
+        }
+    }
+
+    /// Create a new instance of a [`BidAddr`].
+    pub fn new_purse_delegation(validator: &PublicKey, delegator: URefAddr) -> Self {
+        BidAddr::DelegatedPurse {
+            validator: validator.to_account_hash(),
+            delegator,
         }
     }
 
@@ -188,29 +222,57 @@ impl BidAddr {
     }
 
     /// Create a new instance of a [`BidAddr`].
-    pub fn new_reservation(validator: &PublicKey, delegator: &PublicKey) -> Self {
-        BidAddr::Reservation {
+    pub fn new_reservation_account(validator: &PublicKey, delegator: &PublicKey) -> Self {
+        BidAddr::ReservedDelegationAccount {
             validator: validator.into(),
             delegator: delegator.into(),
         }
     }
 
-    /// Returns the common prefix of all delegators to the cited validator.
-    pub fn delegators_prefix(&self) -> Result<Vec<u8>, Error> {
+    /// Create a new instance of a [`BidAddr`].
+    pub fn new_reservation_purse(validator: &PublicKey, delegator: URefAddr) -> Self {
+        BidAddr::ReservedDelegationPurse {
+            validator: validator.to_account_hash(),
+            delegator,
+        }
+    }
+
+    /// Returns the common prefix of all delegated accounts to the cited validator.
+    pub fn delegated_account_prefix(&self) -> Result<Vec<u8>, Error> {
         let validator = self.validator_account_hash();
         let mut ret = Vec::with_capacity(validator.serialized_length() + 2);
         ret.push(KeyTag::BidAddr as u8);
-        ret.push(BidAddrTag::Delegator as u8);
+        ret.push(BidAddrTag::DelegatedAccount as u8);
         validator.write_bytes(&mut ret)?;
         Ok(ret)
     }
 
-    /// Returns the common prefix of all reservations to the cited validator.
-    pub fn reservation_prefix(&self) -> Result<Vec<u8>, Error> {
+    /// Returns the common prefix of all delegated purses to the cited validator.
+    pub fn delegated_purse_prefix(&self) -> Result<Vec<u8>, Error> {
         let validator = self.validator_account_hash();
         let mut ret = Vec::with_capacity(validator.serialized_length() + 2);
         ret.push(KeyTag::BidAddr as u8);
-        ret.push(BidAddrTag::Reservation as u8);
+        ret.push(BidAddrTag::DelegatedPurse as u8);
+        validator.write_bytes(&mut ret)?;
+        Ok(ret)
+    }
+
+    /// Returns the common prefix of all reservations for accounts to the cited validator.
+    pub fn reserved_account_prefix(&self) -> Result<Vec<u8>, Error> {
+        let validator = self.validator_account_hash();
+        let mut ret = Vec::with_capacity(validator.serialized_length() + 2);
+        ret.push(KeyTag::BidAddr as u8);
+        ret.push(BidAddrTag::ReservedDelegationAccount as u8);
+        validator.write_bytes(&mut ret)?;
+        Ok(ret)
+    }
+
+    /// Returns the common prefix of all reservations for purses to the cited validator.
+    pub fn reserved_purse_prefix(&self) -> Result<Vec<u8>, Error> {
+        let validator = self.validator_account_hash();
+        let mut ret = Vec::with_capacity(validator.serialized_length() + 2);
+        ret.push(KeyTag::BidAddr as u8);
+        ret.push(BidAddrTag::ReservedDelegationPurse as u8);
         validator.write_bytes(&mut ret)?;
         Ok(ret)
     }
@@ -219,19 +281,37 @@ impl BidAddr {
     pub fn validator_account_hash(&self) -> AccountHash {
         match self {
             BidAddr::Unified(account_hash) | BidAddr::Validator(account_hash) => *account_hash,
-            BidAddr::Delegator { validator, .. }
+            BidAddr::DelegatedAccount { validator, .. }
+            | BidAddr::DelegatedPurse { validator, .. }
             | BidAddr::Credit { validator, .. }
-            | BidAddr::Reservation { validator, .. } => *validator,
+            | BidAddr::ReservedDelegationAccount { validator, .. }
+            | BidAddr::ReservedDelegationPurse { validator, .. } => *validator,
         }
     }
 
     /// Delegator account hash or none.
     pub fn maybe_delegator_account_hash(&self) -> Option<AccountHash> {
         match self {
-            BidAddr::Unified(_) | BidAddr::Validator(_) | BidAddr::Credit { .. } => None,
-            BidAddr::Delegator { delegator, .. } | BidAddr::Reservation { delegator, .. } => {
-                Some(*delegator)
-            }
+            BidAddr::Unified(_)
+            | BidAddr::Validator(_)
+            | BidAddr::Credit { .. }
+            | BidAddr::DelegatedPurse { .. }
+            | BidAddr::ReservedDelegationPurse { .. } => None,
+            BidAddr::DelegatedAccount { delegator, .. }
+            | BidAddr::ReservedDelegationAccount { delegator, .. } => Some(*delegator),
+        }
+    }
+
+    /// Delegator purse addr or none.
+    pub fn maybe_delegator_purse(&self) -> Option<URefAddr> {
+        match self {
+            BidAddr::Unified(_)
+            | BidAddr::Validator(_)
+            | BidAddr::Credit { .. }
+            | BidAddr::DelegatedAccount { .. }
+            | BidAddr::ReservedDelegationAccount { .. } => None,
+            BidAddr::DelegatedPurse { delegator, .. }
+            | BidAddr::ReservedDelegationPurse { delegator, .. } => Some(*delegator),
         }
     }
 
@@ -240,8 +320,10 @@ impl BidAddr {
         match self {
             BidAddr::Unified(_)
             | BidAddr::Validator(_)
-            | BidAddr::Delegator { .. }
-            | BidAddr::Reservation { .. } => None,
+            | BidAddr::DelegatedAccount { .. }
+            | BidAddr::DelegatedPurse { .. }
+            | BidAddr::ReservedDelegationAccount { .. }
+            | BidAddr::ReservedDelegationPurse { .. } => None,
             BidAddr::Credit { era_id, .. } => Some(*era_id),
         }
     }
@@ -253,8 +335,9 @@ impl BidAddr {
             BidAddr::Unified(_)
             | BidAddr::Validator(_)
             | BidAddr::Credit { .. }
-            | BidAddr::Reservation { .. } => false,
-            BidAddr::Delegator { .. } => true,
+            | BidAddr::ReservedDelegationAccount { .. }
+            | BidAddr::ReservedDelegationPurse { .. } => false,
+            BidAddr::DelegatedAccount { .. } | BidAddr::DelegatedPurse { .. } => true,
         }
     }
 
@@ -264,14 +347,22 @@ impl BidAddr {
             BidAddr::Unified(account_hash) | BidAddr::Validator(account_hash) => {
                 ToBytes::serialized_length(account_hash) + 1
             }
-            BidAddr::Delegator {
+            BidAddr::DelegatedAccount {
+                validator,
+                delegator,
+            } => ToBytes::serialized_length(validator) + ToBytes::serialized_length(delegator) + 1,
+            BidAddr::DelegatedPurse {
                 validator,
                 delegator,
             } => ToBytes::serialized_length(validator) + ToBytes::serialized_length(delegator) + 1,
             BidAddr::Credit { validator, era_id } => {
                 ToBytes::serialized_length(validator) + ToBytes::serialized_length(era_id) + 1
             }
-            BidAddr::Reservation {
+            BidAddr::ReservedDelegationAccount {
+                validator,
+                delegator,
+            } => ToBytes::serialized_length(validator) + ToBytes::serialized_length(delegator) + 1,
+            BidAddr::ReservedDelegationPurse {
                 validator,
                 delegator,
             } => ToBytes::serialized_length(validator) + ToBytes::serialized_length(delegator) + 1,
@@ -283,10 +374,12 @@ impl BidAddr {
         match self {
             BidAddr::Unified(_) => BidAddrTag::Unified,
             BidAddr::Validator(_) => BidAddrTag::Validator,
-            BidAddr::Delegator { .. } => BidAddrTag::Delegator,
+            BidAddr::DelegatedAccount { .. } => BidAddrTag::DelegatedAccount,
+            BidAddr::DelegatedPurse { .. } => BidAddrTag::DelegatedPurse,
 
             BidAddr::Credit { .. } => BidAddrTag::Credit,
-            BidAddr::Reservation { .. } => BidAddrTag::Reservation,
+            BidAddr::ReservedDelegationAccount { .. } => BidAddrTag::ReservedDelegationAccount,
+            BidAddr::ReservedDelegationPurse { .. } => BidAddrTag::ReservedDelegationPurse,
         }
     }
 }
@@ -296,6 +389,9 @@ impl ToBytes for BidAddr {
         let mut buffer = bytesrepr::allocate_buffer(self)?;
         buffer.push(self.tag() as u8);
         buffer.append(&mut self.validator_account_hash().to_bytes()?);
+        if let Some(delegator) = self.maybe_delegator_purse() {
+            buffer.append(&mut delegator.to_bytes()?);
+        }
         if let Some(delegator) = self.maybe_delegator_account_hash() {
             buffer.append(&mut delegator.to_bytes()?);
         }
@@ -318,11 +414,22 @@ impl FromBytes for BidAddr {
                 .map(|(account_hash, remainder)| (BidAddr::Unified(account_hash), remainder)),
             tag if tag == BidAddrTag::Validator as u8 => AccountHash::from_bytes(remainder)
                 .map(|(account_hash, remainder)| (BidAddr::Validator(account_hash), remainder)),
-            tag if tag == BidAddrTag::Delegator as u8 => {
+            tag if tag == BidAddrTag::DelegatedAccount as u8 => {
                 let (validator, remainder) = AccountHash::from_bytes(remainder)?;
                 let (delegator, remainder) = AccountHash::from_bytes(remainder)?;
                 Ok((
-                    BidAddr::Delegator {
+                    BidAddr::DelegatedAccount {
+                        validator,
+                        delegator,
+                    },
+                    remainder,
+                ))
+            }
+            tag if tag == BidAddrTag::DelegatedPurse as u8 => {
+                let (validator, remainder) = AccountHash::from_bytes(remainder)?;
+                let (delegator, remainder) = URefAddr::from_bytes(remainder)?;
+                Ok((
+                    BidAddr::DelegatedPurse {
                         validator,
                         delegator,
                     },
@@ -335,11 +442,22 @@ impl FromBytes for BidAddr {
                 let (era_id, remainder) = EraId::from_bytes(remainder)?;
                 Ok((BidAddr::Credit { validator, era_id }, remainder))
             }
-            tag if tag == BidAddrTag::Reservation as u8 => {
+            tag if tag == BidAddrTag::ReservedDelegationAccount as u8 => {
                 let (validator, remainder) = AccountHash::from_bytes(remainder)?;
                 let (delegator, remainder) = AccountHash::from_bytes(remainder)?;
                 Ok((
-                    BidAddr::Reservation {
+                    BidAddr::ReservedDelegationAccount {
+                        validator,
+                        delegator,
+                    },
+                    remainder,
+                ))
+            }
+            tag if tag == BidAddrTag::ReservedDelegationPurse as u8 => {
+                let (validator, remainder) = AccountHash::from_bytes(remainder)?;
+                let (delegator, remainder) = URefAddr::from_bytes(remainder)?;
+                Ok((
+                    BidAddr::ReservedDelegationPurse {
                         validator,
                         delegator,
                     },
@@ -382,10 +500,20 @@ impl Display for BidAddr {
             BidAddr::Unified(account_hash) | BidAddr::Validator(account_hash) => {
                 write!(f, "{}{}", tag, account_hash)
             }
-            BidAddr::Delegator {
+            BidAddr::DelegatedAccount {
                 validator,
                 delegator,
             } => write!(f, "{}{}{}", tag, validator, delegator),
+            BidAddr::DelegatedPurse {
+                validator,
+                delegator,
+            } => write!(
+                f,
+                "{}{}{}",
+                tag,
+                validator,
+                base16::encode_lower(&delegator),
+            ),
 
             BidAddr::Credit { validator, era_id } => write!(
                 f,
@@ -394,10 +522,20 @@ impl Display for BidAddr {
                 validator,
                 base16::encode_lower(&era_id.to_le_bytes())
             ),
-            BidAddr::Reservation {
+            BidAddr::ReservedDelegationAccount {
                 validator,
                 delegator,
             } => write!(f, "{}{}{}", tag, validator, delegator),
+            BidAddr::ReservedDelegationPurse {
+                validator,
+                delegator,
+            } => write!(
+                f,
+                "{}{}{}",
+                tag,
+                validator,
+                base16::encode_lower(&delegator),
+            ),
         }
     }
 }
@@ -407,20 +545,44 @@ impl Debug for BidAddr {
         match self {
             BidAddr::Unified(validator) => write!(f, "BidAddr::Unified({:?})", validator),
             BidAddr::Validator(validator) => write!(f, "BidAddr::Validator({:?})", validator),
-            BidAddr::Delegator {
+            BidAddr::DelegatedAccount {
                 validator,
                 delegator,
             } => {
-                write!(f, "BidAddr::Delegator({:?}{:?})", validator, delegator)
+                write!(
+                    f,
+                    "BidAddr::DelegatedAccount({:?}{:?})",
+                    validator, delegator
+                )
+            }
+            BidAddr::DelegatedPurse {
+                validator,
+                delegator,
+            } => {
+                write!(f, "BidAddr::DelegatedPurse({:?}{:?})", validator, delegator)
             }
             BidAddr::Credit { validator, era_id } => {
                 write!(f, "BidAddr::Credit({:?}{:?})", validator, era_id)
             }
-            BidAddr::Reservation {
+            BidAddr::ReservedDelegationAccount {
                 validator,
                 delegator,
             } => {
-                write!(f, "BidAddr::Reservation({:?}{:?})", validator, delegator)
+                write!(
+                    f,
+                    "BidAddr::ReservedDelegationAccount({:?}{:?})",
+                    validator, delegator
+                )
+            }
+            BidAddr::ReservedDelegationPurse {
+                validator,
+                delegator,
+            } => {
+                write!(
+                    f,
+                    "BidAddr::ReservedDelegationPurse({:?}{:?})",
+                    validator, delegator
+                )
             }
         }
     }
@@ -443,7 +605,7 @@ mod tests {
         bytesrepr::test_serialization_roundtrip(&bid_addr);
         let bid_addr = BidAddr::new_validator_addr([1; 32]);
         bytesrepr::test_serialization_roundtrip(&bid_addr);
-        let bid_addr = BidAddr::new_delegator_addr(([1; 32], [2; 32]));
+        let bid_addr = BidAddr::new_delegator_account_addr(([1; 32], [2; 32]));
         bytesrepr::test_serialization_roundtrip(&bid_addr);
         let bid_addr = BidAddr::new_credit(
             &PublicKey::from(
@@ -452,7 +614,7 @@ mod tests {
             EraId::new(0),
         );
         bytesrepr::test_serialization_roundtrip(&bid_addr);
-        let bid_addr = BidAddr::new_reservation_addr(([1; 32], [2; 32]));
+        let bid_addr = BidAddr::new_reservation_account_addr(([1; 32], [2; 32]));
         bytesrepr::test_serialization_roundtrip(&bid_addr);
     }
 }

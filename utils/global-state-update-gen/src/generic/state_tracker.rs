@@ -84,7 +84,7 @@ impl<T: StateReader> StateTracker<T> {
             BidKind::Credit(credit) => {
                 BidAddr::new_credit(credit.validator_public_key(), credit.era_id())
             }
-            BidKind::Reservation(reservation) => BidAddr::new_reservation(
+            BidKind::Reservation(reservation) => BidAddr::new_reservation_account(
                 reservation.validator_public_key(),
                 reservation.delegator_public_key(),
             ),

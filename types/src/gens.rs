@@ -168,7 +168,7 @@ pub fn bid_addr_validator_arb() -> impl Strategy<Value = BidAddr> {
 pub fn bid_addr_delegator_arb() -> impl Strategy<Value = BidAddr> {
     let x = u8_slice_32();
     let y = u8_slice_32();
-    (x, y).prop_map(BidAddr::new_delegator_addr)
+    (x, y).prop_map(BidAddr::new_delegator_account_addr)
 }
 
 pub fn balance_hold_addr_arb() -> impl Strategy<Value = BalanceHoldAddr> {

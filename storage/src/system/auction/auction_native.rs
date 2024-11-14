@@ -64,61 +64,99 @@ where
     }
 
     fn delegator_count(&mut self, bid_addr: &BidAddr) -> Result<usize, Error> {
-        let prefix = bid_addr.delegators_prefix()?;
-        let keys = self.get_keys_by_prefix(&prefix).map_err(|err| {
-            error!("RuntimeProvider::delegator_count {:?}", err);
-            Error::Storage
-        })?;
-        Ok(keys.len())
-    }
-
-    fn reservation_count(&mut self, bid_addr: &BidAddr) -> Result<usize, Error> {
-        let reservation_prefix = bid_addr.reservation_prefix()?;
-        let reservation_keys = self
-            .get_keys_by_prefix(&reservation_prefix)
-            .map_err(|err| {
-                error!("RuntimeProvider::reservation_count {:?}", err);
-                Error::Storage
-            })?;
-        Ok(reservation_keys.len())
-    }
-
-    fn used_reservation_count(&mut self, bid_addr: &BidAddr) -> Result<usize, Error> {
-        let delegator_prefix = bid_addr.delegators_prefix()?;
-        let delegator_keys = self.get_keys_by_prefix(&delegator_prefix).map_err(|err| {
-            error!("RuntimeProvider::used_reservation_count {:?}", err);
-            Error::Storage
-        })?;
-        let delegator_account_hashes: Vec<AccountHash> = delegator_keys
-            .into_iter()
-            .filter_map(|key| {
-                if let Key::BidAddr(BidAddr::Delegator { delegator, .. }) = key {
-                    Some(delegator)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        let reservation_prefix = bid_addr.reservation_prefix()?;
-        let reservation_keys = self
-            .get_keys_by_prefix(&reservation_prefix)
-            .map_err(|err| {
+        let delegated_accounts = {
+            let prefix = bid_addr.delegated_account_prefix()?;
+            let keys = self.get_keys_by_prefix(&prefix).map_err(|err| {
                 error!("RuntimeProvider::delegator_count {:?}", err);
                 Error::Storage
             })?;
+            keys.len()
+        };
+        let delegated_purses = {
+            let prefix = bid_addr.delegated_purse_prefix()?;
+            let keys = self.get_keys_by_prefix(&prefix).map_err(|err| {
+                error!("RuntimeProvider::delegator_count {:?}", err);
+                Error::Storage
+            })?;
+            keys.len()
+        };
+        Ok(delegated_accounts.saturating_add(delegated_purses))
+    }
 
-        let used_reservations_count = reservation_keys
-            .iter()
-            .filter(|reservation| {
-                if let Key::BidAddr(BidAddr::Reservation { delegator, .. }) = reservation {
-                    delegator_account_hashes.contains(delegator)
-                } else {
-                    false
+    fn reservation_count(&mut self, bid_addr: &BidAddr) -> Result<usize, Error> {
+        let reserved_accounts = {
+            let reservation_prefix = bid_addr.reserved_account_prefix()?;
+            let reservation_keys = self
+                .get_keys_by_prefix(&reservation_prefix)
+                .map_err(|err| {
+                    error!("RuntimeProvider::reservation_count {:?}", err);
+                    Error::Storage
+                })?;
+            reservation_keys.len()
+        };
+        let reserved_purses = {
+            let reservation_prefix = bid_addr.reserved_purse_prefix()?;
+            let reservation_keys = self
+                .get_keys_by_prefix(&reservation_prefix)
+                .map_err(|err| {
+                    error!("RuntimeProvider::reservation_count {:?}", err);
+                    Error::Storage
+                })?;
+            reservation_keys.len()
+        };
+        Ok(reserved_accounts.saturating_add(reserved_purses))
+    }
+
+    fn used_reservation_count(&mut self, bid_addr: &BidAddr) -> Result<usize, Error> {
+        let reservation_account_prefix = bid_addr.reserved_account_prefix()?;
+        let reservation_purse_prefix = bid_addr.reserved_purse_prefix()?;
+
+        let mut reservation_keys = self
+            .get_keys_by_prefix(&reservation_account_prefix)
+            .map_err(|exec_error| {
+                error!("RuntimeProvider::reservation_count {:?}", exec_error);
+                <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
+            })?;
+
+        let more = self
+            .get_keys_by_prefix(&reservation_purse_prefix)
+            .map_err(|exec_error| {
+                error!("RuntimeProvider::reservation_count {:?}", exec_error);
+                <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
+            })?;
+
+        reservation_keys.extend(more);
+
+        let mut used = 0;
+        for reservation_key in reservation_keys {
+            if let Key::BidAddr(BidAddr::ReservedDelegationAccount {
+                validator,
+                delegator,
+            }) = reservation_key
+            {
+                let key_to_check = Key::BidAddr(BidAddr::DelegatedAccount {
+                    validator,
+                    delegator,
+                });
+                if let Ok(Some(_)) = self.read_bid(&key_to_check) {
+                    used += 1;
                 }
-            })
-            .count();
-        Ok(used_reservations_count)
+            }
+            if let Key::BidAddr(BidAddr::ReservedDelegationPurse {
+                validator,
+                delegator,
+            }) = reservation_key
+            {
+                let key_to_check = Key::BidAddr(BidAddr::DelegatedPurse {
+                    validator,
+                    delegator,
+                });
+                if let Ok(Some(_)) = self.read_bid(&key_to_check) {
+                    used += 1;
+                }
+            }
+        }
+        Ok(used)
     }
 
     fn vesting_schedule_period_millis(&self) -> u64 {

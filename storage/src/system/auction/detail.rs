@@ -744,7 +744,7 @@ fn has_reservation<P>(
 where
     P: RuntimeProvider + StorageProvider + ?Sized,
 {
-    let reservation_bid_key = BidAddr::Reservation {
+    let reservation_bid_key = BidAddr::ReservedDelegationAccount {
         validator: AccountHash::from(validator),
         delegator: AccountHash::from(delegator),
     }
@@ -859,7 +859,7 @@ where
     let bid = read_validator_bid(provider, &validator_bid_addr.into())?;
 
     // is there already a record for this delegator?
-    let reservation_bid_key = BidAddr::Reservation {
+    let reservation_bid_key = BidAddr::ReservedDelegationAccount {
         validator: AccountHash::from(reservation.validator_public_key()),
         delegator: AccountHash::from(reservation.delegator_public_key()),
     }
@@ -910,7 +910,7 @@ where
     let validator_bid = read_validator_bid(provider, &validator_bid_addr.into())?;
 
     // is there a reservation for this delegator?
-    let reservation_bid_addr = BidAddr::Reservation {
+    let reservation_bid_addr = BidAddr::ReservedDelegationAccount {
         validator: AccountHash::from(&validator),
         delegator: AccountHash::from(&delegator),
     };
@@ -995,7 +995,7 @@ where
     let bid_addr = BidAddr::from(validator_public_key.clone());
     let delegator_bid_keys = provider.get_keys_by_prefix(
         &bid_addr
-            .delegators_prefix()
+            .delegated_account_prefix()
             .map_err(|_| Error::Serialization)?,
     )?;
     for delegator_bid_key in delegator_bid_keys {
@@ -1033,7 +1033,7 @@ where
     let bid_addr = BidAddr::from(validator_public_key.clone());
     let reservation_bid_keys = provider.get_keys_by_prefix(
         &bid_addr
-            .reservation_prefix()
+            .reserved_account_prefix()
             .map_err(|_| Error::Serialization)?,
     )?;
     for reservation_bid_key in reservation_bid_keys {
@@ -1210,7 +1210,7 @@ where
     let bid_addr = BidAddr::from(validator_public_key.clone());
     let delegator_bid_keys = provider.get_keys_by_prefix(
         &bid_addr
-            .delegators_prefix()
+            .delegated_account_prefix()
             .map_err(|_| Error::Serialization)?,
     )?;
 
@@ -1234,7 +1234,7 @@ where
     let bid_addr = BidAddr::from(validator_public_key.clone());
     let reservation_bid_keys = provider.get_keys_by_prefix(
         &bid_addr
-            .reservation_prefix()
+            .reserved_account_prefix()
             .map_err(|_| Error::Serialization)?,
     )?;
 
