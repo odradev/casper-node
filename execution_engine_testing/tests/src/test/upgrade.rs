@@ -1051,17 +1051,6 @@ fn call_and_migrate_purse_holder_contract(migration_scenario: MigrationScenario)
 
     builder.exec(execute_request).expect_success().commit();
 
-    // There is only one version present, post migration there should also
-    // be only one.
-    let version_count = builder
-        .get_package(package_hash)
-        .expect("must have package")
-        .versions()
-        .version_count();
-    println!("{version_count}");
-    //
-    // assert_eq!(version_count, 1usize);
-
     let updated_entity = builder
         .get_entity_with_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
         .expect("must have default entity");

@@ -375,7 +375,6 @@ impl LmdbWasmTestBuilder {
         let max_query_depth = DEFAULT_MAX_QUERY_DEPTH;
 
         let enable_addressable_entity = chainspec.core_config.enable_addressable_entity;
-        println!("entity {}", enable_addressable_entity);
         let global_state = match mode {
             GlobalStateMode::Create(database_flags) => {
                 let trie_store = LmdbTrieStore::new(&environment, None, database_flags)
