@@ -38,8 +38,6 @@ fn try_add_contract_version(
     should_succeed: bool,
     mut builder: LmdbWasmTestBuilder,
 ) {
-    builder.run_genesis(LOCAL_GENESIS_REQUEST.clone()).commit();
-
     let module_bytes = utils::read_wasm_file(CONTRACT);
 
     let txn = TransactionV1Builder::new_session(
@@ -154,13 +152,17 @@ fn to_v1_session_input_data<'a>(
 #[ignore]
 #[test]
 fn should_allow_add_contract_version_via_transaction_v1_installer_upgrader() {
-    try_add_contract_version(true, true, LmdbWasmTestBuilder::default())
+    let mut builder = LmdbWasmTestBuilder::default();
+    builder.run_genesis(LOCAL_GENESIS_REQUEST.clone()).commit();
+    try_add_contract_version(true, true, builder)
 }
 
 #[ignore]
 #[test]
 fn should_disallow_add_contract_version_via_transaction_v1_standard() {
-    try_add_contract_version(false, false, LmdbWasmTestBuilder::default())
+    let mut builder = LmdbWasmTestBuilder::default();
+    builder.run_genesis(LOCAL_GENESIS_REQUEST.clone()).commit();
+    try_add_contract_version(false, false, builder)
 }
 
 #[ignore]
@@ -171,7 +173,6 @@ fn should_allow_1x_user_to_add_contract_version_via_transaction_v1_installer_upg
             lmdb_fixture::RELEASE_1_5_8,
             true,
         );
-    println!("got fixture");
     let old_protocol_version = lmdb_fixture_state.genesis_protocol_version();
 
     let mut upgrade_request = UpgradeRequestBuilder::new()

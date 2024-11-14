@@ -233,6 +233,7 @@ impl ChainspecConfig {
         self
     }
 
+    /// Sets the enable addressable entity flag.
     pub fn with_enable_addressable_entity(mut self, enable_addressable_entity: bool) -> Self {
         self.core_config.enable_addressable_entity = enable_addressable_entity;
         self

@@ -27,9 +27,8 @@ use casper_types::{
         MINT,
     },
     BlockGlobalAddr, BlockTime, ByteCode, ByteCodeAddr, ByteCodeHash, CLValue, ChecksumRegistry,
-    Contract, EntityAddr, EntryPointValue, EntryPoints, HashAddr, HoldBalanceHandling, HoldsEpoch,
-    Key, Motes, Package, StoredValue, StoredValueTypeMismatch, SystemHashRegistry, URef, URefAddr,
-    U512,
+    Contract, EntityAddr, EntryPoints, HashAddr, HoldBalanceHandling, HoldsEpoch, Key, Motes,
+    Package, StoredValue, StoredValueTypeMismatch, SystemHashRegistry, URef, URefAddr, U512,
 };
 
 /// Higher-level operations on the state via a `TrackingCopy`.
