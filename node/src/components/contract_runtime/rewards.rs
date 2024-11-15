@@ -432,8 +432,9 @@ pub(crate) async fn fetch_data_and_calculate_rewards_for_era<REv: ReactorEventT>
         // Calculate and push reward metric(s)
         match &rewards {
             Ok(rewards_map) => {
-                let expected_total_seigniorage = reward_per_round_current_era.to_integer()
-                    * U512::from(cited_blocks_count_current_era as u64);
+                let expected_total_seigniorage = reward_per_round_current_era
+                    .to_integer()
+                    .saturating_mul(U512::from(cited_blocks_count_current_era as u64));
                 let actual_total_seigniorage =
                     rewards_map
                         .iter()
@@ -441,7 +442,7 @@ pub(crate) async fn fetch_data_and_calculate_rewards_for_era<REv: ReactorEventT>
                             let current_era_reward = rewards_vec
                                 .first()
                                 .expect("expected current era reward amount");
-                            acc + current_era_reward
+                            acc.saturating_add(*current_era_reward)
                         });
                 let seigniorage_target_fraction = Ratio::new(
                     actual_total_seigniorage.as_u128(),
