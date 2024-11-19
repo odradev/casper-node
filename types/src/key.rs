@@ -899,13 +899,14 @@ impl Key {
             Err(error) => return Err(FromStrError::EntryPoint(error.to_string())),
         }
 
-        if let Some(contract_entity_hash) = input.strip_prefix(STATE_PREFIX) {
-            let package_addr_bytes = checksummed_hex::decode(contract_entity_hash)
-                .map_err(|error| FromStrError::State(error.to_string()))?;
-
-            let entity_hash_addr: HashAddr = PackageAddr::try_from(package_addr_bytes.as_ref())
-                .map_err(|error| FromStrError::Package(error.to_string()))?;
-            return Ok(Key::State(EntityAddr::SmartContract(entity_hash_addr)));
+        if let Some(entity_addr_formatted) = input.strip_prefix(STATE_PREFIX) {
+            match EntityAddr::from_formatted_str(entity_addr_formatted) {
+                Ok(entity_addr) => return Ok(Key::State(entity_addr)),
+                Err(addressable_entity::FromStrError::InvalidPrefix) => {}
+                Err(error) => {
+                    return Err(FromStrError::State(error.to_string()));
+                }
+            }
         }
 
         Err(FromStrError::UnknownPrefix)
@@ -2608,13 +2609,6 @@ mod tests {
 
     #[test]
     fn serialization_roundtrip_json() {
-        let round_trip = |key: &Key| {
-            let encoded = serde_json::to_value(key).unwrap();
-            let decoded = serde_json::from_value(encoded.clone())
-                .unwrap_or_else(|_| panic!("{} {}", key, encoded));
-            assert_eq!(key, &decoded);
-        };
-
         for key in KEYS {
             round_trip(key);
         }
@@ -2662,6 +2656,19 @@ mod tests {
     }
 
     #[test]
+    fn state_json_deserialization() {
+        let mut test_rng = TestRng::new();
+        let state_key = Key::State(EntityAddr::new_account(test_rng.gen()));
+        round_trip(&state_key);
+
+        let state_key = Key::State(EntityAddr::new_system(test_rng.gen()));
+        round_trip(&state_key);
+
+        let state_key = Key::State(EntityAddr::new_smart_contract(test_rng.gen()));
+        round_trip(&state_key);
+    }
+
+    #[test]
     fn roundtrip() {
         bytesrepr::test_serialization_roundtrip(&ACCOUNT_KEY);
         bytesrepr::test_serialization_roundtrip(&HASH_KEY);
@@ -2690,5 +2697,12 @@ mod tests {
         bytesrepr::test_serialization_roundtrip(&MESSAGE_TOPIC_KEY);
         bytesrepr::test_serialization_roundtrip(&MESSAGE_KEY);
         bytesrepr::test_serialization_roundtrip(&NAMED_KEY);
+    }
+
+    fn round_trip(key: &Key) {
+        let encoded = serde_json::to_value(key).unwrap();
+        let decoded = serde_json::from_value(encoded.clone())
+            .unwrap_or_else(|_| panic!("{} {}", key, encoded));
+        assert_eq!(key, &decoded);
     }
 }

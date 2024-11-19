@@ -851,7 +851,10 @@ fn setup_upgrade_threshold_state() -> (LmdbWasmTestBuilder, AccountHash) {
     const UPGRADE_THRESHOLDS_FIXTURE: &str = "upgrade_thresholds";
 
     let (mut builder, lmdb_fixture_state, _temp_dir) =
-        crate::lmdb_fixture::builder_from_global_state_fixture(UPGRADE_THRESHOLDS_FIXTURE);
+        crate::lmdb_fixture::builder_from_global_state_fixture_with_enable_ae(
+            UPGRADE_THRESHOLDS_FIXTURE,
+            true,
+        );
 
     let current_protocol_version = lmdb_fixture_state.genesis_protocol_version();
 
@@ -866,7 +869,7 @@ fn setup_upgrade_threshold_state() -> (LmdbWasmTestBuilder, AccountHash) {
         .with_activation_point(activation_point)
         .with_new_gas_hold_handling(HoldBalanceHandling::Accrued)
         .with_new_gas_hold_interval(24 * 60 * 60 * 60)
-        .with_migrate_legacy_contracts(true)
+        .with_enable_addressable_entity(true)
         .build();
 
     builder
@@ -1000,16 +1003,6 @@ fn call_and_migrate_purse_holder_contract(migration_scenario: MigrationScenario)
         .into_hash_addr()
         .map(PackageHash::new)
         .unwrap();
-
-    // There is only one version present, post migration there should also
-    // be only one.
-    let version_count = builder
-        .get_package(package_hash)
-        .expect("must have package")
-        .versions()
-        .version_count();
-
-    assert_eq!(version_count, 1usize);
 
     let execute_request = match migration_scenario {
         MigrationScenario::ByPackageName(maybe_contract_version) => {

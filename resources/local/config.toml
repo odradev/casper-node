@@ -327,6 +327,12 @@ max_connections = 5
 # The implementation uses a sliding window algorithm.
 qps_limit = 110
 
+# The amount of time between checks of the connection keepalive mechanism
+keepalive_check_interval = '20 seconds'
+
+# The amount of inactivity on a binary port connection which will force a close from the keepalive mechanism
+keepalive_no_activity_timeout = '180 seconds'
+
 # ==============================================
 # Configuration options for the REST HTTP server
 # ==============================================
