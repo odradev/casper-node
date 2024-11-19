@@ -79,7 +79,6 @@ impl BlockAcceptor {
         // from the fetcher it'll already be verified.
         if let Err(error) = meta_block.block.verify() {
             warn!(%error, "received invalid block");
-            // TODO[RC]: Consider renaming `InvalidGossip` and/or restructuring the errors
             return match peer {
                 Some(node_id) => Err(AcceptorError::InvalidGossip(Box::new(
                     InvalidGossipError::Block {

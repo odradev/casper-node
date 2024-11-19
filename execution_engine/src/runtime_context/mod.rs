@@ -1,7 +1,7 @@
 //! The context of execution of WASM code.
 
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;
 
 use std::{
     cell::RefCell,
@@ -16,20 +16,24 @@ use tracing::error;
 use casper_storage::{
     global_state::{error::Error as GlobalStateError, state::StateReader},
     tracking_copy::{
-        AddResult, TrackingCopy, TrackingCopyEntityExt, TrackingCopyError, TrackingCopyExt,
+        AddResult, TrackingCopy, TrackingCopyCache, TrackingCopyEntityExt, TrackingCopyError,
+        TrackingCopyExt,
     },
     AddressGenerator,
 };
 
 use casper_types::{
-    account::{Account, AccountHash},
+    account::{
+        Account, AccountHash, AddKeyFailure, RemoveKeyFailure, SetThresholdFailure,
+        UpdateKeyFailure,
+    },
     addressable_entity::{
-        ActionType, AddKeyFailure, EntityKindTag, MessageTopicError, MessageTopics, NamedKeyAddr,
-        NamedKeyValue, NamedKeys, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure, Weight,
+        ActionType, EntityKindTag, MessageTopicError, MessageTopics, NamedKeyAddr, NamedKeyValue,
+        Weight,
     },
     bytesrepr::ToBytes,
     contract_messages::{Message, MessageAddr, MessageTopicSummary, Messages, TopicNameHash},
-    contracts::{ContractHash, ContractPackage, ContractPackageHash},
+    contracts::{ContractHash, ContractPackage, ContractPackageHash, NamedKeys},
     execution::Effects,
     handle_stored_dictionary_value,
     system::auction::EraInfo,
@@ -80,7 +84,7 @@ pub struct RuntimeContext<'a, R> {
     remaining_spending_limit: U512,
 
     // Original account/contract for read only tasks taken before execution
-    runtime_footprint: &'a RuntimeFootprint,
+    runtime_footprint: Rc<RefCell<RuntimeFootprint>>,
     // Key pointing to the account / contract / entity context this instance is tied to
     context_key: Key,
     account_hash: AccountHash,
@@ -98,7 +102,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         named_keys: &'a mut NamedKeys,
-        runtime_footprint: &'a RuntimeFootprint,
+        runtime_footprint: Rc<RefCell<RuntimeFootprint>>,
         context_key: Key,
         authorization_keys: BTreeSet<AccountHash>,
         access_rights: ContextAccessRights,
@@ -158,7 +162,7 @@ where
         access_rights: ContextAccessRights,
         runtime_args: RuntimeArgs,
     ) -> Self {
-        let runtime_footprint = self.runtime_footprint;
+        let runtime_footprint = self.runtime_footprint.clone();
         let authorization_keys = self.authorization_keys.clone();
         let account_hash = self.account_hash;
 
@@ -214,6 +218,11 @@ where
 
     /// Returns named keys.
     pub fn named_keys(&self) -> &NamedKeys {
+        self.named_keys
+    }
+
+    /// Returns a mutable reference to named keys.
+    pub fn named_keys_mut(&mut self) -> &mut NamedKeys {
         self.named_keys
     }
 
@@ -288,8 +297,7 @@ where
 
     /// Remove Key from the `named_keys` map of the current context.
     /// It removes both from the ephemeral map (RuntimeContext::named_keys) but
-    /// also persistable map (one that is found in the
-    /// TrackingCopy/GlobalState).
+    /// also the to-be-persisted map (in the TrackingCopy/GlobalState).
     pub fn remove_key(&mut self, name: &str) -> Result<(), ExecError> {
         self.named_keys.remove(name);
         self.remove_key_from_entity(name)
@@ -315,9 +323,9 @@ where
         &self.access_rights
     }
 
-    /// Returns contract of the caller.
-    pub fn runtime_footprint(&self) -> &'a RuntimeFootprint {
-        self.runtime_footprint
+    /// Returns footprint of the caller.
+    pub fn runtime_footprint(&self) -> Rc<RefCell<RuntimeFootprint>> {
+        Rc::clone(&self.runtime_footprint)
     }
 
     /// Returns arguments.
@@ -446,7 +454,6 @@ where
         } else {
             return Err(ExecError::UnexpectedKeyVariant(entity_key));
         };
-
         self.tracking_copy
             .borrow_mut()
             .get_named_keys(entity_addr)
@@ -659,6 +666,11 @@ where
         self.tracking_copy.borrow().messages()
     }
 
+    /// Returns a copy of the current named keys of a tracking copy.
+    pub fn cache(&self) -> TrackingCopyCache {
+        self.tracking_copy.borrow().cache()
+    }
+
     /// Returns the cost charged for the last emitted message.
     pub fn emit_message_cost(&self) -> U512 {
         self.emit_message_cost
@@ -730,7 +742,7 @@ where
             | StoredValue::Contract(_)
             | StoredValue::AddressableEntity(_)
             | StoredValue::Package(_)
-            | StoredValue::Transfer(_)
+            | StoredValue::LegacyTransfer(_)
             | StoredValue::DeployInfo(_)
             | StoredValue::EraInfo(_)
             | StoredValue::Bid(_)
@@ -741,8 +753,9 @@ where
             | StoredValue::ContractWasm(_)
             | StoredValue::MessageTopic(_)
             | StoredValue::Message(_)
-            | StoredValue::Reservation(_)
-            | StoredValue::EntryPoint(_) => Ok(()),
+            | StoredValue::Prepaid(_)
+            | StoredValue::EntryPoint(_)
+            | StoredValue::RawBytes(_) => Ok(()),
         }
     }
 
@@ -1138,6 +1151,7 @@ where
 
         if !self
             .runtime_footprint()
+            .borrow()
             .can_manage_keys_with(&self.authorization_keys)
         {
             // Exit early if authorization keys weight doesn't exceed required
@@ -1214,6 +1228,7 @@ where
 
         if !self
             .runtime_footprint()
+            .borrow()
             .can_manage_keys_with(&self.authorization_keys)
         {
             // Exit early if authorization keys weight doesn't exceed required
@@ -1400,6 +1415,7 @@ where
     pub fn get_main_purse(&mut self) -> Result<URef, ExecError> {
         let main_purse = self
             .runtime_footprint()
+            .borrow()
             .main_purse()
             .ok_or_else(|| ExecError::InvalidContext)?;
         Ok(main_purse)

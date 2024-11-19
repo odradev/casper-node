@@ -1121,7 +1121,7 @@ fn should_retrieve_transactions_era_ids() {
     );
 
     // Check we get back both eras if we use some from each collection.
-    let both_eras = vec![EraId::new(1), EraId::new(2)].into_iter().collect();
+    let both_eras = HashSet::from_iter([EraId::new(1), EraId::new(2)]);
     assert_eq!(
         get_transactions_era_ids(
             &mut harness,
@@ -1375,7 +1375,6 @@ fn prepare_exec_result_with_transfer(
         limit,
         cost: limit.value(),
         consumed: limit,
-        payment: vec![],
         transfers: vec![transfer.clone()],
         effects: Effects::new(),
         size_estimate: rng.gen(),

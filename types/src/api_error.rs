@@ -6,10 +6,10 @@ use core::{
 };
 
 use crate::{
-    addressable_entity::{
-        self, AddKeyFailure, MessageTopicError, RemoveKeyFailure, SetThresholdFailure,
-        TryFromIntError, TryFromSliceForAccountHashError, UpdateKeyFailure,
+    account::{
+        AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, TryFromIntError, UpdateKeyFailure,
     },
+    addressable_entity::{self, MessageTopicError, TryFromSliceForAccountHashError},
     bytesrepr, contracts,
     system::{auction, handle_payment, mint},
     CLValueError,
@@ -162,7 +162,7 @@ pub enum ApiError {
     /// # use casper_types::ApiError;
     /// assert_eq!(ApiError::from(10), ApiError::UnexpectedContractRefVariant);
     /// ```
-    UnexpectedContractRefVariant, // TODO: this variant is not used any longer and can be removed
+    UnexpectedContractRefVariant,
     /// Invalid purse name given.
     /// ```
     /// # use casper_types::ApiError;
@@ -836,8 +836,6 @@ pub fn result_from(value: i32) -> Result<(), ApiError> {
 
 #[cfg(test)]
 mod tests {
-    use std::{i32, u16, u8};
-
     use super::*;
 
     fn round_trip(result: Result<(), ApiError>) {

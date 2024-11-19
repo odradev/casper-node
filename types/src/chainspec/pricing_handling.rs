@@ -7,10 +7,10 @@ use core::fmt::{Display, Formatter};
 use datasize::DataSize;
 use serde::{Deserialize, Serialize};
 
+const PRICING_HANDLING_TAG_LENGTH: u8 = 1;
+
 const PRICING_HANDLING_CLASSIC_TAG: u8 = 0;
 const PRICING_HANDLING_FIXED_TAG: u8 = 1;
-
-const PRICING_HANDLING_TAG_LENGTH: u8 = 1;
 
 /// Defines what pricing mode a network allows. Correlates to the PricingMode of a
 /// [`crate::Transaction`]. Nodes will not accept transactions whose pricing mode does not match.
@@ -74,6 +74,7 @@ impl FromBytes for PricingHandling {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]

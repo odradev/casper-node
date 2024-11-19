@@ -4,7 +4,7 @@ use casper_wasm::elements::Module;
 use casper_wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef};
 
 use casper_types::{
-    addressable_entity::NamedKeys, AccessRights, CLType, CLValue, Key, ProtocolVersion, PublicKey,
+    contracts::NamedKeys, AccessRights, CLType, CLValue, Key, ProtocolVersion, PublicKey,
     RuntimeArgs, URef, URefAddr, U128, U256, U512,
 };
 
@@ -1153,15 +1153,14 @@ fn rewrite_urefs(cl_value: CLValue, mut func: impl FnMut(&mut URef)) -> Result<C
             }
             (_, _) => cl_value,
         },
-        // TODO: nested matches for Tuple3?
         CLType::Tuple3(_) => cl_value,
         CLType::Key => {
-            let mut key: Key = cl_value.to_owned().into_t()?; // TODO: optimize?
+            let mut key: Key = cl_value.to_t()?;
             key.as_uref_mut().iter_mut().for_each(|v| func(v));
             CLValue::from_t(key)?
         }
         CLType::URef => {
-            let mut uref: URef = cl_value.to_owned().into_t()?; // TODO: optimize?
+            let mut uref: URef = cl_value.to_t()?;
             func(&mut uref);
             CLValue::from_t(uref)?
         }

@@ -2627,7 +2627,7 @@ fn should_validate_delegation_rate_of_genesis_validator() {
             Motes::new(ACCOUNT_1_BALANCE),
             Some(GenesisValidator::new(
                 Motes::new(ACCOUNT_1_BOND),
-                DelegationRate::max_value(),
+                DelegationRate::MAX,
             )),
         );
         tmp.push(account_1);
@@ -4474,15 +4474,6 @@ fn should_transfer_to_main_purse_in_case_of_redelegation_past_max_delegation_cap
 
         builder.advance_era();
     }
-
-    // TODO: reenable when new payment code is added
-    // let delegator_1_purse_balance_after = builder.get_purse_balance(delegator_1_main_purse);
-
-    // assert_eq!(
-    //     delegator_1_purse_balance_before
-    //         + U512::from(UNDELEGATE_AMOUNT_1 + DEFAULT_MINIMUM_DELEGATION_AMOUNT),
-    //     delegator_1_purse_balance_after
-    // )
 }
 
 #[ignore]

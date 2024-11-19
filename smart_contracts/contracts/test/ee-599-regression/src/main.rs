@@ -11,8 +11,7 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    account::AccountHash,
-    addressable_entity::{NamedKeys, Parameters},
+    account::AccountHash, addressable_entity::Parameters, contracts::NamedKeys,
     AddressableEntityHash, ApiError, CLType, EntryPoint, EntryPointAccess, EntryPointPayment,
     EntryPointType, EntryPoints, Key, RuntimeArgs, URef, U512,
 };
@@ -176,7 +175,10 @@ fn delegate() -> Result<(), ApiError> {
 
             let (contract_hash, _contract_version) =
                 storage::new_contract(entry_points, Some(known_keys), None, None, None);
-            runtime::put_key(TRANSFER_FUNDS_KEY, Key::contract_entity_key(contract_hash));
+            runtime::put_key(
+                TRANSFER_FUNDS_KEY,
+                Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
+            );
             // For easy access in outside world here `donation` purse is also attached
             // to the account
             runtime::put_key(DONATION_PURSE_COPY, purse.into());
@@ -188,7 +190,11 @@ fn delegate() -> Result<(), ApiError> {
 
             // This is a method that's gets forwarded into the sub contract
             let subcontract_method: String = runtime::get_named_arg(ARG_SUBCONTRACTMETHODFWD);
-            runtime::call_contract::<()>(contract_key, &subcontract_method, RuntimeArgs::default());
+            runtime::call_contract::<()>(
+                contract_key.into(),
+                &subcontract_method,
+                RuntimeArgs::default(),
+            );
         }
         _ => return Err(ContractError::InvalidDelegateMethod.into()),
     }

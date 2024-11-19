@@ -5,7 +5,10 @@ extern crate alloc;
 
 use alloc::string::String;
 use casper_contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
-use casper_types::{AddressableEntityHash, ApiError, PackageHash, RuntimeArgs};
+use casper_types::{
+    contracts::{ContractHash, ContractPackageHash},
+    ApiError, RuntimeArgs,
+};
 
 const CONTRACT_PACKAGE_HASH_KEY: &str = "contract_package_hash";
 const DO_SOMETHING_ENTRYPOINT: &str = "do_something";
@@ -25,7 +28,7 @@ pub extern "C" fn call() {
             .unwrap_or_revert()
             .into_entity_hash_addr()
             .ok_or(ApiError::UnexpectedKeyVariant)
-            .map(AddressableEntityHash::new)
+            .map(ContractHash::new)
             .unwrap_or_revert();
         runtime::call_contract::<()>(
             contract_hash,
@@ -38,7 +41,7 @@ pub extern "C" fn call() {
             .unwrap_or_revert()
             .into_package_addr()
             .ok_or(ApiError::UnexpectedKeyVariant)
-            .map(PackageHash::new)
+            .map(ContractPackageHash::new)
             .unwrap_or_revert();
 
         let contract_version = runtime::get_named_arg(ARG_CONTRACT_VERSION);

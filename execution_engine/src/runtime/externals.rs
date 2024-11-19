@@ -8,14 +8,14 @@ use casper_wasmi::{Externals, RuntimeArgs, RuntimeValue, Trap};
 use casper_storage::global_state::{error::Error as GlobalStateError, state::StateReader};
 use casper_types::{
     account::AccountHash,
-    addressable_entity::{EntryPoints, NamedKeys},
+    addressable_entity::EntryPoints,
     api_error,
     bytesrepr::{self, ToBytes},
     contract_messages::MessageTopicOperation,
-    contracts::ContractPackageHash,
+    contracts::{ContractPackageHash, NamedKeys},
     AddressableEntityHash, ApiError, EntityVersion, Gas, Group, HashAlgorithm, HostFunction,
-    HostFunctionCost, Key, PackageHash, PackageStatus, StoredValue, URef, U512,
-    UREF_SERIALIZED_LENGTH,
+    HostFunctionCost, Key, PackageHash, PackageStatus, PublicKey, Signature, StoredValue, URef,
+    U512, UREF_SERIALIZED_LENGTH,
 };
 
 use super::{args::Args, ExecError, Runtime};
@@ -572,8 +572,6 @@ where
                     output_size_ptr,
                 ) = Args::parse(args)?;
 
-                // TODO - use `num_new_urefs` * costs for unit uref, assuming these aren't
-                // already charged.
                 self.charge_host_function_call(
                     &host_function_costs.create_contract_user_group,
                     [
@@ -1021,7 +1019,7 @@ where
                 // args(4) = output of size value of host bytes data
                 let (package_ptr, package_size, label_ptr, label_size, value_size_ptr) =
                     Args::parse(args)?;
-                // TODO - add cost for 1x unit uref, assuming this isn't already charged
+
                 self.charge_host_function_call(
                     &host_function_costs.provision_contract_user_group_uref,
                     [
@@ -1102,10 +1100,8 @@ where
             FunctionIndex::NewDictionaryFuncIndex => {
                 // args(0) = pointer to output size (output param)
                 let (output_size_ptr,): (u32,) = Args::parse(args)?;
-
-                // TODO - dynamically calculate the size of the new data.  Currently using
-                //        hard-coded 33 which is correct as of now.
-                self.charge_host_function_call(&host_function_costs.new_uref, [0, 0, 33])?;
+                const UREF_LEN: u32 = 33u32;
+                self.charge_host_function_call(&host_function_costs.new_uref, [0, 0, UREF_LEN])?;
                 let ret = self.new_dictionary(output_size_ptr)?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
@@ -1177,7 +1173,7 @@ where
                 // args(0) (Output) Pointer to number of elements in the call stack.
                 // args(1) (Output) Pointer to size in bytes of the serialized call stack.
                 let (call_stack_len_ptr, result_size_ptr) = Args::parse(args)?;
-                // TODO: add cost table entry once we can upgrade safely
+
                 self.charge_host_function_call(
                     &HostFunction::fixed(10_000),
                     [call_stack_len_ptr, result_size_ptr],
@@ -1416,6 +1412,112 @@ where
                 if self.try_get_memory()?.set(out_ptr, &digest).is_err() {
                     return Ok(Some(RuntimeValue::I32(
                         u32::from(ApiError::HostBufferEmpty) as i32,
+                    )));
+                }
+
+                Ok(Some(RuntimeValue::I32(0)))
+            }
+
+            FunctionIndex::RecoverSecp256k1 => {
+                // args(0) = pointer to input bytes in memory
+                // args(1) = length of input bytes in memory
+                // args(2) = pointer to signature bytes in memory
+                // args(3) = length of signature bytes in memory
+                // args(4) = pointer to public key buffer in memory (size is fixed)
+                // args(5) = the recovery id
+
+                let (
+                    data_ptr,
+                    data_size,
+                    signature_ptr,
+                    signature_size,
+                    public_key_ptr,
+                    recovery_id,
+                ) = Args::parse(args)?;
+
+                self.charge_host_function_call(
+                    &host_function_costs.recover_secp256k1,
+                    [
+                        data_ptr,
+                        data_size,
+                        signature_ptr,
+                        signature_size,
+                        public_key_ptr,
+                        recovery_id,
+                    ],
+                )?;
+
+                if recovery_id >= 4 {
+                    return Ok(Some(RuntimeValue::I32(
+                        u32::from(ApiError::InvalidArgument) as i32,
+                    )));
+                }
+
+                let data = self.bytes_from_mem(data_ptr, data_size as usize)?;
+                let signature: Signature = self.t_from_mem(signature_ptr, signature_size)?;
+
+                let Ok(public_key) =
+                    casper_types::crypto::recover_secp256k1(data, &signature, recovery_id as u8)
+                else {
+                    return Ok(Some(RuntimeValue::I32(
+                        u32::from(ApiError::InvalidArgument) as i32,
+                    )));
+                };
+
+                let Ok(key_bytes) = public_key.to_bytes() else {
+                    return Ok(Some(RuntimeValue::I32(
+                        u32::from(ApiError::OutOfMemory) as i32
+                    )));
+                };
+
+                if self
+                    .try_get_memory()?
+                    .set(public_key_ptr, &key_bytes)
+                    .is_err()
+                {
+                    return Ok(Some(RuntimeValue::I32(
+                        u32::from(ApiError::HostBufferEmpty) as i32,
+                    )));
+                }
+
+                Ok(Some(RuntimeValue::I32(0)))
+            }
+
+            FunctionIndex::VerifySignature => {
+                // args(0) = pointer to message bytes in memory
+                // args(1) = length of message bytes
+                // args(2) = pointer to signature bytes in memory
+                // args(3) = length of signature bytes
+                // args(4) = pointer to public key bytes in memory
+                // args(5) = length of public key bytes
+                let (
+                    message_ptr,
+                    message_size,
+                    signature_ptr,
+                    signature_size,
+                    public_key_ptr,
+                    public_key_size,
+                ) = Args::parse(args)?;
+
+                self.charge_host_function_call(
+                    &host_function_costs.verify_signature,
+                    [
+                        message_ptr,
+                        message_size,
+                        signature_ptr,
+                        signature_size,
+                        public_key_ptr,
+                        public_key_size,
+                    ],
+                )?;
+
+                let message = self.bytes_from_mem(message_ptr, message_size as usize)?;
+                let signature: Signature = self.t_from_mem(signature_ptr, signature_size)?;
+                let public_key: PublicKey = self.t_from_mem(public_key_ptr, public_key_size)?;
+
+                if casper_types::crypto::verify(message, &signature, &public_key).is_err() {
+                    return Ok(Some(RuntimeValue::I32(
+                        u32::from(ApiError::InvalidArgument) as i32,
                     )));
                 }
 

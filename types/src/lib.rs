@@ -145,16 +145,15 @@ pub use chainspec::{
     DEFAULT_CONTROL_FLOW_IF_OPCODE, DEFAULT_CONTROL_FLOW_LOOP_OPCODE,
     DEFAULT_CONTROL_FLOW_RETURN_OPCODE, DEFAULT_CONTROL_FLOW_SELECT_OPCODE,
     DEFAULT_CONVERSION_COST, DEFAULT_CURRENT_MEMORY_COST, DEFAULT_DELEGATE_COST, DEFAULT_DIV_COST,
-    DEFAULT_FEE_HANDLING, DEFAULT_GAS_HOLD_BALANCE_HANDLING, DEFAULT_GLOBAL_COST,
-    DEFAULT_GROW_MEMORY_COST, DEFAULT_INTEGER_COMPARISON_COST, DEFAULT_LARGE_TRANSACTION_GAS_LIMIT,
-    DEFAULT_LOAD_COST, DEFAULT_LOCAL_COST, DEFAULT_MAX_PAYMENT_MOTES, DEFAULT_MIN_TRANSFER_MOTES,
-    DEFAULT_MUL_COST, DEFAULT_NEW_DICTIONARY_COST, DEFAULT_NOP_COST, DEFAULT_STORE_COST,
-    DEFAULT_TRANSFER_COST, DEFAULT_UNREACHABLE_COST, DEFAULT_V1_MAX_STACK_HEIGHT,
-    DEFAULT_V1_WASM_MAX_MEMORY,
+    DEFAULT_FEE_HANDLING, DEFAULT_GLOBAL_COST, DEFAULT_GROW_MEMORY_COST,
+    DEFAULT_INTEGER_COMPARISON_COST, DEFAULT_LARGE_TRANSACTION_GAS_LIMIT, DEFAULT_LOAD_COST,
+    DEFAULT_LOCAL_COST, DEFAULT_MAX_PAYMENT_MOTES, DEFAULT_MIN_TRANSFER_MOTES, DEFAULT_MUL_COST,
+    DEFAULT_NEW_DICTIONARY_COST, DEFAULT_NOP_COST, DEFAULT_STORE_COST, DEFAULT_TRANSFER_COST,
+    DEFAULT_UNREACHABLE_COST, DEFAULT_V1_MAX_STACK_HEIGHT, DEFAULT_V1_WASM_MAX_MEMORY,
 };
 pub use contract_wasm::{ContractWasm, ContractWasmHash};
 #[doc(inline)]
-pub use contracts::Contract;
+pub use contracts::{Contract, NamedKeys};
 pub use crypto::*;
 pub use deploy_info::DeployInfo;
 pub use digest::{
@@ -183,7 +182,7 @@ pub use protocol_version::{ProtocolVersion, VersionCheckResult};
 pub use runtime_footprint::RuntimeFootprint;
 pub use semver::{ParseSemVerError, SemVer, SEM_VER_SERIALIZED_LENGTH};
 pub use stored_value::{
-    GlobalStateIdentifier, StoredValue, TypeMismatch as StoredValueTypeMismatch,
+    GlobalStateIdentifier, StoredValue, StoredValueTag, TypeMismatch as StoredValueTypeMismatch,
 };
 pub use tagged::Tagged;
 #[cfg(any(feature = "std", test))]
@@ -196,10 +195,11 @@ pub use transaction::{
     DeployDecodeFromJsonError, DeployError, DeployExcessiveSizeError, DeployHash, DeployHeader,
     DeployId, ExecutableDeployItem, ExecutableDeployItemIdentifier, ExecutionInfo, InitiatorAddr,
     InvalidDeploy, InvalidTransaction, InvalidTransactionV1, NamedArg, PackageIdentifier,
-    PricingMode, PricingModeError, RuntimeArgs, Transaction, TransactionEntryPoint,
-    TransactionHash, TransactionId, TransactionInvocationTarget, TransactionRuntime,
-    TransactionScheduling, TransactionTarget, TransactionV1, TransactionV1DecodeFromJsonError,
-    TransactionV1Error, TransactionV1ExcessiveSizeError, TransactionV1Hash, TransferTarget,
+    PricingMode, PricingModeError, RuntimeArgs, Transaction, TransactionArgs,
+    TransactionEntryPoint, TransactionHash, TransactionId, TransactionInvocationTarget,
+    TransactionRuntime, TransactionScheduling, TransactionTarget, TransactionV1,
+    TransactionV1DecodeFromJsonError, TransactionV1Error, TransactionV1ExcessiveSizeError,
+    TransactionV1Hash, TransferTarget,
 };
 #[cfg(any(feature = "std", test))]
 pub use transaction::{

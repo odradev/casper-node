@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{contract_runtime::StateResultError, types::TransactionHeader};
-use casper_types::{execution::PaymentInfo, InitiatorAddr, Transfer};
+use casper_types::{InitiatorAddr, Transfer};
 use datasize::DataSize;
 use serde::Serialize;
 
@@ -21,6 +21,10 @@ use casper_types::{
     BlockHash, BlockHeaderV2, BlockV2, Digest, EraId, Gas, InvalidDeploy, InvalidTransaction,
     InvalidTransactionV1, ProtocolVersion, PublicKey, Transaction, TransactionHash, U512,
 };
+
+use self::wasm_v2_request::{WasmV2Error, WasmV2Result};
+
+use super::operations::wasm_v2_request;
 
 /// Request for validator weights for a specific era.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,7 +75,6 @@ pub(crate) struct ExecutionArtifactBuilder {
     messages: Messages,
     transfers: Vec<Transfer>,
     initiator: InitiatorAddr,
-    payment: Vec<PaymentInfo>,
     cost: U512,
     limit: Gas,
     consumed: Gas,
@@ -88,7 +91,6 @@ impl ExecutionArtifactBuilder {
             transfers: vec![],
             messages: Default::default(),
             initiator: transaction.initiator_addr(),
-            payment: vec![],
             cost: U512::zero(),
             limit: Gas::zero(),
             consumed: Gas::zero(),
@@ -168,6 +170,11 @@ impl ExecutionArtifactBuilder {
             .with_appended_messages(&mut wasm_v1_result.messages().clone())
             .with_appended_effects(wasm_v1_result.effects().clone());
         Ok(self)
+    }
+
+    pub fn with_error_message(&mut self, error_message: String) -> &mut Self {
+        self.error_message = Some(error_message);
+        self
     }
 
     pub fn with_set_refund_purse_result(
@@ -306,6 +313,7 @@ impl ExecutionArtifactBuilder {
         if let TransferResult::Success {
             mut transfers,
             effects,
+            cache: _,
         } = transfer_result
         {
             self.with_appended_transfers(&mut transfers)
@@ -333,13 +341,6 @@ impl ExecutionArtifactBuilder {
         self
     }
 
-    //TODO: use this when payment breakdown is implemented.
-    #[allow(unused)]
-    pub fn with_appended_payment_info(&mut self, payment: &mut Vec<PaymentInfo>) -> &mut Self {
-        self.payment.append(payment);
-        self
-    }
-
     pub(crate) fn build(self) -> ExecutionArtifact {
         let result = ExecutionResultV2 {
             effects: self.effects,
@@ -348,12 +349,40 @@ impl ExecutionArtifactBuilder {
             limit: self.limit,
             consumed: self.consumed,
             cost: self.cost,
-            payment: self.payment,
             size_estimate: self.size_estimate,
             error_message: self.error_message,
         };
         let execution_result = ExecutionResult::V2(result);
         ExecutionArtifact::new(self.hash, self.header, execution_result, self.messages)
+    }
+
+    /// Adds the error message from a `InvalidRequest` to the artifact.
+    pub(crate) fn with_invalid_wasm_v2_request(
+        &mut self,
+        ire: wasm_v2_request::InvalidRequest,
+    ) -> &mut Self {
+        if self.error_message.is_none() {
+            self.error_message = Some(format!("{}", ire));
+        }
+        self
+    }
+
+    /// Adds the result from a `WasmV2Result` to the artifact.
+    pub(crate) fn with_wasm_v2_result(&mut self, result: WasmV2Result) -> &mut Self {
+        self.with_added_consumed(Gas::from(result.gas_usage().gas_spent()));
+
+        // TODO: Use system message to notify about contract hash
+
+        self.with_appended_effects(result.effects().clone());
+
+        self
+    }
+
+    /// Adds the error message from a `WasmV2Error` to the artifact.
+    #[inline]
+    pub(crate) fn with_wasm_v2_error(&mut self, error: WasmV2Error) -> &mut Self {
+        self.with_error_message(error.to_string());
+        self
     }
 }
 

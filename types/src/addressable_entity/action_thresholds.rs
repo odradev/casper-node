@@ -9,8 +9,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    account::ActionThresholds as AccountActionThresholds,
-    addressable_entity::{ActionType, SetThresholdFailure, Weight, WEIGHT_SERIALIZED_LENGTH},
+    account::{ActionThresholds as AccountActionThresholds, SetThresholdFailure},
+    addressable_entity::{ActionType, Weight, WEIGHT_SERIALIZED_LENGTH},
     bytesrepr::{self, Error, FromBytes, ToBytes},
 };
 

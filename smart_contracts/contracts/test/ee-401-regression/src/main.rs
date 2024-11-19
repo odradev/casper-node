@@ -10,8 +10,8 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    addressable_entity::Parameters, CLType, CLValue, EntryPoint, EntryPointAccess,
-    EntryPointPayment, EntryPointType, EntryPoints, Key, URef,
+    addressable_entity::Parameters, AddressableEntityHash, CLType, CLValue, EntryPoint,
+    EntryPointAccess, EntryPointPayment, EntryPointType, EntryPoints, Key, URef,
 };
 
 const HELLO_EXT: &str = "hello_ext";
@@ -47,5 +47,8 @@ pub extern "C" fn call() {
         storage::new_contract(entry_points, None, None, None, None);
 
     runtime::put_key(CONTRACT_VERSION, storage::new_uref(contract_version).into());
-    runtime::put_key(HELLO_EXT, Key::contract_entity_key(contract_hash));
+    runtime::put_key(
+        HELLO_EXT,
+        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
+    );
 }

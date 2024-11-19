@@ -14,7 +14,7 @@ fn runtime_stack_overflow_should_cause_unreachable_error() {
         (memory $memory 1)
       )"#;
 
-    let module_bytes = wabt::wat2wasm(wat).unwrap();
+    let module_bytes = wat::parse_str(wat).unwrap();
 
     let do_stack_overflow_request = ExecuteRequestBuilder::module_bytes(
         *DEFAULT_ACCOUNT_ADDR,
@@ -30,11 +30,6 @@ fn runtime_stack_overflow_should_cause_unreachable_error() {
         .exec(do_stack_overflow_request)
         .expect_failure()
         .commit();
-
-    // TODO: In order to assert if proper message has been put on `stderr` we might consider
-    // extending EE to be able to write to arbitrary stream. It would default to `Stdout` so the
-    // users can see the message and we can set it to a pipe or file in the test, so we can analyze
-    // the output.
 
     let error = builder.get_error().expect("should have error");
     assert!(

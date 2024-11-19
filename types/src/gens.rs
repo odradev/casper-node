@@ -16,7 +16,7 @@ use crate::{
     },
     addressable_entity::{
         action_thresholds::gens::action_thresholds_arb, associated_keys::gens::associated_keys_arb,
-        MessageTopics, NamedKeyValue, NamedKeys, Parameters, Weight,
+        MessageTopics, NamedKeyValue, Parameters, Weight,
     },
     block::BlockGlobalAddr,
     byte_code::ByteCodeKind,
@@ -25,6 +25,7 @@ use crate::{
     contracts::{
         Contract, ContractHash, ContractPackage, ContractPackageStatus, ContractVersionKey,
         ContractVersions, EntryPoint as ContractEntryPoint, EntryPoints as ContractEntryPoints,
+        NamedKeys,
     },
     crypto::{
         self,
@@ -43,7 +44,8 @@ use crate::{
         SystemEntityType,
     },
     transaction::{
-        gens::deploy_hash_arb, FieldsContainer, InitiatorAddrAndSecretKey, TransactionV1Payload,
+        gens::deploy_hash_arb, FieldsContainer, InitiatorAddrAndSecretKey, TransactionArgs,
+        TransactionV1Payload,
     },
     transfer::{
         gens::{transfer_v1_addr_arb, transfer_v1_arb},
@@ -839,7 +841,7 @@ pub fn stored_value_arb() -> impl Strategy<Value = StoredValue> {
         contract_package_arb().prop_map(StoredValue::ContractPackage),
         addressable_entity_arb().prop_map(StoredValue::AddressableEntity),
         package_arb().prop_map(StoredValue::Package),
-        transfer_v1_arb().prop_map(StoredValue::Transfer),
+        transfer_v1_arb().prop_map(StoredValue::LegacyTransfer),
         deploy_info_arb().prop_map(StoredValue::DeployInfo),
         era_info_arb(1..10).prop_map(StoredValue::EraInfo),
         unified_bid_arb(0..3).prop_map(StoredValue::BidKind),
@@ -852,6 +854,7 @@ pub fn stored_value_arb() -> impl Strategy<Value = StoredValue> {
         message_topic_summary_arb().prop_map(StoredValue::MessageTopic),
         message_summary_arb().prop_map(StoredValue::Message),
         named_key_value_arb().prop_map(StoredValue::NamedKey),
+        collection::vec(any::<u8>(), 0..1000).prop_map(StoredValue::RawBytes),
     ]
     .prop_map(|stored_value|
             // The following match statement is here only to make sure
@@ -862,7 +865,7 @@ pub fn stored_value_arb() -> impl Strategy<Value = StoredValue> {
                 StoredValue::ContractWasm(_) => stored_value,
                 StoredValue::Contract(_) => stored_value,
                 StoredValue::ContractPackage(_) => stored_value,
-                StoredValue::Transfer(_) => stored_value,
+                StoredValue::LegacyTransfer(_) => stored_value,
                 StoredValue::DeployInfo(_) => stored_value,
                 StoredValue::EraInfo(_) => stored_value,
                 StoredValue::Bid(_) => stored_value,
@@ -875,9 +878,10 @@ pub fn stored_value_arb() -> impl Strategy<Value = StoredValue> {
                 StoredValue::MessageTopic(_) => stored_value,
                 StoredValue::Message(_) => stored_value,
                 StoredValue::NamedKey(_) => stored_value,
-                StoredValue::Reservation(_) => stored_value,
+                StoredValue::Prepaid(_) => stored_value,
                 StoredValue::EntryPoint(_) => stored_value,
-            })
+                StoredValue::RawBytes(_) => stored_value,
+        })
 }
 
 pub fn blake2b_hash_arb() -> impl Strategy<Value = Digest> {
@@ -960,8 +964,11 @@ pub fn stored_transaction_target() -> impl Strategy<Value = TransactionTarget> {
     (
         transaction_invocation_target_arb(),
         transaction_runtime_arb(),
+        any::<u64>(),
     )
-        .prop_map(|(target, runtime)| TransactionTarget::new_stored(target, runtime))
+        .prop_map(|(target, runtime, transferred_value)| {
+            TransactionTarget::new_stored(target, runtime, transferred_value)
+        })
 }
 
 pub fn session_transaction_target() -> impl Strategy<Value = TransactionTarget> {
@@ -969,9 +976,11 @@ pub fn session_transaction_target() -> impl Strategy<Value = TransactionTarget> 
         any::<bool>(),
         Just(Bytes::from(vec![1; 10])),
         transaction_runtime_arb(),
+        any::<u64>(),
+        any::<Option<[u8; 32]>>(),
     )
-        .prop_map(|(target, module_bytes, runtime)| {
-            TransactionTarget::new_session(target, module_bytes, runtime)
+        .prop_map(|(target, module_bytes, runtime, transferred_value, seed)| {
+            TransactionTarget::new_session(target, module_bytes, runtime, transferred_value, seed)
         })
 }
 
@@ -980,9 +989,34 @@ pub fn transaction_target_arb() -> impl Strategy<Value = TransactionTarget> {
         Just(TransactionTarget::Native),
         (
             transaction_invocation_target_arb(),
-            transaction_runtime_arb()
+            transaction_runtime_arb(),
+            any::<u64>(),
         )
-            .prop_map(|(target, runtime)| TransactionTarget::new_stored(target, runtime))
+            .prop_map(
+                |(target, runtime, transferred_value)| TransactionTarget::new_stored(
+                    target,
+                    runtime,
+                    transferred_value
+                )
+            ),
+        (
+            any::<bool>(),
+            Just(Bytes::from(vec![1; 10])),
+            transaction_runtime_arb(),
+            any::<u64>(),
+            any::<Option<[u8; 32]>>(),
+        )
+            .prop_map(
+                |(is_install_upgrade, module_bytes, runtime, transferred_value, seed)| {
+                    TransactionTarget::new_session(
+                        is_install_upgrade,
+                        module_bytes,
+                        runtime,
+                        transferred_value,
+                        seed,
+                    )
+                }
+            )
     ]
 }
 
@@ -1031,6 +1065,18 @@ pub fn runtime_args_arb() -> impl Strategy<Value = RuntimeArgs> {
     prop_oneof![Just(runtime_args_1)]
 }
 
+fn transaction_args_bytes_arbitrary() -> impl Strategy<Value = TransactionArgs> {
+    prop::collection::vec(any::<u8>(), 0..100)
+        .prop_map(|bytes| TransactionArgs::Bytesrepr(bytes.into()))
+}
+
+pub fn transaction_args_arb() -> impl Strategy<Value = TransactionArgs> {
+    prop_oneof![
+        runtime_args_arb().prop_map(TransactionArgs::Named),
+        transaction_args_bytes_arbitrary()
+    ]
+}
+
 pub fn fields_arb() -> impl Strategy<Value = BTreeMap<u16, Bytes>> {
     collection::btree_map(
         any::<u16>(),
@@ -1074,7 +1120,7 @@ pub fn pricing_mode_arb() -> impl Strategy<Value = PricingMode> {
     prop_oneof![
         (any::<u64>(), any::<u8>(), any::<bool>()).prop_map(
             |(payment_amount, gas_price_tolerance, standard_payment)| {
-                PricingMode::Classic {
+                PricingMode::PaymentLimited {
                     payment_amount,
                     gas_price_tolerance,
                     standard_payment,
@@ -1083,7 +1129,7 @@ pub fn pricing_mode_arb() -> impl Strategy<Value = PricingMode> {
         ),
         fixed_pricing_mode_arb(),
         u8_slice_32().prop_map(|receipt| {
-            PricingMode::Reserved {
+            PricingMode::Prepaid {
                 receipt: receipt.into(),
             }
         }),
@@ -1110,7 +1156,7 @@ pub fn legal_v1_transaction_arb() -> impl Strategy<Value = TransactionV1> {
         any::<u32>(),
         pricing_mode_arb(),
         secret_key_arb_no_system(),
-        runtime_args_arb(),
+        transaction_args_arb(),
         transaction_scheduling_arb(),
         legal_target_entry_point_calls_arb(),
     )
@@ -1173,7 +1219,12 @@ pub fn v1_transaction_arb() -> impl Strategy<Value = TransactionV1> {
                     initiator_addr,
                     secret_key: &secret_key,
                 };
-                let container = FieldsContainer::new(args, target, entry_point, scheduling);
+                let container = FieldsContainer::new(
+                    TransactionArgs::Named(args),
+                    target,
+                    entry_point,
+                    scheduling,
+                );
                 TransactionV1::build(
                     chain_name,
                     timestamp,

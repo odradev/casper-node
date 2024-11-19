@@ -5,15 +5,14 @@ use core::{
 
 use casper_types::{
     InvalidTransaction, InvalidTransactionV1, TransactionConfig, TransactionEntryPoint,
-    TransactionTarget, TransactionV1Config, AUCTION_LANE_ID, INSTALL_UPGRADE_LANE_ID, MINT_LANE_ID,
+    TransactionRuntime, TransactionTarget, TransactionV1Config, AUCTION_LANE_ID,
+    INSTALL_UPGRADE_LANE_ID, MINT_LANE_ID,
 };
-#[cfg(feature = "datasize")]
 use datasize::DataSize;
 use serde::Serialize;
 
 /// The category of a Transaction.
-#[cfg_attr(feature = "datasize", derive(DataSize))]
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug, Serialize)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug, Serialize, DataSize)]
 #[repr(u8)]
 pub enum TransactionLane {
     /// Native mint interaction (the default).
@@ -118,7 +117,9 @@ pub(crate) fn calculate_transaction_lane(
             }
         },
         TransactionTarget::Session {
-            is_install_upgrade, ..
+            is_install_upgrade,
+            runtime: TransactionRuntime::VmCasperV1,
+            ..
         } => match entry_point {
             TransactionEntryPoint::Call => {
                 if *is_install_upgrade {
@@ -133,6 +134,37 @@ pub(crate) fn calculate_transaction_lane(
             }
             TransactionEntryPoint::Custom(_)
             | TransactionEntryPoint::Transfer
+            | TransactionEntryPoint::AddBid
+            | TransactionEntryPoint::WithdrawBid
+            | TransactionEntryPoint::Delegate
+            | TransactionEntryPoint::Undelegate
+            | TransactionEntryPoint::Redelegate
+            | TransactionEntryPoint::ActivateBid
+            | TransactionEntryPoint::ChangeBidPublicKey
+            | TransactionEntryPoint::AddReservations
+            | TransactionEntryPoint::CancelReservations => {
+                Err(InvalidTransactionV1::EntryPointMustBeCall {
+                    entry_point: entry_point.clone(),
+                })
+            }
+        },
+        TransactionTarget::Session {
+            is_install_upgrade,
+            runtime: TransactionRuntime::VmCasperV2,
+            ..
+        } => match entry_point {
+            TransactionEntryPoint::Call | TransactionEntryPoint::Custom(_) => {
+                if *is_install_upgrade {
+                    Ok(INSTALL_UPGRADE_LANE_ID)
+                } else {
+                    get_lane_for_non_install_wasm(
+                        &transaction_config.transaction_v1_config,
+                        transaction_size,
+                        additional_computation_factor,
+                    )
+                }
+            }
+            TransactionEntryPoint::Transfer
             | TransactionEntryPoint::AddBid
             | TransactionEntryPoint::WithdrawBid
             | TransactionEntryPoint::Delegate

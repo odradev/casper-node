@@ -1658,10 +1658,10 @@
           "description": "The original payment model, where the creator of the transaction specifies how much they will pay, at what gas price.",
           "type": "object",
           "required": [
-            "Classic"
+            "PaymentLimited"
           ],
           "properties": {
-            "Classic": {
+            "PaymentLimited": {
               "type": "object",
               "required": [
                 "gas_price_tolerance",
@@ -1724,13 +1724,13 @@
           "additionalProperties": false
         },
         {
-          "description": "The payment for this transaction was previously reserved, as proven by the receipt hash (this is for future use, not currently implemented).",
+          "description": "The payment for this transaction was previously paid, as proven by the receipt hash (this is for future use, not currently implemented).",
           "type": "object",
           "required": [
-            "Reserved"
+            "Prepaid"
           ],
           "properties": {
-            "Reserved": {
+            "Prepaid": {
               "type": "object",
               "required": [
                 "receipt"
@@ -3103,7 +3103,6 @@
         "effects",
         "initiator",
         "limit",
-        "payment",
         "size_estimate",
         "transfers"
       ],
@@ -3147,13 +3146,6 @@
             }
           ]
         },
-        "payment": {
-          "description": "Breakdown of payments made to cover the cost.",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/PaymentInfo"
-          }
-        },
         "transfers": {
           "description": "A record of transfers performed while executing this transaction.",
           "type": "array",
@@ -3185,23 +3177,6 @@
           "$ref": "#/definitions/U512"
         }
       ]
-    },
-    "PaymentInfo": {
-      "description": "Breakdown of payments made to cover the cost.",
-      "type": "object",
-      "required": [
-        "source"
-      ],
-      "properties": {
-        "source": {
-          "description": "Source purse used for payment of the transaction.",
-          "allOf": [
-            {
-              "$ref": "#/definitions/URef"
-            }
-          ]
-        }
-      }
     },
     "Transfer": {
       "description": "A versioned wrapper for a transfer.",
@@ -3545,10 +3520,10 @@
           "description": "A version 1 transfer.",
           "type": "object",
           "required": [
-            "Transfer"
+            "LegacyTransfer"
           ],
           "properties": {
-            "Transfer": {
+            "LegacyTransfer": {
               "$ref": "#/definitions/TransferV1"
             }
           },
@@ -3720,11 +3695,11 @@
           "description": "A reservation record.",
           "type": "object",
           "required": [
-            "Reservation"
+            "Prepaid"
           ],
           "properties": {
-            "Reservation": {
-              "$ref": "#/definitions/ReservationKind"
+            "Prepaid": {
+              "$ref": "#/definitions/PrepaidKind"
             }
           },
           "additionalProperties": false
@@ -3738,6 +3713,24 @@
           "properties": {
             "EntryPoint": {
               "$ref": "#/definitions/EntryPointValue"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Raw bytes. Similar to a [`crate::StoredValue::CLValue`] but does not incur overhead of a [`crate::CLValue`] and [`crate::CLType`].",
+          "type": "object",
+          "required": [
+            "RawBytes"
+          ],
+          "properties": {
+            "RawBytes": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint8",
+                "minimum": 0.0
+              }
             }
           },
           "additionalProperties": false
@@ -4513,6 +4506,13 @@
           "enum": [
             "V1CasperWasm"
           ]
+        },
+        {
+          "description": "Byte code to be executed with the version 2 Casper execution engine.",
+          "type": "string",
+          "enum": [
+            "V2CasperWasm"
+          ]
         }
       ]
     },
@@ -4581,24 +4581,24 @@
         }
       }
     },
-    "ReservationKind": {
-      "description": "Container for bytes recording location, type and data for a gas reservation",
+    "PrepaidKind": {
+      "description": "Container for bytes recording location, type and data for a gas pre payment",
       "type": "object",
       "required": [
-        "receipt",
-        "reservation_data",
-        "reservation_kind"
+        "prepayment_data",
+        "prepayment_kind",
+        "receipt"
       ],
       "properties": {
         "receipt": {
           "$ref": "#/definitions/Digest"
         },
-        "reservation_kind": {
+        "prepayment_kind": {
           "type": "integer",
           "format": "uint8",
           "minimum": 0.0
         },
-        "reservation_data": {
+        "prepayment_data": {
           "$ref": "#/definitions/Bytes"
         }
       }
@@ -4615,19 +4615,6 @@
           "properties": {
             "V1CasperVm": {
               "$ref": "#/definitions/EntryPoint2"
-            }
-          },
-          "additionalProperties": false
-        },
-        {
-          "description": "Entrypoints to be executed against the V2 Casper VM.",
-          "type": "object",
-          "required": [
-            "V2CasperVm"
-          ],
-          "properties": {
-            "V2CasperVm": {
-              "$ref": "#/definitions/EntryPointV2"
             }
           },
           "additionalProperties": false
@@ -4694,28 +4681,6 @@
           ]
         }
       ]
-    },
-    "EntryPointV2": {
-      "description": "The entry point for the V2 Casper VM.",
-      "type": "object",
-      "required": [
-        "flags",
-        "function_index"
-      ],
-      "properties": {
-        "function_index": {
-          "description": "The selector.",
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0.0
-        },
-        "flags": {
-          "description": "The flags.",
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0.0
-        }
-      }
     },
     "TransformError": {
       "description": "Error type for applying and combining transforms.\n\nA `TypeMismatch` occurs when a transform cannot be applied because the types are not compatible (e.g. trying to add a number to a string).",

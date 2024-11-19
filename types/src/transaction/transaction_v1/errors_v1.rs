@@ -14,7 +14,7 @@ use serde::Serialize;
 use super::TransactionV1;
 use crate::{
     bytesrepr, crypto, CLType, DisplayIter, PricingMode, TimeDiff, Timestamp,
-    TransactionEntryPoint, U512,
+    TransactionEntryPoint, TransactionRuntime, U512,
 };
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -191,6 +191,15 @@ pub enum InvalidTransaction {
 
     /// The transactions field map had entries that were unexpected
     UnexpectedTransactionFieldEntries,
+    /// The transaction requires named arguments.
+    ExpectedNamedArguments,
+    /// The transaction runtime is invalid.
+    InvalidTransactionRuntime {
+        /// The expected runtime as specified by the chainspec.
+        expected: TransactionRuntime,
+    },
+    /// The transaction is missing a seed field.
+    MissingSeed,
 }
 
 impl Display for InvalidTransaction {
@@ -368,6 +377,18 @@ impl Display for InvalidTransaction {
             },
             InvalidTransaction::NoWasmLaneMatchesTransaction() => write!(formatter, "Could not match any generic wasm lane to the specified transaction"),
             InvalidTransaction::UnexpectedTransactionFieldEntries => write!(formatter, "There were entries in the fields map of the payload that could not be matched"),
+            InvalidTransaction::ExpectedNamedArguments => {
+                write!(formatter, "transaction requires named arguments")
+            }
+            InvalidTransaction::InvalidTransactionRuntime { expected } => {
+                write!(
+                    formatter,
+                    "invalid transaction runtime: expected {expected}"
+                )
+            }
+            InvalidTransaction::MissingSeed => {
+                write!(formatter, "missing seed for install or upgrade")
+            }
         }
     }
 }
@@ -416,6 +437,9 @@ impl StdError for InvalidTransaction {
                 | FieldDeserializationError::LingeringBytesInField { .. } => None,
                 FieldDeserializationError::FromBytesError { error, .. } => Some(error),
             },
+            InvalidTransaction::ExpectedNamedArguments
+            | InvalidTransaction::InvalidTransactionRuntime { .. }
+            | InvalidTransaction::MissingSeed => None,
         }
     }
 }

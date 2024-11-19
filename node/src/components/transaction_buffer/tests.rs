@@ -342,7 +342,7 @@ fn get_proposable_transactions() {
 }
 
 #[test]
-fn get_appendable_block_when_transfers_are_of_one_category() {
+fn get_appendable_block_when_transfers_are_of_one_lane() {
     let mut rng = TestRng::new();
 
     let transaction_v1_config =
@@ -413,7 +413,7 @@ fn get_appendable_block_when_transfers_are_both_legacy_and_v1() {
 }
 
 #[test]
-fn get_appendable_block_when_standards_are_of_one_category() {
+fn get_appendable_block_when_standards_are_of_one_lane() {
     let large_lane_id: u8 = 3;
     let mut rng = TestRng::new();
 
@@ -916,7 +916,7 @@ impl MockReactor {
 }
 
 #[tokio::test]
-async fn expire_transactions_and_check_announcement_when_transactions_are_of_one_category() {
+async fn expire_transactions_and_check_announcement_when_transactions_are_of_one_lane() {
     let mut rng = TestRng::new();
 
     for category in all_categories() {
@@ -1023,8 +1023,8 @@ async fn expire_transactions_and_check_announcement_when_transactions_are_of_ran
     let num_transactions: usize = rng.gen_range(5..50);
     let expired_transactions: Vec<_> = (0..num_transactions)
         .map(|_| {
-            let random_category = *all_categories().choose(&mut rng).unwrap();
-            create_valid_transaction(&mut rng, random_category, Some(past_timestamp), Some(ttl))
+            let random_lane = *all_categories().choose(&mut rng).unwrap();
+            create_valid_transaction(&mut rng, random_lane, Some(past_timestamp), Some(ttl))
         })
         .collect();
 
@@ -1048,8 +1048,8 @@ async fn expire_transactions_and_check_announcement_when_transactions_are_of_ran
     // generate and register some valid transactions
     let transactions: Vec<_> = (0..num_transactions)
         .map(|_| {
-            let random_category = *all_categories().choose(&mut rng).unwrap();
-            create_valid_transaction(&mut rng, random_category, None, None)
+            let random_lane = *all_categories().choose(&mut rng).unwrap();
+            create_valid_transaction(&mut rng, random_lane, None, None)
         })
         .collect();
     transactions

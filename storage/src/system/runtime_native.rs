@@ -4,12 +4,13 @@ use crate::{
     AddressGenerator, TrackingCopy,
 };
 use casper_types::{
-    account::AccountHash, addressable_entity::NamedKeys, Chainspec, ContextAccessRights,
-    EntityAddr, FeeHandling, Key, Phase, ProtocolVersion, PublicKey, RefundHandling,
-    RuntimeFootprint, StoredValue, TransactionHash, Transfer, URef, U512,
+    account::AccountHash, contracts::NamedKeys, Chainspec, ContextAccessRights, EntityAddr,
+    FeeHandling, Key, Phase, ProtocolVersion, PublicKey, RefundHandling, RuntimeFootprint,
+    StoredValue, TransactionHash, Transfer, URef, U512,
 };
 use num_rational::Ratio;
-use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
+use parking_lot::RwLock;
+use std::{cell::RefCell, collections::BTreeSet, rc::Rc, sync::Arc};
 use tracing::error;
 
 /// Configuration settings.
@@ -293,9 +294,9 @@ impl Id {
 /// State held by an instance of runtime native.
 pub struct RuntimeNative<S> {
     config: Config,
-    id: Id,
 
-    address_generator: AddressGenerator,
+    id: Id,
+    address_generator: Arc<RwLock<AddressGenerator>>,
     protocol_version: ProtocolVersion,
 
     tracking_copy: Rc<RefCell<TrackingCopy<S>>>,
@@ -318,6 +319,7 @@ where
         config: Config,
         protocol_version: ProtocolVersion,
         id: Id,
+        address_generator: Arc<RwLock<AddressGenerator>>,
         tracking_copy: Rc<RefCell<TrackingCopy<S>>>,
         address: AccountHash,
         context_key: Key,
@@ -326,11 +328,10 @@ where
         remaining_spending_limit: U512,
         phase: Phase,
     ) -> Self {
-        let seed = id.seed();
-        let address_generator = AddressGenerator::new(&seed, phase);
         let transfers = vec![];
         RuntimeNative {
             config,
+
             id,
             address_generator,
             protocol_version,
@@ -351,11 +352,10 @@ where
         config: Config,
         protocol_version: ProtocolVersion,
         id: Id,
+        address_generator: Arc<RwLock<AddressGenerator>>,
         tracking_copy: Rc<RefCell<TrackingCopy<S>>>,
         phase: Phase,
     ) -> Result<Self, TrackingCopyError> {
-        let seed = id.seed();
-        let address_generator = AddressGenerator::new(&seed, phase);
         let transfers = vec![];
         let (entity_addr, runtime_footprint, access_rights) = tracking_copy
             .borrow_mut()
@@ -389,12 +389,11 @@ where
         config: Config,
         protocol_version: ProtocolVersion,
         id: Id,
+        address_generator: Arc<RwLock<AddressGenerator>>,
         tracking_copy: Rc<RefCell<TrackingCopy<S>>>,
         phase: Phase,
         name: &str,
     ) -> Result<Self, TrackingCopyError> {
-        let seed = id.seed();
-        let address_generator = AddressGenerator::new(&seed, phase);
         let transfers = vec![];
 
         let system_entity_registry = tracking_copy.borrow().get_system_entity_registry()?;
@@ -415,8 +414,7 @@ where
         let runtime_footprint = tracking_copy
             .borrow_mut()
             .runtime_footprint_by_hash_addr(hash)?;
-        let access_rights =
-            runtime_footprint.extract_access_rights(hash, runtime_footprint.named_keys());
+        let access_rights = runtime_footprint.extract_access_rights(hash);
         let address = PublicKey::System.to_account_hash();
         let remaining_spending_limit = U512::MAX; // system has no spending limit
         Ok(RuntimeNative {
@@ -437,8 +435,8 @@ where
     }
 
     /// Returns mutable reference to address generator.
-    pub fn address_generator(&mut self) -> &mut AddressGenerator {
-        &mut self.address_generator
+    pub fn address_generator(&mut self) -> Arc<RwLock<AddressGenerator>> {
+        Arc::clone(&self.address_generator)
     }
 
     /// Returns reference to config.

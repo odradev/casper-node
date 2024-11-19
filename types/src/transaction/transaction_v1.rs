@@ -1,6 +1,7 @@
 pub mod arg_handling;
 mod errors_v1;
 pub mod fields_container;
+mod transaction_args;
 #[cfg(any(feature = "std", test))]
 mod transaction_v1_builder;
 mod transaction_v1_hash;
@@ -49,6 +50,7 @@ pub use errors_v1::{
     ExcessiveSizeErrorV1 as TransactionV1ExcessiveSizeError,
     InvalidTransaction as InvalidTransactionV1,
 };
+pub use transaction_args::TransactionArgs;
 #[cfg(any(feature = "std", test))]
 pub use transaction_v1_builder::{TransactionV1Builder, TransactionV1BuilderError};
 pub use transaction_v1_hash::TransactionV1Hash;
@@ -395,7 +397,7 @@ impl TransactionV1 {
     /// Returns the gas price tolerance for the given transaction.
     pub fn gas_price_tolerance(&self) -> u8 {
         match self.pricing_mode() {
-            PricingMode::Classic {
+            PricingMode::PaymentLimited {
                 gas_price_tolerance,
                 ..
             } => *gas_price_tolerance,
@@ -403,7 +405,7 @@ impl TransactionV1 {
                 gas_price_tolerance,
                 ..
             } => *gas_price_tolerance,
-            PricingMode::Reserved { .. } => {
+            PricingMode::Prepaid { .. } => {
                 // TODO: Change this when reserve gets implemented.
                 0u8
             }

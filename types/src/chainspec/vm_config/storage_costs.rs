@@ -102,7 +102,7 @@ pub mod tests {
     use proptest::prelude::*;
 
     const SMALL_WEIGHT: usize = 123456789;
-    const LARGE_WEIGHT: usize = usize::max_value();
+    const LARGE_WEIGHT: usize = usize::MAX;
 
     #[test]
     fn should_calculate_gas_cost() {

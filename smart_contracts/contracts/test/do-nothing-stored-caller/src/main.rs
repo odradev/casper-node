@@ -26,7 +26,7 @@ pub extern "C" fn call() {
     };
 
     runtime::call_versioned_contract(
-        contract_package_hash,
+        contract_package_hash.into(),
         contract_version,
         ENTRY_FUNCTION_NAME,
         runtime_args,

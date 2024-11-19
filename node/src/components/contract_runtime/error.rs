@@ -170,4 +170,15 @@ pub enum BlockExecutionError {
     UnsupportedTransactionKind(u8),
     #[error("Error while converting transaction to internal representation: {0}")]
     TransactionConversion(String),
+    /// Invalid gas limit amount.
+    #[error("Invalid gas limit amount: {0}")]
+    InvalidGasLimit(U512),
+    /// Invalid transaction variant.
+    #[error("Invalid transaction variant")]
+    InvalidTransactionVariant,
+    /// Invalid transaction arguments.
+    #[error("Invalid transaction arguments")]
+    InvalidTransactionArgs,
+    #[error("Data Access Layer conflicts with chainspec setting: {0}")]
+    InvalidAESetting(bool),
 }

@@ -350,23 +350,20 @@ mod tests {
 
         #[test]
         fn i32_cl_value_should_encode_to_json() {
-            check_to_json(
-                i32::min_value(),
-                r#"{"cl_type":"I32","parsed":-2147483648}"#,
-            );
+            check_to_json(i32::MIN, r#"{"cl_type":"I32","parsed":-2147483648}"#);
             check_to_json(0_i32, r#"{"cl_type":"I32","parsed":0}"#);
-            check_to_json(i32::max_value(), r#"{"cl_type":"I32","parsed":2147483647}"#);
+            check_to_json(i32::MAX, r#"{"cl_type":"I32","parsed":2147483647}"#);
         }
 
         #[test]
         fn i64_cl_value_should_encode_to_json() {
             check_to_json(
-                i64::min_value(),
+                i64::MIN,
                 r#"{"cl_type":"I64","parsed":-9223372036854775808}"#,
             );
             check_to_json(0_i64, r#"{"cl_type":"I64","parsed":0}"#);
             check_to_json(
-                i64::max_value(),
+                i64::MAX,
                 r#"{"cl_type":"I64","parsed":9223372036854775807}"#,
             );
         }
@@ -374,20 +371,20 @@ mod tests {
         #[test]
         fn u8_cl_value_should_encode_to_json() {
             check_to_json(0_u8, r#"{"cl_type":"U8","parsed":0}"#);
-            check_to_json(u8::max_value(), r#"{"cl_type":"U8","parsed":255}"#);
+            check_to_json(u8::MAX, r#"{"cl_type":"U8","parsed":255}"#);
         }
 
         #[test]
         fn u32_cl_value_should_encode_to_json() {
             check_to_json(0_u32, r#"{"cl_type":"U32","parsed":0}"#);
-            check_to_json(u32::max_value(), r#"{"cl_type":"U32","parsed":4294967295}"#);
+            check_to_json(u32::MAX, r#"{"cl_type":"U32","parsed":4294967295}"#);
         }
 
         #[test]
         fn u64_cl_value_should_encode_to_json() {
             check_to_json(0_u64, r#"{"cl_type":"U64","parsed":0}"#);
             check_to_json(
-                u64::max_value(),
+                u64::MAX,
                 r#"{"cl_type":"U64","parsed":18446744073709551615}"#,
             );
         }
@@ -396,7 +393,7 @@ mod tests {
         fn u128_cl_value_should_encode_to_json() {
             check_to_json(U128::zero(), r#"{"cl_type":"U128","parsed":"0"}"#);
             check_to_json(
-                U128::max_value(),
+                U128::MAX,
                 r#"{"cl_type":"U128","parsed":"340282366920938463463374607431768211455"}"#,
             );
         }
@@ -405,7 +402,7 @@ mod tests {
         fn u256_cl_value_should_encode_to_json() {
             check_to_json(U256::zero(), r#"{"cl_type":"U256","parsed":"0"}"#);
             check_to_json(
-                U256::max_value(),
+                U256::MAX,
                 r#"{"cl_type":"U256","parsed":"115792089237316195423570985008687907853269984665640564039457584007913129639935"}"#,
             );
         }
@@ -414,7 +411,7 @@ mod tests {
         fn u512_cl_value_should_encode_to_json() {
             check_to_json(U512::zero(), r#"{"cl_type":"U512","parsed":"0"}"#);
             check_to_json(
-                U512::max_value(),
+                U512::MAX,
                 r#"{"cl_type":"U512","parsed":"13407807929942597099574024998205846127479365820592393377723561443721764030073546976801874298166903427690031858186486050853753882811946569946433649006084095"}"#,
             );
         }
@@ -512,12 +509,12 @@ mod tests {
         #[test]
         fn i32_cl_value_should_encode_to_json() {
             check_to_json(
-                Some(i32::min_value()),
+                Some(i32::MIN),
                 r#"{"cl_type":{"Option":"I32"},"parsed":-2147483648}"#,
             );
             check_to_json(Some(0_i32), r#"{"cl_type":{"Option":"I32"},"parsed":0}"#);
             check_to_json(
-                Some(i32::max_value()),
+                Some(i32::MAX),
                 r#"{"cl_type":{"Option":"I32"},"parsed":2147483647}"#,
             );
             check_to_json(
@@ -529,12 +526,12 @@ mod tests {
         #[test]
         fn i64_cl_value_should_encode_to_json() {
             check_to_json(
-                Some(i64::min_value()),
+                Some(i64::MIN),
                 r#"{"cl_type":{"Option":"I64"},"parsed":-9223372036854775808}"#,
             );
             check_to_json(Some(0_i64), r#"{"cl_type":{"Option":"I64"},"parsed":0}"#);
             check_to_json(
-                Some(i64::max_value()),
+                Some(i64::MAX),
                 r#"{"cl_type":{"Option":"I64"},"parsed":9223372036854775807}"#,
             );
             check_to_json(
@@ -546,10 +543,7 @@ mod tests {
         #[test]
         fn u8_cl_value_should_encode_to_json() {
             check_to_json(Some(0_u8), r#"{"cl_type":{"Option":"U8"},"parsed":0}"#);
-            check_to_json(
-                Some(u8::max_value()),
-                r#"{"cl_type":{"Option":"U8"},"parsed":255}"#,
-            );
+            check_to_json(Some(u8::MAX), r#"{"cl_type":{"Option":"U8"},"parsed":255}"#);
             check_to_json(
                 Option::<u8>::None,
                 r#"{"cl_type":{"Option":"U8"},"parsed":null}"#,
@@ -560,7 +554,7 @@ mod tests {
         fn u32_cl_value_should_encode_to_json() {
             check_to_json(Some(0_u32), r#"{"cl_type":{"Option":"U32"},"parsed":0}"#);
             check_to_json(
-                Some(u32::max_value()),
+                Some(u32::MAX),
                 r#"{"cl_type":{"Option":"U32"},"parsed":4294967295}"#,
             );
             check_to_json(
@@ -573,7 +567,7 @@ mod tests {
         fn u64_cl_value_should_encode_to_json() {
             check_to_json(Some(0_u64), r#"{"cl_type":{"Option":"U64"},"parsed":0}"#);
             check_to_json(
-                Some(u64::max_value()),
+                Some(u64::MAX),
                 r#"{"cl_type":{"Option":"U64"},"parsed":18446744073709551615}"#,
             );
             check_to_json(
@@ -589,7 +583,7 @@ mod tests {
                 r#"{"cl_type":{"Option":"U128"},"parsed":"0"}"#,
             );
             check_to_json(
-                Some(U128::max_value()),
+                Some(U128::MAX),
                 r#"{"cl_type":{"Option":"U128"},"parsed":"340282366920938463463374607431768211455"}"#,
             );
             check_to_json(
@@ -605,7 +599,7 @@ mod tests {
                 r#"{"cl_type":{"Option":"U256"},"parsed":"0"}"#,
             );
             check_to_json(
-                Some(U256::max_value()),
+                Some(U256::MAX),
                 r#"{"cl_type":{"Option":"U256"},"parsed":"115792089237316195423570985008687907853269984665640564039457584007913129639935"}"#,
             );
             check_to_json(
@@ -621,7 +615,7 @@ mod tests {
                 r#"{"cl_type":{"Option":"U512"},"parsed":"0"}"#,
             );
             check_to_json(
-                Some(U512::max_value()),
+                Some(U512::MAX),
                 r#"{"cl_type":{"Option":"U512"},"parsed":"13407807929942597099574024998205846127479365820592393377723561443721764030073546976801874298166903427690031858186486050853753882811946569946433649006084095"}"#,
             );
             check_to_json(

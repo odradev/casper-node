@@ -8,9 +8,8 @@ use casper_types::{
         Account, AccountHash, ActionThresholds as AccountActionThresholds,
         AssociatedKeys as AccountAssociatedKeys, Weight as AccountWeight,
     },
-    addressable_entity::{
-        ActionThresholds, AddressableEntity, AssociatedKeys, EntityKind, NamedKeys,
-    },
+    addressable_entity::{ActionThresholds, AddressableEntity, AssociatedKeys, EntityKind},
+    contracts::NamedKeys,
     system::{
         auction::{
             Bid, BidAddr, BidKind, Delegator, EraInfo, SeigniorageAllocation, UnbondingPurse,
@@ -421,7 +420,7 @@ pub fn make_abi_test_fixtures() -> Result<TestFixtures, Error> {
 
         stored_value.insert(
             "LegacyTransfer".to_string(),
-            ABITestCase::from_inputs(vec![StoredValue::Transfer(legacy_transfer).into()])?,
+            ABITestCase::from_inputs(vec![StoredValue::LegacyTransfer(legacy_transfer).into()])?,
         );
         stored_value.insert(
             "DeployInfo".to_string(),

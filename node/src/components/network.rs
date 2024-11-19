@@ -455,9 +455,6 @@ where
             self.outgoing_manager.connected_peers(),
             is_validator_in_era,
         );
-
-        // todo!() - consider sampling more validators (for example: 10%, but not fewer than 5)
-
         if peer_ids.len() != count {
             let not_excluded = self
                 .outgoing_manager
@@ -532,8 +529,6 @@ where
                 peer_id: _,
                 ref error,
             } => {
-                // TODO: At this point, we could consider blocking peers by [`PeerID`], but this
-                //       feature is not implemented yet.
                 debug!(
                     err = display_error(error),
                     "incoming connection failed after TLS setup"
@@ -1266,7 +1261,7 @@ where
                         offender,
                         justification,
                     } => {
-                        // TODO: We do not have a proper by-node-ID blocklist, but rather only block
+                        // Note: We do not have a proper by-node-ID blocklist, but rather only block
                         // the current outgoing address of a peer.
                         info!(%offender, %justification, "adding peer to blocklist after transgression");
 

@@ -93,6 +93,10 @@ uuid = { version = "0.8.1", features = ["serde", "v4"] }
 warp = { version = "0.3.6", features = ["compression"] }
 wheelbuf = "0.2.0"
 
+casper-executor-wasm = { path = "../executor/wasm" }
+casper-executor-wasm-interface = { path = "../executor/wasm-interface" }
+
+
 [build-dependencies]
 vergen = { version = "8.3.2", default-features = false, features = ["git", "gitoxide"] }
 
@@ -114,6 +118,7 @@ tokio = { version = "1", features = ["test-util"] }
 failpoints = []
 testing = ["casper-types/testing"]
 vendored-openssl = ["openssl/vendored"]
+datasize = ["casper-types/datasize"]
 
 [[bin]]
 name = "casper-node"

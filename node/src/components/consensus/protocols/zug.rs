@@ -1523,12 +1523,18 @@ impl<C: Context + 'static> Zug<C> {
     /// Adds a signed message content to the state.
     /// Does not call `update` and does not detect faults.
     fn add_content(&mut self, signed_msg: SignedMessage<C>) -> bool {
-        if self.active[signed_msg.validator_idx].is_none() {
+        if self.active[signed_msg.validator_idx]
+            .as_ref()
+            .map_or(true, |old_msg| old_msg.round_id < signed_msg.round_id)
+        {
+            if self.active[signed_msg.validator_idx].is_none() {
+                // We considered this validator inactive until now, and didn't accept proposals that
+                // didn't have them in the `inactive` field. Mark all relevant rounds as dirty so
+                // that the next `update` call checks all proposals again.
+                self.mark_dirty(self.first_non_finalized_round_id);
+            }
+            // Save the latest signed message for participation tracking purposes.
             self.active[signed_msg.validator_idx] = Some(signed_msg.clone());
-            // We considered this validator inactive until now, and didn't accept proposals that
-            // didn't have them in the `inactive` field. Mark all relevant rounds as dirty so that
-            // the next `update` call checks all proposals again.
-            self.mark_dirty(self.first_non_finalized_round_id);
         }
         let SignedMessage {
             round_id,
@@ -1664,8 +1670,13 @@ impl<C: Context + 'static> Zug<C> {
                 .current_round_start
                 .saturating_add(self.proposal_timeout());
             if now >= current_timeout {
-                outcomes.extend(self.create_and_gossip_message(round_id, Content::Vote(false)));
-                self.update_proposal_timeout(now);
+                let msg_outcomes = self.create_and_gossip_message(round_id, Content::Vote(false));
+                // Only update the proposal timeout if this is the first time we timed out in this
+                // round
+                if !msg_outcomes.is_empty() {
+                    self.update_proposal_timeout(now);
+                }
+                outcomes.extend(msg_outcomes);
             } else if self.faults.contains_key(&self.leader(round_id)) {
                 outcomes.extend(self.create_and_gossip_message(round_id, Content::Vote(false)));
             }
@@ -1685,12 +1696,10 @@ impl<C: Context + 'static> Zug<C> {
                     // that time.
                     debug!(our_idx, %now, %timestamp, "update_round - schedule update 1");
                     outcomes.extend(self.schedule_update(timestamp));
-                } else {
-                    if self.current_round_start > now {
-                        // A proposal could be made now. Start the timer and propose if leader.
-                        self.current_round_start = now;
-                        outcomes.extend(self.propose_if_leader(maybe_parent_round_id, now));
-                    }
+                } else if self.current_round_start > now {
+                    // A proposal could be made now. Start the timer and propose if leader.
+                    self.current_round_start = now;
+                    outcomes.extend(self.propose_if_leader(maybe_parent_round_id, now));
                     let current_timeout = self
                         .current_round_start
                         .saturating_add(self.proposal_timeout());

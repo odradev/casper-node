@@ -1,10 +1,14 @@
 use crate::types::MetaTransaction;
+#[cfg(test)]
+use casper_types::{testing::TestRng, U512};
 use casper_types::{
     Approval, Chainspec, Digest, Gas, InvalidTransaction, InvalidTransactionV1, TimeDiff,
     Timestamp, Transaction, TransactionHash, AUCTION_LANE_ID, INSTALL_UPGRADE_LANE_ID,
     MINT_LANE_ID,
 };
 use datasize::DataSize;
+#[cfg(test)]
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -37,7 +41,8 @@ impl TransactionFootprint {
         chainspec: &Chainspec,
         transaction: &Transaction,
     ) -> Result<Self, InvalidTransaction> {
-        let transaction = MetaTransaction::from(transaction, &chainspec.transaction_config)?;
+        let transaction =
+            MetaTransaction::from_transaction(transaction, &chainspec.transaction_config)?;
         Self::new_from_meta_transaction(chainspec, &transaction)
     }
 
@@ -123,5 +128,29 @@ impl TransactionFootprint {
 
     pub(crate) fn gas_price_tolerance(&self) -> u8 {
         self.gas_price_tolerance
+    }
+
+    #[cfg(test)]
+    pub fn random_of_lane(lane_id: u8, rng: &mut TestRng) -> Self {
+        let transaction_hash = TransactionHash::random(rng);
+        let payload_hash = Digest::random(rng);
+        let gas_limit = Gas::new(U512::from(1));
+        let gas_price_tolerance = rng.gen();
+        let size_estimate = rng.gen_range(1000..2000);
+        let timestamp = Timestamp::now();
+        let ttl = TimeDiff::from_millis(15000);
+        let mut approvals = BTreeSet::new();
+        approvals.insert(Approval::random(rng));
+        TransactionFootprint {
+            transaction_hash,
+            payload_hash,
+            gas_limit,
+            gas_price_tolerance,
+            size_estimate,
+            lane_id,
+            timestamp,
+            ttl,
+            approvals,
+        }
     }
 }

@@ -1,26 +1,24 @@
 use num_traits::One;
 
 use casper_engine_test_support::{
-    ExecuteRequest, LmdbWasmTestBuilder, UpgradeRequestBuilder, DEFAULT_ACCOUNT_ADDR,
+    ExecuteRequest, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
+    LOCAL_GENESIS_REQUEST,
 };
 use casper_execution_engine::{engine_state::Error as CoreError, execution::ExecError};
 use casper_types::{
-    account::AccountHash,
-    addressable_entity::NamedKeys,
+    account::{Account, AccountHash},
     contracts::{ContractHash, ContractPackageHash},
-    system::{CallStackElement, Caller, CallerInfo},
-    AddressableEntity, AddressableEntityHash, CLValue, EntityAddr, EntryPointType, HashAddr,
-    HoldBalanceHandling, Key, PackageAddr, PackageHash, ProtocolVersion, StoredValue, Timestamp,
-    U512,
+    runtime_args,
+    system::{Caller, CallerInfo},
+    CLValue, EntityAddr, EntryPointType, HashAddr, Key, PackageHash, StoredValue, U512,
 };
-
-use crate::lmdb_fixture;
 
 use get_call_stack_recursive_subcall::{
     Call, ContractAddress, ARG_CALLS, ARG_CURRENT_DEPTH, METHOD_FORWARDER_CONTRACT_NAME,
     METHOD_FORWARDER_SESSION_NAME,
 };
 
+const CONTRACT_RECURSIVE_SUBCALL: &str = "get_call_stack_recursive_subcall.wasm";
 const CONTRACT_CALL_RECURSIVE_SUBCALL: &str = "get_call_stack_call_recursive_subcall.wasm";
 
 const CONTRACT_PACKAGE_NAME: &str = "forwarder";
@@ -29,12 +27,7 @@ const CONTRACT_NAME: &str = "our_contract_name";
 const CONTRACT_FORWARDER_ENTRYPOINT_CONTRACT: &str = METHOD_FORWARDER_CONTRACT_NAME;
 const CONTRACT_FORWARDER_ENTRYPOINT_SESSION: &str = METHOD_FORWARDER_SESSION_NAME;
 
-const IS_SESSION_ENTRY_POINT: bool = true;
-const IS_NOT_SESSION_ENTRY_POINT: bool = false;
-
-const CALL_STACK_FIXTURE: &str = "call_stack_fixture";
-
-fn stored_session(contract_hash: AddressableEntityHash) -> Call {
+fn stored_session(contract_hash: ContractHash) -> Call {
     Call {
         contract_address: ContractAddress::ContractHash(contract_hash),
         target_method: CONTRACT_FORWARDER_ENTRYPOINT_SESSION.to_string(),
@@ -42,7 +35,7 @@ fn stored_session(contract_hash: AddressableEntityHash) -> Call {
     }
 }
 
-fn stored_versioned_session(contract_package_hash: PackageHash) -> Call {
+fn stored_versioned_session(contract_package_hash: ContractPackageHash) -> Call {
     Call {
         contract_address: ContractAddress::ContractPackageHash(contract_package_hash),
         target_method: CONTRACT_FORWARDER_ENTRYPOINT_SESSION.to_string(),
@@ -50,7 +43,7 @@ fn stored_versioned_session(contract_package_hash: PackageHash) -> Call {
     }
 }
 
-fn stored_contract(contract_hash: AddressableEntityHash) -> Call {
+fn stored_contract(contract_hash: ContractHash) -> Call {
     Call {
         contract_address: ContractAddress::ContractHash(contract_hash),
         target_method: CONTRACT_FORWARDER_ENTRYPOINT_CONTRACT.to_string(),
@@ -58,37 +51,41 @@ fn stored_contract(contract_hash: AddressableEntityHash) -> Call {
     }
 }
 
-fn stored_versioned_contract(contract_package_hash: PackageHash) -> Call {
+fn stored_versioned_contract(contract_package_hash: ContractPackageHash) -> Call {
     Call {
         contract_address: ContractAddress::ContractPackageHash(contract_package_hash),
         target_method: CONTRACT_FORWARDER_ENTRYPOINT_CONTRACT.to_string(),
         entry_point_type: EntryPointType::Called,
     }
+}
+
+fn store_contract(builder: &mut LmdbWasmTestBuilder, session_filename: &str) {
+    let store_contract_request =
+        ExecuteRequestBuilder::standard(*DEFAULT_ACCOUNT_ADDR, session_filename, runtime_args! {})
+            .build();
+    builder
+        .exec(store_contract_request)
+        .commit()
+        .expect_success();
 }
 
 fn execute_and_assert_result(
     call_depth: usize,
     builder: &mut LmdbWasmTestBuilder,
     execute_request: ExecuteRequest,
-    is_entry_point_type_session: bool,
+    is_invalid_context: bool,
 ) {
-    if call_depth == 0 && !is_entry_point_type_session {
+    if call_depth == 0 {
         builder.exec(execute_request).commit().expect_success();
-    } else {
+    } else if is_invalid_context {
         builder.exec(execute_request).commit().expect_failure();
         let error = builder.get_error().expect("must have an error");
-        assert!(
-            matches!(
-                error,
-                // Call chains have stored contract trying to call stored session which we don't
-                // support and is an actual error. Due to variable opcode costs such
-                // execution may end up in a success (and fail with InvalidContext) or GasLimit
-                // when executing longer chains.
-                CoreError::Exec(ExecError::InvalidContext) | CoreError::Exec(ExecError::GasLimit)
-            ),
-            "{:?}",
-            error
-        );
+        assert!(matches!(
+            error,
+            // Call chains have stored contract trying to call stored session which we don't
+            // support and is an actual error.
+            CoreError::Exec(ExecError::InvalidContext)
+        ));
     }
 }
 
@@ -102,38 +99,16 @@ pub fn approved_amount(idx: usize) -> U512 {
     U512::from(LARGE_AMOUNT * (idx + 1) as u64)
 }
 
-struct EntityWithKeys {
-    #[allow(dead_code)]
-    entity: AddressableEntity,
-    named_keys: NamedKeys,
-}
-
-impl EntityWithKeys {
-    fn new(entity: AddressableEntity, named_keys: NamedKeys) -> Self {
-        Self { entity, named_keys }
-    }
-}
-
 trait AccountExt {
-    fn get_entity_hash(&self, key: &str) -> HashAddr;
-
-    fn get_package_hash(&self, key: &str) -> PackageAddr;
+    fn get_hash(&self, key: &str) -> HashAddr;
 }
 
-impl AccountExt for EntityWithKeys {
-    fn get_entity_hash(&self, key: &str) -> HashAddr {
-        self.named_keys
+impl AccountExt for Account {
+    fn get_hash(&self, key: &str) -> HashAddr {
+        self.named_keys()
             .get(key)
             .cloned()
-            .and_then(|key| key.into_hash_addr())
-            .unwrap()
-    }
-
-    fn get_package_hash(&self, key: &str) -> PackageAddr {
-        self.named_keys
-            .get(key)
-            .cloned()
-            .and_then(|key| key.into_hash_addr())
+            .and_then(Key::into_hash_addr)
             .unwrap()
     }
 }
@@ -236,88 +211,103 @@ impl BuilderExt for LmdbWasmTestBuilder {
         stored_call_stack_key: &str,
         contract_package_hash: HashAddr,
     ) -> Vec<Caller> {
-        let enable_entity = self.chainspec().core_config.enable_addressable_entity;
-        let package_key = if enable_entity {
-            Key::Package(contract_package_hash)
-        } else {
-            Key::Hash(contract_package_hash)
-        };
+        let value = self
+            .query(None, Key::Hash(contract_package_hash), &[])
+            .unwrap();
 
-        let value = self.query(None, package_key, &[]).unwrap();
-
-        let package = match value {
-            StoredValue::ContractPackage(contract_package) => contract_package.into(),
-            StoredValue::Package(package) => package,
+        let contract_package = match value {
+            StoredValue::ContractPackage(package) => package,
             _ => panic!("unreachable"),
         };
 
-        let current_entity_hash = package.current_entity_hash().unwrap();
-        let current_contract_entity_key = if enable_entity {
-            Key::AddressableEntity(EntityAddr::SmartContract(current_entity_hash.value()))
-        } else {
-            Key::Hash(current_entity_hash.value())
-        };
+        let current_contract_hash = contract_package.current_contract_hash().unwrap();
 
         let cl_value = self
             .query(
                 None,
-                current_contract_entity_key,
+                current_contract_hash.into(),
                 &[stored_call_stack_key.to_string()],
             )
             .unwrap();
 
         let stack_elements = cl_value
             .into_cl_value()
-            .map(CLValue::into_t::<Vec<CallStackElement>>)
+            .map(CLValue::into_t::<Vec<CallerInfo>>)
             .unwrap()
             .unwrap();
 
-        stack_elements
-            .into_iter()
-            .map(|elem| match elem {
-                CallStackElement::Session { account_hash } => Caller::Initiator { account_hash },
-                CallStackElement::StoredSession {
-                    contract_hash,
-                    contract_package_hash,
-                    ..
-                } => Caller::Entity {
-                    package_hash: PackageHash::new(contract_package_hash.value()),
-                    entity_addr: EntityAddr::SmartContract(contract_hash.value()),
-                },
-                CallStackElement::StoredContract {
-                    contract_hash,
-                    contract_package_hash,
-                } => Caller::Entity {
-                    package_hash: PackageHash::new(contract_package_hash.value()),
-                    entity_addr: EntityAddr::SmartContract(contract_hash.value()),
-                },
-            })
-            .collect()
+        let mut callers = vec![];
+
+        for info in stack_elements {
+            let kind = info.kind();
+            match kind {
+                0 => {
+                    let account_hash = info
+                        .get_field_by_index(0)
+                        .map(|val| {
+                            val.to_t::<Option<AccountHash>>()
+                                .expect("must convert out of cl_value")
+                        })
+                        .expect("must have index 0 in fields")
+                        .expect("account hash must be some");
+                    callers.push(Caller::Initiator { account_hash });
+                }
+                3 => {
+                    let package_hash = info
+                        .get_field_by_index(1)
+                        .map(|val| {
+                            val.to_t::<Option<PackageHash>>()
+                                .expect("must convert out of cl_value")
+                        })
+                        .expect("must have index 1 in fields")
+                        .expect("package hash must be some");
+                    let entity_addr = info
+                        .get_field_by_index(3)
+                        .map(|val| {
+                            val.to_t::<Option<EntityAddr>>()
+                                .expect("must convert out of cl_value")
+                        })
+                        .expect("must have index 3 in fields")
+                        .expect("entity addr must be some");
+                    callers.push(Caller::Entity {
+                        package_hash,
+                        entity_addr,
+                    });
+                }
+                4 => {
+                    let contract_package_hash = info
+                        .get_field_by_index(2)
+                        .map(|val| {
+                            val.to_t::<Option<ContractPackageHash>>()
+                                .expect("must convert out of cl_value")
+                        })
+                        .expect("must have index 2 in fields")
+                        .expect("contract package hash must be some");
+                    let contract_hash = info
+                        .get_field_by_index(4)
+                        .map(|val| {
+                            val.to_t::<Option<ContractHash>>()
+                                .expect("must convert out of cl_value")
+                        })
+                        .expect("must have index 4 in fields")
+                        .expect("contract hash must be some");
+                    callers.push(Caller::SmartContract {
+                        contract_package_hash,
+                        contract_hash,
+                    });
+                }
+                _ => panic!("unhandled kind"),
+            }
+        }
+
+        callers
     }
 }
 
 fn setup() -> LmdbWasmTestBuilder {
-    let (mut builder, lmdb_fixture_state, _) =
-        lmdb_fixture::builder_from_global_state_fixture(CALL_STACK_FIXTURE);
-
-    let pre_upgrade_hash = lmdb_fixture_state.post_state_hash;
-    let old_protocol_version = lmdb_fixture_state.genesis_protocol_version();
-
-    let mut upgrade_request = UpgradeRequestBuilder::new()
-        .with_pre_state_hash(pre_upgrade_hash)
-        .with_current_protocol_version(old_protocol_version)
-        .with_new_protocol_version(ProtocolVersion::V2_0_0)
-        .with_migrate_legacy_accounts(false)
-        .with_migrate_legacy_contracts(false)
-        .build();
-
-    builder
-        .upgrade(&mut upgrade_request)
-        .expect_upgrade_success()
-        .commit();
-
-    builder.with_block_time(Timestamp::now().into());
-    builder.with_gas_hold_config(HoldBalanceHandling::Accrued, 1200u64);
+    let mut builder = LmdbWasmTestBuilder::default();
+    builder.run_genesis(LOCAL_GENESIS_REQUEST.clone());
+    store_contract(&mut builder, CONTRACT_RECURSIVE_SUBCALL);
     builder
 }
 
@@ -380,7 +370,7 @@ fn assert_invalid_context(builder: &mut LmdbWasmTestBuilder, depth: usize) {
 fn assert_each_context_has_correct_call_stack_info_module_bytes(
     builder: &mut LmdbWasmTestBuilder,
     subcalls: Vec<Call>,
-    current_contract_package_hash: PackageHash,
+    current_contract_package_hash: HashAddr,
 ) {
     let stored_call_stack_key = format!("call_stack-{}", 0);
     let call_stack = builder.get_call_stack_from_session_context(&stored_call_stack_key);
@@ -399,7 +389,7 @@ fn assert_each_context_has_correct_call_stack_info_module_bytes(
             EntryPointType::Called | EntryPointType::Factory => builder
                 .get_call_stack_from_contract_context(
                     &stored_call_stack_key,
-                    current_contract_package_hash.value(),
+                    current_contract_package_hash,
                 ),
             EntryPointType::Caller => {
                 builder.get_call_stack_from_session_context(&stored_call_stack_key)
@@ -420,7 +410,7 @@ fn assert_call_stack_matches_calls(call_stack: Vec<Caller>, calls: &[Call]) {
     for (index, expected_call_stack_element) in call_stack.iter().enumerate() {
         let maybe_call = calls.get(index);
         match (maybe_call, expected_call_stack_element) {
-            // Versioned Call with EntryPointType::Called
+            // Versioned Call with EntryPointType::Contract
             (
                 Some(Call {
                     entry_point_type,
@@ -428,12 +418,12 @@ fn assert_call_stack_matches_calls(call_stack: Vec<Caller>, calls: &[Call]) {
                         ContractAddress::ContractPackageHash(current_contract_package_hash),
                     ..
                 }),
-                Caller::Entity {
-                    package_hash: contract_package_hash,
+                Caller::SmartContract {
+                    contract_package_hash,
                     ..
                 },
             ) if *entry_point_type == EntryPointType::Called
-                && *contract_package_hash == *current_contract_package_hash => {}
+                && contract_package_hash.value() == current_contract_package_hash.value() => {}
 
             // Unversioned Call with EntryPointType::Called
             (
@@ -442,11 +432,34 @@ fn assert_call_stack_matches_calls(call_stack: Vec<Caller>, calls: &[Call]) {
                     contract_address: ContractAddress::ContractHash(current_contract_hash),
                     ..
                 }),
-                Caller::Entity {
-                    entity_addr: contract_hash,
+                Caller::SmartContract { contract_hash, .. },
+            ) if *entry_point_type == EntryPointType::Called
+                && contract_hash.value() == current_contract_hash.value() => {}
+
+            // Versioned Call with EntryPointType::Session
+            (
+                Some(Call {
+                    entry_point_type,
+                    contract_address:
+                        ContractAddress::ContractPackageHash(current_contract_package_hash),
+                    ..
+                }),
+                Caller::SmartContract {
+                    contract_package_hash,
                     ..
                 },
-            ) if *entry_point_type == EntryPointType::Called
+            ) if *entry_point_type == EntryPointType::Caller
+                && *contract_package_hash == *current_contract_package_hash => {}
+
+            // Unversioned Call with EntryPointType::Session
+            (
+                Some(Call {
+                    entry_point_type,
+                    contract_address: ContractAddress::ContractHash(current_contract_hash),
+                    ..
+                }),
+                Caller::SmartContract { contract_hash, .. },
+            ) if *entry_point_type == EntryPointType::Caller
                 && contract_hash.value() == current_contract_hash.value() => {}
 
             _ => panic!(
@@ -458,11 +471,9 @@ fn assert_call_stack_matches_calls(call_stack: Vec<Caller>, calls: &[Call]) {
 }
 
 mod session {
-    use crate::test::contract_api::get_call_stack::EntityWithKeys;
+
     use casper_engine_test_support::{ExecuteRequestBuilder, DEFAULT_ACCOUNT_ADDR};
-    use casper_execution_engine::execution::ExecError;
     use casper_types::{execution::TransformKindV2, runtime_args, system::mint, Key};
-    use num_traits::Zero;
 
     use super::{
         approved_amount, AccountExt, ARG_CALLS, ARG_CURRENT_DEPTH, CONTRACT_CALL_RECURSIVE_SUBCALL,
@@ -481,16 +492,8 @@ mod session {
     fn session_bytes_to_stored_versioned_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let subcalls =
                 vec![super::stored_versioned_contract(current_contract_package_hash.into()); *len];
@@ -511,7 +514,7 @@ mod session {
             super::assert_each_context_has_correct_call_stack_info_module_bytes(
                 &mut builder,
                 subcalls,
-                current_contract_package_hash.into(),
+                current_contract_package_hash,
             );
         }
     }
@@ -521,18 +524,9 @@ mod session {
     fn session_bytes_to_stored_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_contract(current_contract_hash.into()); *len];
 
@@ -552,7 +546,7 @@ mod session {
             super::assert_each_context_has_correct_call_stack_info_module_bytes(
                 &mut builder,
                 subcalls,
-                current_contract_package_hash.into(),
+                current_contract_package_hash,
             );
         }
     }
@@ -562,18 +556,9 @@ mod session {
     fn session_bytes_to_stored_versioned_contract_to_stored_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![
@@ -600,7 +585,7 @@ mod session {
             super::assert_each_context_has_correct_call_stack_info_module_bytes(
                 &mut builder,
                 subcalls,
-                current_contract_package_hash.into(),
+                current_contract_package_hash,
             );
         }
     }
@@ -610,18 +595,9 @@ mod session {
     fn session_bytes_to_stored_contract_to_stored_versioned_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![super::stored_contract(current_contract_hash.into()); len.saturating_sub(1)];
@@ -647,7 +623,7 @@ mod session {
             super::assert_each_context_has_correct_call_stack_info_module_bytes(
                 &mut builder,
                 subcalls,
-                current_contract_package_hash.into(),
+                current_contract_package_hash,
             );
         }
     }
@@ -657,16 +633,9 @@ mod session {
     fn session_bytes_to_stored_versioned_session_to_stored_versioned_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            println!("{:?}", default_account);
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let mut subcalls =
                 vec![
@@ -690,19 +659,13 @@ mod session {
             )
             .build();
 
-            // At current depth with len at 0, the invoked wasm will early exit and
-            // does not invoke the stored session. Therefore for the first iteration we
-            // expect successful execution of the module bytes.
-            if len.is_zero() {
-                builder.exec(execute_request).expect_success().commit();
-            } else {
-                builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-                let expected_error =
-                    casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-                builder.assert_error(expected_error)
-            }
+            super::assert_each_context_has_correct_call_stack_info_module_bytes(
+                &mut builder,
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -711,17 +674,9 @@ mod session {
     fn session_bytes_to_stored_versioned_session_to_stored_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![
@@ -743,19 +698,13 @@ mod session {
             )
             .build();
 
-            // At current depth with len at 0, the invoked wasm will early exit and
-            // does not invoke the stored session. Therefore for the first iteration we
-            // expect successful execution of the module bytes.
-            if len.is_zero() {
-                builder.exec(execute_request).expect_success().commit();
-            } else {
-                builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-                let expected_error =
-                    casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-                builder.assert_error(expected_error)
-            }
+            super::assert_each_context_has_correct_call_stack_info_module_bytes(
+                &mut builder,
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -764,17 +713,9 @@ mod session {
     fn session_bytes_to_stored_session_to_stored_versioned_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![super::stored_session(current_contract_hash.into()); len.saturating_sub(1)];
@@ -795,19 +736,13 @@ mod session {
             )
             .build();
 
-            // At current depth with len at 0, the invoked wasm will early exit and
-            // does not invoke the stored session. Therefore for the first iteration we
-            // expect successful execution of the module bytes.
-            if len.is_zero() {
-                builder.exec(execute_request).expect_success().commit();
-            } else {
-                builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-                let expected_error =
-                    casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-                builder.assert_error(expected_error)
-            }
+            super::assert_each_context_has_correct_call_stack_info_module_bytes(
+                &mut builder,
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -816,15 +751,9 @@ mod session {
     fn session_bytes_to_stored_session_to_stored_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![super::stored_session(current_contract_hash.into()); len.saturating_sub(1)];
@@ -843,19 +772,13 @@ mod session {
             )
             .build();
 
-            // At current depth with len at 0, the invoked wasm will early exit and
-            // does not invoke the stored session. Therefore for the first iteration we
-            // expect successful execution of the module bytes.
-            if len.is_zero() {
-                builder.exec(execute_request).expect_success().commit();
-            } else {
-                builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-                let expected_error =
-                    casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-                builder.assert_error(expected_error)
-            }
+            super::assert_each_context_has_correct_call_stack_info_module_bytes(
+                &mut builder,
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -864,16 +787,8 @@ mod session {
     fn session_bytes_to_stored_versioned_session() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let subcalls =
                 vec![super::stored_versioned_session(current_contract_package_hash.into()); *len];
@@ -889,19 +804,13 @@ mod session {
             )
             .build();
 
-            // At current depth with len at 0, the invoked wasm will early exit and
-            // does not invoke the stored session. Therefore for the first iteration we
-            // expect successful execution of the module bytes.
-            if len.is_zero() {
-                builder.exec(execute_request).expect_success().commit();
-            } else {
-                builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-                let expected_error =
-                    casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-                builder.assert_error(expected_error)
-            }
+            super::assert_each_context_has_correct_call_stack_info_module_bytes(
+                &mut builder,
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -910,17 +819,9 @@ mod session {
     fn session_bytes_to_stored_versioned_session_to_stored_session() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![
@@ -942,19 +843,13 @@ mod session {
             )
             .build();
 
-            // At current depth with len at 0, the invoked wasm will early exit and
-            // does not invoke the stored session. Therefore for the first iteration we
-            // expect successful execution of the module bytes.
-            if len.is_zero() {
-                builder.exec(execute_request).expect_success().commit();
-            } else {
-                builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-                let expected_error =
-                    casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-                builder.assert_error(expected_error)
-            }
+            super::assert_each_context_has_correct_call_stack_info_module_bytes(
+                &mut builder,
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -963,18 +858,9 @@ mod session {
     fn session_bytes_to_stored_session_to_stored_versioned_session() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![super::stored_session(current_contract_hash.into()); len.saturating_sub(1)];
@@ -995,19 +881,13 @@ mod session {
             )
             .build();
 
-            // At current depth with len at 0, the invoked wasm will early exit and
-            // does not invoke the stored session. Therefore for the first iteration we
-            // expect successful execution of the module bytes.
-            if len.is_zero() {
-                builder.exec(execute_request).expect_success().commit();
-            } else {
-                builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-                let expected_error =
-                    casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-                builder.assert_error(expected_error)
-            }
+            super::assert_each_context_has_correct_call_stack_info_module_bytes(
+                &mut builder,
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -1016,15 +896,9 @@ mod session {
     fn session_bytes_to_stored_session() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_session(current_contract_hash.into()); *len];
 
@@ -1039,19 +913,13 @@ mod session {
             )
             .build();
 
-            // At current depth with len at 0, the invoked wasm will early exit and
-            // does not invoke the stored session. Therefore for the first iteration we
-            // expect successful execution of the module bytes.
-            if len.is_zero() {
-                builder.exec(execute_request).expect_success().commit();
-            } else {
-                builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-                let expected_error =
-                    casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-                builder.assert_error(expected_error)
-            }
+            super::assert_each_context_has_correct_call_stack_info_module_bytes(
+                &mut builder,
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -1062,16 +930,8 @@ mod session {
     fn session_bytes_to_stored_versioned_contract_to_stored_versioned_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let mut subcalls =
                 vec![
@@ -1106,18 +966,9 @@ mod session {
     fn session_bytes_to_stored_versioned_contract_to_stored_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![
@@ -1150,18 +1001,9 @@ mod session {
     fn session_bytes_to_stored_contract_to_stored_versioned_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![super::stored_contract(current_contract_hash.into()); len.saturating_sub(1)];
@@ -1193,15 +1035,8 @@ mod session {
     fn session_bytes_to_stored_contract_to_stored_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![super::stored_contract(current_contract_hash.into()); len.saturating_sub(1)];
@@ -1233,15 +1068,8 @@ mod session {
     fn stored_versioned_contract_by_name_to_stored_versioned_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let subcalls =
                 vec![super::stored_versioned_contract(current_contract_package_hash.into()); *len];
@@ -1275,16 +1103,8 @@ mod session {
     fn stored_versioned_contract_by_hash_to_stored_versioned_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let subcalls =
                 vec![super::stored_versioned_contract(current_contract_package_hash.into()); *len];
@@ -1335,17 +1155,9 @@ mod session {
     fn stored_versioned_contract_by_name_to_stored_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_contract(current_contract_hash.into()); *len];
 
@@ -1378,17 +1190,9 @@ mod session {
     fn stored_versioned_contract_by_hash_to_stored_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_contract(current_contract_hash.into()); *len];
 
@@ -1421,17 +1225,9 @@ mod session {
     fn stored_contract_by_name_to_stored_versioned_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls =
                 vec![super::stored_versioned_contract(current_contract_package_hash.into()); *len];
@@ -1464,17 +1260,9 @@ mod session {
     fn stored_contract_by_hash_to_stored_versioned_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls =
                 vec![super::stored_versioned_contract(current_contract_package_hash.into()); *len];
@@ -1516,17 +1304,9 @@ mod session {
     fn stored_contract_by_name_to_stored_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_contract(current_contract_hash.into()); *len];
 
@@ -1558,17 +1338,9 @@ mod session {
     fn stored_contract_by_hash_to_stored_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_contract(current_contract_hash.into()); *len];
 
@@ -1602,15 +1374,8 @@ mod session {
     fn stored_versioned_contract_by_name_to_stored_versioned_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let subcalls =
                 vec![super::stored_versioned_session(current_contract_package_hash.into()); *len];
@@ -1639,15 +1404,8 @@ mod session {
     fn stored_versioned_contract_by_hash_to_stored_versioned_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let subcalls =
                 vec![super::stored_versioned_session(current_contract_package_hash.into()); *len];
@@ -1676,14 +1434,8 @@ mod session {
     fn stored_versioned_contract_by_name_to_stored_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_session(current_contract_hash.into()); *len];
 
@@ -1711,17 +1463,9 @@ mod session {
     fn stored_versioned_contract_by_hash_to_stored_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_session(current_contract_hash.into()); *len];
 
@@ -1749,15 +1493,8 @@ mod session {
     fn stored_contract_by_name_to_stored_versioned_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let subcalls =
                 vec![super::stored_versioned_session(current_contract_package_hash.into()); *len];
@@ -1785,17 +1522,9 @@ mod session {
     fn stored_contract_by_hash_to_stored_versioned_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls =
                 vec![super::stored_versioned_session(current_contract_package_hash.into()); *len];
@@ -1823,14 +1552,8 @@ mod session {
     fn stored_contract_by_name_to_stored_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_session(current_contract_hash.into()); *len];
 
@@ -1857,14 +1580,8 @@ mod session {
     fn stored_contract_by_hash_to_stored_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_session(current_contract_hash.into()); *len];
 
@@ -1892,15 +1609,8 @@ mod session {
     ) {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let mut subcalls =
                 vec![
@@ -1938,17 +1648,9 @@ mod session {
     ) {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![
@@ -1984,17 +1686,9 @@ mod session {
     ) {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![super::stored_contract(current_contract_hash.into()); len.saturating_sub(1)];
@@ -2028,17 +1722,9 @@ mod session {
     fn stored_versioned_contract_by_hash_to_stored_contract_to_stored_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![super::stored_contract(current_contract_hash.into()); len.saturating_sub(1)];
@@ -2071,15 +1757,8 @@ mod session {
     ) {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let mut subcalls =
                 vec![
@@ -2115,17 +1794,9 @@ mod session {
     fn stored_contract_by_hash_to_stored_versioned_contract_to_stored_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![
@@ -2159,17 +1830,9 @@ mod session {
     fn stored_contract_by_name_to_stored_contract_to_stored_versioned_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![super::stored_contract(current_contract_hash.into()); len.saturating_sub(1)];
@@ -2202,14 +1865,8 @@ mod session {
     fn stored_contract_by_hash_to_stored_contract_to_stored_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![super::stored_contract(current_contract_hash.into()); len.saturating_sub(1)];
@@ -2242,15 +1899,8 @@ mod session {
     fn stored_versioned_session_by_name_to_stored_versioned_session() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let subcalls =
                 vec![super::stored_versioned_session(current_contract_package_hash.into()); *len];
@@ -2268,12 +1918,14 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_each_context_has_correct_call_stack_info(
+                &mut builder,
+                super::stored_versioned_session(current_contract_package_hash.into()),
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -2282,15 +1934,8 @@ mod session {
     fn stored_versioned_session_by_hash_to_stored_versioned_session() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let subcalls =
                 vec![super::stored_versioned_session(current_contract_package_hash.into()); *len];
@@ -2308,12 +1953,14 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_each_context_has_correct_call_stack_info(
+                &mut builder,
+                super::stored_versioned_session(current_contract_package_hash.into()),
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -2322,14 +1969,9 @@ mod session {
     fn stored_versioned_session_by_name_to_stored_session() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_session(current_contract_hash.into()); *len];
 
@@ -2346,12 +1988,14 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_each_context_has_correct_call_stack_info(
+                &mut builder,
+                super::stored_versioned_session(current_contract_package_hash.into()),
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -2360,17 +2004,9 @@ mod session {
     fn stored_versioned_session_by_hash_to_stored_session() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_session(current_contract_hash.into()); *len];
 
@@ -2387,12 +2023,14 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_each_context_has_correct_call_stack_info(
+                &mut builder,
+                super::stored_versioned_session(current_contract_package_hash.into()),
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -2401,15 +2039,9 @@ mod session {
     fn stored_session_by_name_to_stored_versioned_session() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls =
                 vec![super::stored_versioned_session(current_contract_package_hash.into()); *len];
@@ -2426,12 +2058,14 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_each_context_has_correct_call_stack_info(
+                &mut builder,
+                super::stored_session(current_contract_hash.into()),
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -2440,17 +2074,9 @@ mod session {
     fn stored_session_by_hash_to_stored_versioned_session() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls =
                 vec![super::stored_versioned_session(current_contract_package_hash.into()); *len];
@@ -2467,12 +2093,14 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_each_context_has_correct_call_stack_info(
+                &mut builder,
+                super::stored_versioned_session(current_contract_package_hash.into()),
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -2481,15 +2109,9 @@ mod session {
     fn stored_session_by_name_to_stored_session() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_session(current_contract_hash.into()); *len];
 
@@ -2505,12 +2127,14 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_each_context_has_correct_call_stack_info(
+                &mut builder,
+                super::stored_session(current_contract_hash.into()),
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -2519,14 +2143,9 @@ mod session {
     fn stored_session_by_hash_to_stored_session() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_session(current_contract_hash.into()); *len];
 
@@ -2542,12 +2161,14 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_each_context_has_correct_call_stack_info(
+                &mut builder,
+                super::stored_session(current_contract_hash.into()),
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -2556,15 +2177,8 @@ mod session {
     fn stored_versioned_session_by_name_to_stored_versioned_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let subcalls =
                 vec![super::stored_versioned_contract(current_contract_package_hash.into()); *len];
@@ -2582,12 +2196,14 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_each_context_has_correct_call_stack_info(
+                &mut builder,
+                super::stored_versioned_session(current_contract_package_hash.into()),
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -2596,15 +2212,8 @@ mod session {
     fn stored_versioned_session_by_hash_to_stored_versioned_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let subcalls =
                 vec![super::stored_versioned_contract(current_contract_package_hash.into()); *len];
@@ -2622,12 +2231,14 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_each_context_has_correct_call_stack_info(
+                &mut builder,
+                super::stored_versioned_session(current_contract_package_hash.into()),
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -2636,15 +2247,9 @@ mod session {
     fn stored_versioned_session_by_name_to_stored_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_contract(current_contract_hash.into()); *len];
 
@@ -2661,12 +2266,14 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_each_context_has_correct_call_stack_info(
+                &mut builder,
+                super::stored_versioned_session(current_contract_package_hash.into()),
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -2675,17 +2282,9 @@ mod session {
     fn stored_versioned_session_by_hash_to_stored_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_contract(current_contract_hash.into()); *len];
 
@@ -2702,12 +2301,14 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_each_context_has_correct_call_stack_info(
+                &mut builder,
+                super::stored_versioned_session(current_contract_package_hash.into()),
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -2716,15 +2317,9 @@ mod session {
     fn stored_session_by_name_to_stored_versioned_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls =
                 vec![super::stored_versioned_contract(current_contract_package_hash.into()); *len];
@@ -2741,12 +2336,14 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_each_context_has_correct_call_stack_info(
+                &mut builder,
+                super::stored_session(current_contract_hash.into()),
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -2755,17 +2352,9 @@ mod session {
     fn stored_session_by_hash_to_stored_versioned_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls =
                 vec![super::stored_versioned_contract(current_contract_package_hash.into()); *len];
@@ -2782,12 +2371,14 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_each_context_has_correct_call_stack_info(
+                &mut builder,
+                super::stored_session(current_contract_hash.into()),
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -2796,15 +2387,9 @@ mod session {
     fn stored_session_by_name_to_stored_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_contract(current_contract_hash.into()); *len];
 
@@ -2820,12 +2405,14 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_each_context_has_correct_call_stack_info(
+                &mut builder,
+                super::stored_session(current_contract_hash.into()),
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -2834,15 +2421,9 @@ mod session {
     fn stored_session_by_hash_to_stored_contract() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_contract(current_contract_hash.into()); *len];
 
@@ -2858,12 +2439,14 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit().expect_success();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_each_context_has_correct_call_stack_info(
+                &mut builder,
+                super::stored_session(current_contract_hash.into()),
+                subcalls,
+                current_contract_package_hash,
+            );
         }
     }
 
@@ -2875,16 +2458,8 @@ mod session {
     ) {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let mut subcalls =
                 vec![
@@ -2910,12 +2485,9 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_invalid_context(&mut builder, *len);
         }
     }
 
@@ -2925,17 +2497,9 @@ mod session {
     {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![
@@ -2959,12 +2523,9 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_invalid_context(&mut builder, *len);
         }
     }
 
@@ -2974,17 +2535,9 @@ mod session {
     {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![super::stored_contract(current_contract_hash.into()); len.saturating_sub(1)];
@@ -3007,12 +2560,9 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_invalid_context(&mut builder, *len);
         }
     }
 
@@ -3021,17 +2571,9 @@ mod session {
     fn stored_versioned_session_by_hash_to_stored_contract_to_stored_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![super::stored_contract(current_contract_hash.into()); len.saturating_sub(1)];
@@ -3052,12 +2594,9 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_invalid_context(&mut builder, *len);
         }
     }
 
@@ -3067,15 +2606,8 @@ mod session {
     {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let mut subcalls =
                 vec![
@@ -3100,12 +2632,9 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_invalid_context(&mut builder, *len);
         }
     }
 
@@ -3114,17 +2643,9 @@ mod session {
     fn stored_session_by_hash_to_stored_versioned_contract_to_stored_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![
@@ -3147,12 +2668,9 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_invalid_context(&mut builder, *len);
         }
     }
 
@@ -3161,17 +2679,9 @@ mod session {
     fn stored_session_by_name_to_stored_contract_to_stored_versioned_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![super::stored_contract(current_contract_hash.into()); len.saturating_sub(1)];
@@ -3193,12 +2703,9 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_invalid_context(&mut builder, *len);
         }
     }
 
@@ -3207,13 +2714,8 @@ mod session {
     fn stored_session_by_hash_to_stored_contract_to_stored_session_should_fail() {
         for len in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![super::stored_contract(current_contract_hash.into()); len.saturating_sub(1)];
@@ -3233,12 +2735,9 @@ mod session {
             )
             .build();
 
-            builder.exec(execute_request).expect_failure();
+            builder.exec(execute_request).commit();
 
-            let expected_error =
-                casper_execution_engine::engine_state::Error::Exec(ExecError::InvalidContext);
-
-            builder.assert_error(expected_error);
+            super::assert_invalid_context(&mut builder, *len);
         }
     }
 }
@@ -3248,9 +2747,6 @@ mod payment {
 
     use rand::Rng;
 
-    use crate::test::contract_api::get_call_stack::{
-        EntityWithKeys, IS_NOT_SESSION_ENTRY_POINT, IS_SESSION_ENTRY_POINT,
-    };
     use casper_engine_test_support::{
         DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_ACCOUNT_ADDR,
     };
@@ -3268,30 +2764,32 @@ mod payment {
     // vector.  Going further than 6 will hit the gas limit.
     const DEPTHS: &[usize] = &[0, 6, 10];
 
-    fn execute(builder: &mut LmdbWasmTestBuilder, call_depth: usize, subcalls: Vec<Call>) {
-        let mut rng = rand::thread_rng();
-        let deploy_hash = rng.gen();
-        let sender = *DEFAULT_ACCOUNT_ADDR;
-        let args = runtime_args! {
-            ARG_CALLS => subcalls,
-            ARG_CURRENT_DEPTH => 0u8,
-            mint::ARG_AMOUNT => approved_amount(call_depth),
+    fn execute(
+        builder: &mut LmdbWasmTestBuilder,
+        call_depth: usize,
+        subcalls: Vec<Call>,
+        is_invalid_context: bool,
+    ) {
+        let execute_request = {
+            let mut rng = rand::thread_rng();
+            let deploy_hash = rng.gen();
+            let sender = *DEFAULT_ACCOUNT_ADDR;
+            let args = runtime_args! {
+                ARG_CALLS => subcalls,
+                ARG_CURRENT_DEPTH => 0u8,
+                mint::ARG_AMOUNT => approved_amount(call_depth),
+            };
+            let deploy = DeployItemBuilder::new()
+                .with_address(sender)
+                .with_payment_code(CONTRACT_CALL_RECURSIVE_SUBCALL, args)
+                .with_session_bytes(wasm_utils::do_nothing_bytes(), RuntimeArgs::default())
+                .with_authorization_keys(&[sender])
+                .with_deploy_hash(deploy_hash)
+                .build();
+            ExecuteRequestBuilder::from_deploy_item(&deploy).build()
         };
-        let deploy_item = DeployItemBuilder::new()
-            .with_address(sender)
-            .with_payment_code(CONTRACT_CALL_RECURSIVE_SUBCALL, args)
-            .with_session_bytes(wasm_utils::do_nothing_bytes(), RuntimeArgs::default())
-            .with_authorization_keys(&[sender])
-            .with_deploy_hash(deploy_hash)
-            .build();
-        let execute_request = ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
 
-        super::execute_and_assert_result(
-            call_depth,
-            builder,
-            execute_request,
-            IS_NOT_SESSION_ENTRY_POINT,
-        );
+        super::execute_and_assert_result(call_depth, builder, execute_request, is_invalid_context);
     }
 
     fn execute_stored_payment_by_package_name(
@@ -3299,38 +2797,35 @@ mod payment {
         call_depth: usize,
         subcalls: Vec<Call>,
     ) {
-        let mut rng = rand::thread_rng();
-        let deploy_hash = rng.gen();
+        let execute_request = {
+            let mut rng = rand::thread_rng();
+            let deploy_hash = rng.gen();
 
-        let sender = *DEFAULT_ACCOUNT_ADDR;
+            let sender = *DEFAULT_ACCOUNT_ADDR;
 
-        let args = runtime_args! {
-            ARG_CALLS => subcalls,
-            ARG_CURRENT_DEPTH => 0u8,
-            mint::ARG_AMOUNT => approved_amount(call_depth),
+            let args = runtime_args! {
+                ARG_CALLS => subcalls,
+                ARG_CURRENT_DEPTH => 0u8,
+                mint::ARG_AMOUNT => approved_amount(call_depth),
+            };
+
+            let deploy = DeployItemBuilder::new()
+                .with_address(sender)
+                .with_stored_versioned_payment_contract_by_name(
+                    CONTRACT_PACKAGE_NAME,
+                    None,
+                    CONTRACT_FORWARDER_ENTRYPOINT_SESSION,
+                    args,
+                )
+                .with_session_bytes(wasm_utils::do_nothing_bytes(), RuntimeArgs::default())
+                .with_authorization_keys(&[sender])
+                .with_deploy_hash(deploy_hash)
+                .build();
+
+            ExecuteRequestBuilder::from_deploy_item(&deploy).build()
         };
 
-        let deploy_item = DeployItemBuilder::new()
-            .with_address(sender)
-            .with_stored_versioned_payment_contract_by_name(
-                CONTRACT_PACKAGE_NAME,
-                None,
-                CONTRACT_FORWARDER_ENTRYPOINT_SESSION,
-                args,
-            )
-            .with_session_bytes(wasm_utils::do_nothing_bytes(), RuntimeArgs::default())
-            .with_authorization_keys(&[sender])
-            .with_deploy_hash(deploy_hash)
-            .build();
-
-        let execute_request = ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
-
-        super::execute_and_assert_result(
-            call_depth,
-            builder,
-            execute_request,
-            IS_SESSION_ENTRY_POINT,
-        );
+        super::execute_and_assert_result(call_depth, builder, execute_request, false);
     }
 
     fn execute_stored_payment_by_package_hash(
@@ -3339,34 +2834,31 @@ mod payment {
         subcalls: Vec<Call>,
         current_contract_package_hash: HashAddr,
     ) {
-        let mut rng = rand::thread_rng();
-        let deploy_hash = rng.gen();
-        let sender = *DEFAULT_ACCOUNT_ADDR;
-        let args = runtime_args! {
-            ARG_CALLS => subcalls,
-            ARG_CURRENT_DEPTH => 0u8,
-            mint::ARG_AMOUNT => approved_amount(call_depth),
+        let execute_request = {
+            let mut rng = rand::thread_rng();
+            let deploy_hash = rng.gen();
+            let sender = *DEFAULT_ACCOUNT_ADDR;
+            let args = runtime_args! {
+                ARG_CALLS => subcalls,
+                ARG_CURRENT_DEPTH => 0u8,
+                mint::ARG_AMOUNT => approved_amount(call_depth),
+            };
+            let deploy = DeployItemBuilder::new()
+                .with_address(sender)
+                .with_stored_versioned_payment_contract_by_hash(
+                    current_contract_package_hash,
+                    None,
+                    CONTRACT_FORWARDER_ENTRYPOINT_SESSION,
+                    args,
+                )
+                .with_session_bytes(wasm_utils::do_nothing_bytes(), RuntimeArgs::default())
+                .with_authorization_keys(&[sender])
+                .with_deploy_hash(deploy_hash)
+                .build();
+            ExecuteRequestBuilder::from_deploy_item(&deploy).build()
         };
-        let deploy_item = DeployItemBuilder::new()
-            .with_address(sender)
-            .with_stored_versioned_payment_contract_by_hash(
-                current_contract_package_hash,
-                None,
-                CONTRACT_FORWARDER_ENTRYPOINT_SESSION,
-                args,
-            )
-            .with_session_bytes(wasm_utils::do_nothing_bytes(), RuntimeArgs::default())
-            .with_authorization_keys(&[sender])
-            .with_deploy_hash(deploy_hash)
-            .build();
-        let execute_request = ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
 
-        super::execute_and_assert_result(
-            call_depth,
-            builder,
-            execute_request,
-            IS_SESSION_ENTRY_POINT,
-        );
+        super::execute_and_assert_result(call_depth, builder, execute_request, false);
     }
 
     fn execute_stored_payment_by_contract_name(
@@ -3374,37 +2866,34 @@ mod payment {
         call_depth: usize,
         subcalls: Vec<Call>,
     ) {
-        let mut rng = rand::thread_rng();
-        let deploy_hash = rng.gen();
+        let execute_request = {
+            let mut rng = rand::thread_rng();
+            let deploy_hash = rng.gen();
 
-        let sender = *DEFAULT_ACCOUNT_ADDR;
+            let sender = *DEFAULT_ACCOUNT_ADDR;
 
-        let args = runtime_args! {
-            ARG_CALLS => subcalls,
-            ARG_CURRENT_DEPTH => 0u8,
-            mint::ARG_AMOUNT => approved_amount(call_depth),
+            let args = runtime_args! {
+                ARG_CALLS => subcalls,
+                ARG_CURRENT_DEPTH => 0u8,
+                mint::ARG_AMOUNT => approved_amount(call_depth),
+            };
+
+            let deploy = DeployItemBuilder::new()
+                .with_address(sender)
+                .with_stored_payment_named_key(
+                    CONTRACT_NAME,
+                    CONTRACT_FORWARDER_ENTRYPOINT_SESSION,
+                    args,
+                )
+                .with_session_bytes(wasm_utils::do_nothing_bytes(), RuntimeArgs::default())
+                .with_authorization_keys(&[sender])
+                .with_deploy_hash(deploy_hash)
+                .build();
+
+            ExecuteRequestBuilder::from_deploy_item(&deploy).build()
         };
 
-        let deploy_item = DeployItemBuilder::new()
-            .with_address(sender)
-            .with_stored_payment_named_key(
-                CONTRACT_NAME,
-                CONTRACT_FORWARDER_ENTRYPOINT_SESSION,
-                args,
-            )
-            .with_session_bytes(wasm_utils::do_nothing_bytes(), RuntimeArgs::default())
-            .with_authorization_keys(&[sender])
-            .with_deploy_hash(deploy_hash)
-            .build();
-
-        let execute_request = ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
-
-        super::execute_and_assert_result(
-            call_depth,
-            builder,
-            execute_request,
-            IS_SESSION_ENTRY_POINT,
-        );
+        super::execute_and_assert_result(call_depth, builder, execute_request, false);
     }
 
     fn execute_stored_payment_by_contract_hash(
@@ -3413,35 +2902,30 @@ mod payment {
         subcalls: Vec<Call>,
         current_contract_hash: HashAddr,
     ) {
-        let mut rng = rand::thread_rng();
-        let deploy_hash = rng.gen();
-        let sender = *DEFAULT_ACCOUNT_ADDR;
-        let args = runtime_args! {
-            ARG_CALLS => subcalls,
-            ARG_CURRENT_DEPTH => 0u8,
-            mint::ARG_AMOUNT => approved_amount(call_depth),
+        let execute_request = {
+            let mut rng = rand::thread_rng();
+            let deploy_hash = rng.gen();
+            let sender = *DEFAULT_ACCOUNT_ADDR;
+            let args = runtime_args! {
+                ARG_CALLS => subcalls,
+                ARG_CURRENT_DEPTH => 0u8,
+                mint::ARG_AMOUNT => approved_amount(call_depth),
+            };
+            let deploy = DeployItemBuilder::new()
+                .with_address(sender)
+                .with_stored_payment_hash(
+                    current_contract_hash.into(),
+                    CONTRACT_FORWARDER_ENTRYPOINT_SESSION,
+                    args,
+                )
+                .with_session_bytes(wasm_utils::do_nothing_bytes(), RuntimeArgs::default())
+                .with_authorization_keys(&[sender])
+                .with_deploy_hash(deploy_hash)
+                .build();
+            ExecuteRequestBuilder::from_deploy_item(&deploy).build()
         };
-        let deploy_item = DeployItemBuilder::new()
-            .with_address(sender)
-            .with_stored_payment_hash(
-                current_contract_hash.into(),
-                CONTRACT_FORWARDER_ENTRYPOINT_SESSION,
-                args,
-            )
-            .with_session_bytes(wasm_utils::do_nothing_bytes(), RuntimeArgs::default())
-            .with_authorization_keys(&[sender])
-            .with_deploy_hash(deploy_hash)
-            .build();
-        let execute_request = ExecuteRequestBuilder::from_deploy_item(&deploy_item).build();
 
-        let is_entry_point_type_session = true;
-
-        super::execute_and_assert_result(
-            call_depth,
-            builder,
-            execute_request,
-            is_entry_point_type_session,
-        );
+        super::execute_and_assert_result(call_depth, builder, execute_request, false);
     }
 
     // Session + recursive subcall
@@ -3451,15 +2935,8 @@ mod payment {
     fn payment_bytes_to_stored_versioned_session_to_stored_versioned_contract() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let mut subcalls =
                 vec![
@@ -3472,7 +2949,7 @@ mod payment {
                 ));
             }
 
-            execute(&mut builder, *call_depth, subcalls);
+            execute(&mut builder, *call_depth, subcalls, false);
         }
     }
 
@@ -3481,17 +2958,9 @@ mod payment {
     fn payment_bytes_to_stored_versioned_session_to_stored_contract() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![
@@ -3502,7 +2971,7 @@ mod payment {
                 subcalls.push(super::stored_contract(current_contract_hash.into()));
             }
 
-            execute(&mut builder, *call_depth, subcalls);
+            execute(&mut builder, *call_depth, subcalls, false);
         }
     }
 
@@ -3511,17 +2980,9 @@ mod payment {
     fn payment_bytes_to_stored_session_to_stored_versioned_contract() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls = vec![
                 super::stored_session(current_contract_hash.into());
@@ -3533,7 +2994,7 @@ mod payment {
                 ));
             }
 
-            execute(&mut builder, *call_depth, subcalls)
+            execute(&mut builder, *call_depth, subcalls, false)
         }
     }
 
@@ -3545,20 +3006,14 @@ mod payment {
     fn payment_bytes_to_stored_contract_to_stored_session() {
         let call_depth = 5usize;
         let mut builder = super::setup();
-        let default_account = builder
-            .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-            .unwrap();
-        let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-        let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-        let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+        let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+        let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
         let subcalls = vec![
             super::stored_contract(current_contract_hash.into()),
             super::stored_session(current_contract_hash.into()),
         ];
-        execute(&mut builder, call_depth, subcalls)
+        execute(&mut builder, call_depth, subcalls, true)
     }
 
     #[ignore]
@@ -3566,14 +3021,8 @@ mod payment {
     fn payment_bytes_to_stored_session_to_stored_contract_() {
         let call_depth = 5usize;
         let mut builder = super::setup();
-        let default_account = builder
-            .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-            .unwrap();
-        let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-        let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-        let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+        let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+        let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
         let subcalls = iter::repeat_with(|| {
             [
@@ -3583,7 +3032,7 @@ mod payment {
         })
         .take(call_depth)
         .flatten();
-        execute(&mut builder, call_depth, subcalls.collect())
+        execute(&mut builder, call_depth, subcalls.collect(), false)
     }
 
     // Session + recursive subcall failure cases
@@ -3593,15 +3042,9 @@ mod payment {
     fn payment_bytes_to_stored_versioned_contract_to_stored_versioned_session_should_fail() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
             let mut subcalls =
                 vec![
                     super::stored_versioned_contract(current_contract_package_hash.into());
@@ -3613,7 +3056,7 @@ mod payment {
                 ));
             }
 
-            execute(&mut builder, *call_depth, subcalls)
+            execute(&mut builder, *call_depth, subcalls, true)
         }
     }
 
@@ -3622,17 +3065,9 @@ mod payment {
     fn payment_bytes_to_stored_versioned_contract_to_stored_session_should_fail() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![
@@ -3643,7 +3078,7 @@ mod payment {
                 subcalls.push(super::stored_session(current_contract_hash.into()));
             }
 
-            execute(&mut builder, *call_depth, subcalls)
+            execute(&mut builder, *call_depth, subcalls, true)
         }
     }
 
@@ -3652,17 +3087,9 @@ mod payment {
     fn payment_bytes_to_stored_contract_to_stored_versioned_session_should_fail() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls = vec![
                 super::stored_contract(current_contract_hash.into());
@@ -3674,7 +3101,7 @@ mod payment {
                 ));
             }
 
-            execute(&mut builder, *call_depth, subcalls)
+            execute(&mut builder, *call_depth, subcalls, true)
         }
     }
 
@@ -3683,14 +3110,8 @@ mod payment {
     fn payment_bytes_to_stored_contract_to_stored_session_should_fail() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls = vec![
                 super::stored_contract(current_contract_hash.into());
@@ -3700,26 +3121,19 @@ mod payment {
                 subcalls.push(super::stored_session(current_contract_hash.into()));
             }
 
-            execute(&mut builder, *call_depth, subcalls)
+            execute(&mut builder, *call_depth, subcalls, true)
         }
     }
 
     // Stored session + recursive subcall
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_versioned_payment_by_name_to_stored_versioned_session() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let subcalls =
                 vec![
@@ -3732,19 +3146,13 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_versioned_payment_by_hash_to_stored_versioned_session() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
             let subcalls =
                 vec![
                     super::stored_versioned_session(current_contract_package_hash.into());
@@ -3761,18 +3169,12 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_versioned_payment_by_name_to_stored_session() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_session(current_contract_hash.into()); *call_depth];
 
@@ -3781,21 +3183,13 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_versioned_payment_by_hash_to_stored_session() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_session(current_contract_hash.into()); *call_depth];
 
@@ -3809,19 +3203,12 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_payment_by_name_to_stored_versioned_session() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let subcalls =
                 vec![
@@ -3834,21 +3221,13 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_payment_by_hash_to_stored_versioned_session() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls =
                 vec![
@@ -3866,18 +3245,12 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_payment_by_name_to_stored_session() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_session(current_contract_hash.into()); *call_depth];
 
@@ -3886,18 +3259,12 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_payment_by_hash_to_stored_session() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_session(current_contract_hash.into()); *call_depth];
 
@@ -3911,19 +3278,12 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_versioned_payment_by_name_to_stored_versioned_contract() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let subcalls =
                 vec![
@@ -3936,19 +3296,12 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_versioned_payment_by_hash_to_stored_versioned_contract() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let subcalls =
                 vec![
@@ -3966,18 +3319,12 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_versioned_payment_by_name_to_stored_contract() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_contract(current_contract_hash.into()); *call_depth];
 
@@ -3986,21 +3333,13 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_versioned_payment_by_hash_to_stored_contract() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_contract(current_contract_hash.into()); *call_depth];
 
@@ -4014,19 +3353,13 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_payment_by_name_to_stored_versioned_contract() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
             let subcalls =
                 vec![
                     super::stored_versioned_contract(current_contract_package_hash.into());
@@ -4038,21 +3371,13 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_payment_by_hash_to_stored_versioned_contract() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls =
                 vec![
@@ -4070,18 +3395,12 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_payment_by_name_to_stored_contract() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_contract(current_contract_hash.into()); *call_depth];
 
@@ -4090,19 +3409,13 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
     #[test]
     fn stored_payment_by_hash_to_stored_contract() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            println!("DA {:?}", default_account);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let subcalls = vec![super::stored_contract(current_contract_hash.into()); *call_depth];
 
@@ -4118,20 +3431,13 @@ mod payment {
     // Stored session + recursive subcall failure cases
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_versioned_payment_by_name_to_stored_versioned_contract_to_stored_versioned_session_should_fail(
     ) {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let mut subcalls =
                 vec![
@@ -4149,22 +3455,14 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_versioned_payment_by_hash_to_stored_versioned_contract_to_stored_session_should_fail()
     {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![
@@ -4185,22 +3483,14 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_versioned_payment_by_name_to_stored_contract_to_stored_versioned_session_should_fail()
     {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls = vec![
                 super::stored_contract(current_contract_hash.into());
@@ -4217,21 +3507,13 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_versioned_payment_by_hash_to_stored_contract_to_stored_session_should_fail() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls = vec![
                 super::stored_contract(current_contract_hash.into());
@@ -4251,20 +3533,13 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_payment_by_name_to_stored_versioned_contract_to_stored_versioned_session_should_fail()
     {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
 
             let mut subcalls =
                 vec![
@@ -4282,21 +3557,13 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_session_by_hash_to_stored_versioned_contract_to_stored_session_should_fail() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls =
                 vec![
@@ -4317,21 +3584,13 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_payment_by_name_to_stored_contract_to_stored_versioned_session_should_fail() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-
-            let current_contract_package_hash =
-                default_entity.get_package_hash(CONTRACT_PACKAGE_NAME);
-
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_package_hash = default_account.get_hash(CONTRACT_PACKAGE_NAME);
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls = vec![
                 super::stored_contract(current_contract_hash.into());
@@ -4348,17 +3607,12 @@ mod payment {
     }
 
     #[ignore]
-    #[allow(unused)]
+    #[test]
     fn stored_payment_by_name_to_stored_contract_to_stored_session_should_fail() {
         for call_depth in DEPTHS {
             let mut builder = super::setup();
-            let default_account = builder
-                .get_entity_by_account_hash(*DEFAULT_ACCOUNT_ADDR)
-                .unwrap();
-            let named_keys = builder.get_named_keys_by_account_hash(*DEFAULT_ACCOUNT_ADDR);
-
-            let default_entity = EntityWithKeys::new(default_account, named_keys);
-            let current_contract_hash = default_entity.get_entity_hash(CONTRACT_NAME);
+            let default_account = builder.get_account(*DEFAULT_ACCOUNT_ADDR).unwrap();
+            let current_contract_hash = default_account.get_hash(CONTRACT_NAME);
 
             let mut subcalls = vec![
                 super::stored_contract(current_contract_hash.into());

@@ -48,7 +48,7 @@ fn make_oom_payload(initial: u32, maximum: Option<u32>) -> Vec<u8> {
             "#,
         bounds
     );
-    wabt::wat2wasm(wat).expect("should parse wat")
+    wat::parse_str(wat).expect("should parse wat")
 }
 
 #[ignore]
@@ -194,14 +194,14 @@ fn test_element_section(
         writeln!(
             wat,
             r#"(module
-            (table {table_init} {max} anyfunc)"#
+            (table {table_init} {max} funcref)"#
         )
         .unwrap();
     } else {
         writeln!(
             wat,
             r#"(module
-            (table {table_init} anyfunc)"#
+            (table {table_init} funcref)"#
         )
         .unwrap();
     }
@@ -226,7 +226,9 @@ fn test_element_section(
     wat += ")\n";
     wat += ")";
 
-    let module_bytes = wabt::wat2wasm(wat).unwrap();
+    std::fs::write("/tmp/elem.wat", &wat).unwrap();
+
+    let module_bytes = wat::parse_str(wat).unwrap();
     let exec_request = ExecuteRequestBuilder::module_bytes(
         *DEFAULT_ACCOUNT_ADDR,
         module_bytes,
@@ -244,8 +246,6 @@ fn test_element_section(
 fn should_not_allow_more_than_one_table() {
     let mut builder = LmdbWasmTestBuilder::default();
     builder.run_genesis(LOCAL_GENESIS_REQUEST.clone());
-
-    // wabt::wat2wasm doesn't allow multiple tables so we'll go with a builder
 
     let module = builder::module()
         // table 1
@@ -336,7 +336,7 @@ fn make_arbitrary_br_table(size: usize) -> Result<Vec<u8>, Box<dyn std::error::E
     writeln!(src, r#"(export "call" (func $call))"#)?;
     writeln!(src, r#"(func $switch_like (param $p i32) (result i32)"#)?;
 
-    let mut bottom = ";;\n(get_local $p)\n".to_string();
+    let mut bottom = ";;\n(local.get $p)\n".to_string();
     bottom += "(br_table\n";
 
     for (br_table_offset, n) in (0..=size - 1).rev().enumerate() {

@@ -3,11 +3,11 @@ use casper_engine_test_support::{
     DEFAULT_ACCOUNT_SECRET_KEY, LOCAL_GENESIS_REQUEST,
 };
 use casper_execution_engine::{
-    engine_state::{Error as StateError, SessionDataDeploy, SessionDataV1, SessionInputData},
+    engine_state::{Error as StateError, SessionDataV1, SessionInputData},
     execution::ExecError,
 };
 use casper_types::{
-    ApiError, BlockTime, InitiatorAddr, Phase, PricingMode, RuntimeArgs, Transaction,
+    ApiError, BlockTime, InitiatorAddr, PricingMode, RuntimeArgs, Transaction, TransactionArgs,
     TransactionEntryPoint, TransactionTarget, TransactionV1Builder,
 };
 
@@ -38,53 +38,61 @@ fn try_add_contract_version(is_install_upgrade: bool, should_succeed: bool) {
 
     let module_bytes = utils::read_wasm_file(CONTRACT);
 
-    let txn = Transaction::from(
-        TransactionV1Builder::new_session(is_install_upgrade, module_bytes)
-            .with_secret_key(&DEFAULT_ACCOUNT_SECRET_KEY)
-            .with_chain_name(CHAIN_NAME)
+    let txn = TransactionV1Builder::new_session(
+        is_install_upgrade,
+        module_bytes,
+        casper_types::TransactionRuntime::VmCasperV1,
+        0,
+        None,
+    )
+    .with_secret_key(&DEFAULT_ACCOUNT_SECRET_KEY)
+    .with_chain_name(CHAIN_NAME)
+    .build()
+    .unwrap();
+
+    let txn_request = {
+        let initiator_addr = txn.initiator_addr().clone();
+        let is_standard_payment = if let PricingMode::PaymentLimited {
+            standard_payment, ..
+        } = txn.pricing_mode()
+        {
+            *standard_payment
+        } else {
+            true
+        };
+        let tx_args = txn
+            .deserialize_field::<TransactionArgs>(ARGS_MAP_KEY)
+            .unwrap();
+        let args = tx_args.as_named().unwrap();
+        let target = txn
+            .deserialize_field::<TransactionTarget>(TARGET_MAP_KEY)
+            .unwrap();
+        let entry_point = txn
+            .deserialize_field::<TransactionEntryPoint>(ENTRY_POINT_MAP_KEY)
+            .unwrap();
+        let wrapped = Transaction::from(txn);
+        let session_input_data = to_v1_session_input_data(
+            is_standard_payment,
+            initiator_addr,
+            args,
+            &target,
+            &entry_point,
+            &wrapped,
+        );
+        assert_eq!(
+            session_input_data.is_install_upgrade_allowed(),
+            is_install_upgrade,
+            "session_input_data should match imputed arg"
+        );
+        ExecuteRequestBuilder::from_session_input_data(&session_input_data)
+            .with_block_time(BLOCK_TIME)
             .build()
-            .unwrap(),
-    );
-    let txn_request = match txn {
-        Transaction::Deploy(ref deploy) => {
-            let initiator_addr = txn.initiator_addr();
-            let is_standard_payment = deploy.payment().is_standard_payment(Phase::Payment);
-            let session_input_data =
-                to_deploy_session_input_data(is_standard_payment, initiator_addr, &txn);
-            ExecuteRequestBuilder::from_session_input_data(&session_input_data)
-                .with_block_time(BLOCK_TIME)
-                .build()
-        }
-        Transaction::V1(ref v1) => {
-            let initiator_addr = txn.initiator_addr();
-            let is_standard_payment = if let PricingMode::Classic {
-                standard_payment, ..
-            } = v1.pricing_mode()
-            {
-                *standard_payment
-            } else {
-                true
-            };
-            let args = v1.deserialize_field::<RuntimeArgs>(ARGS_MAP_KEY).unwrap();
-            let target = v1
-                .deserialize_field::<TransactionTarget>(TARGET_MAP_KEY)
-                .unwrap();
-            let entry_point = v1
-                .deserialize_field::<TransactionEntryPoint>(ENTRY_POINT_MAP_KEY)
-                .unwrap();
-            let session_input_data = to_v1_session_input_data(
-                is_standard_payment,
-                initiator_addr,
-                &args,
-                &target,
-                &entry_point,
-                &txn,
-            );
-            ExecuteRequestBuilder::from_session_input_data(&session_input_data)
-                .with_block_time(BLOCK_TIME)
-                .build()
-        }
     };
+    assert_eq!(
+        txn_request.is_install_upgrade_allowed(),
+        is_install_upgrade,
+        "txn_request should match imputed arg"
+    );
     builder.exec(txn_request);
 
     if should_succeed {
@@ -96,27 +104,15 @@ fn try_add_contract_version(is_install_upgrade: bool, should_succeed: bool) {
     }
 }
 
-fn to_deploy_session_input_data(
-    is_standard_payment: bool,
-    initiator_addr: InitiatorAddr,
-    txn: &Transaction,
-) -> SessionInputData<'_> {
-    match txn {
-        Transaction::Deploy(deploy) => {
-            let data = SessionDataDeploy::new(
-                deploy.hash(),
-                deploy.session(),
-                initiator_addr,
-                txn.signers().clone(),
-                is_standard_payment,
-            );
-            SessionInputData::DeploySessionData { data }
-        }
-        Transaction::V1(_) => {
-            panic!("unexpected transaction v1");
-        }
-    }
-}
+/// if it becomes necessary to extract deploy session data:
+// let data = SessionDataDeploy::new(
+//     deploy.hash(),
+//     deploy.session(),
+//     initiator_addr,
+//     txn.signers().clone(),
+//     is_standard_payment,
+// );
+// SessionInputData::DeploySessionData { data }
 
 fn to_v1_session_input_data<'a>(
     is_standard_payment: bool,
@@ -157,8 +153,8 @@ fn should_allow_add_contract_version_via_transaction_v1_installer_upgrader() {
     try_add_contract_version(true, true)
 }
 
-// #[ignore]
-// #[test]
-// fn should_disallow_add_contract_version_via_transaction_v1_standard() {
-//     try_add_contract_version(false, false)
-// }
+#[ignore]
+#[test]
+fn should_disallow_add_contract_version_via_transaction_v1_standard() {
+    try_add_contract_version(false, false)
+}

@@ -232,8 +232,6 @@ impl TransferRuntimeArgsBuilder {
     /// Returns resolved [`URef`].
     fn resolve_source_uref<R>(
         &self,
-        /* TODO: consider passing in URef values inside named keys
-         * instead of entire named keys */
         account: &RuntimeFootprint,
         tracking_copy: Rc<RefCell<TrackingCopy<R>>>,
     ) -> Result<URef, TransferError>

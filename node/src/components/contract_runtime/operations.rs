@@ -1,6 +1,10 @@
+pub(crate) mod wasm_v2_request;
+
+use casper_executor_wasm::ExecutorV2;
 use itertools::Itertools;
 use std::{collections::BTreeMap, convert::TryInto, sync::Arc, time::Instant};
 use tracing::{debug, error, info, trace, warn};
+use wasm_v2_request::WasmV2Request;
 
 use casper_execution_engine::engine_state::{
     BlockInfo, ExecutionEngineV1, WasmV1Request, WasmV1Result,
@@ -26,14 +30,14 @@ use casper_storage::{
     system::runtime_native::Config as NativeRuntimeConfig,
     tracking_copy::TrackingCopyError,
 };
-
 use casper_types::{
     bytesrepr::{self, ToBytes, U32_SERIALIZED_LENGTH},
     execution::{Effects, ExecutionResult, TransformKindV2, TransformV2},
     system::handle_payment::ARG_AMOUNT,
     BlockHash, BlockHeader, BlockTime, BlockV2, CLValue, Chainspec, ChecksumRegistry, Digest,
-    EntityAddr, EntryPointAddr, EraEndV2, EraId, FeeHandling, Gas, Key, ProtocolVersion, PublicKey,
-    RefundHandling, Transaction, AUCTION_LANE_ID, MINT_LANE_ID, U512,
+    EntityAddr, EntryPointAddr, EraEndV2, EraId, FeeHandling, Gas, InvalidTransaction,
+    InvalidTransactionV1, Key, ProtocolVersion, PublicKey, RefundHandling, Transaction,
+    AUCTION_LANE_ID, MINT_LANE_ID, U512,
 };
 
 use super::{
@@ -53,6 +57,7 @@ use crate::{
 pub fn execute_finalized_block(
     data_access_layer: &DataAccessLayer<LmdbGlobalState>,
     execution_engine_v1: &ExecutionEngineV1,
+    execution_engine_v2: ExecutorV2,
     chainspec: &Chainspec,
     metrics: Option<Arc<Metrics>>,
     execution_pre_state: ExecutionPreState,
@@ -80,6 +85,12 @@ pub fn execute_finalized_block(
     let prune_batch_size = chainspec.core_config.prune_batch_size;
     let native_runtime_config = NativeRuntimeConfig::from_chainspec(chainspec);
     let addressable_entity_enabled = chainspec.core_config.enable_addressable_entity();
+
+    if addressable_entity_enabled != data_access_layer.enable_addressable_entity {
+        return Err(BlockExecutionError::InvalidAESetting(
+            data_access_layer.enable_addressable_entity,
+        ));
+    }
 
     // scrape variables from execution pre state
     let parent_hash = execution_pre_state.parent_hash();
@@ -148,11 +159,12 @@ pub fn execute_finalized_block(
 
     for stored_transaction in executable_block.transactions {
         let mut artifact_builder = ExecutionArtifactBuilder::new(&stored_transaction);
-        let transaction = MetaTransaction::from(&stored_transaction, transaction_config)
-            .map_err(|err| BlockExecutionError::TransactionConversion(err.to_string()))?;
+        let transaction =
+            MetaTransaction::from_transaction(&stored_transaction, transaction_config)
+                .map_err(|err| BlockExecutionError::TransactionConversion(err.to_string()))?;
         let initiator_addr = transaction.initiator_addr();
         let transaction_hash = transaction.hash();
-        let runtime_args = transaction.session_args().clone();
+        let transaction_args = transaction.session_args().clone();
         let entry_point = transaction.entry_point();
         let authorization_keys = transaction.signers();
 
@@ -206,6 +218,7 @@ pub fn execute_finalized_block(
         artifact_builder.with_added_cost(cost);
 
         let is_standard_payment = transaction.is_standard_payment();
+        let is_v2_wasm = transaction.is_v2_wasm();
         let refund_purse_active = !is_standard_payment;
         if refund_purse_active {
             // if custom payment before doing any processing, initialize the initiator's main purse
@@ -288,6 +301,10 @@ pub fn execute_finalized_block(
                     trace!(%transaction_hash, "account session with standard payment");
                     initiator_addr.clone().into()
                 }
+            } else if is_v2_wasm {
+                // if transaction runtime is v2 then the initiating account will pay using
+                // the refund purse
+                BalanceIdentifier::PenalizedAccount(initiator_addr.account_hash())
             } else {
                 // the initiating account will pay, but wants to do so with a different purse or
                 // in a custom way. If anything goes wrong, penalize the sender, do not execute
@@ -391,6 +408,9 @@ pub fn execute_finalized_block(
             trace!(%transaction_hash, ?lane_id, "eligible for execution");
             match lane_id {
                 lane_id if lane_id == MINT_LANE_ID => {
+                    let runtime_args = transaction_args
+                        .as_named()
+                        .ok_or(BlockExecutionError::InvalidTransactionArgs)?;
                     let transfer_result =
                         scratch_state.transfer(TransferRequest::with_runtime_args(
                             native_runtime_config.clone(),
@@ -399,7 +419,7 @@ pub fn execute_finalized_block(
                             transaction_hash,
                             initiator_addr.clone(),
                             authorization_keys,
-                            runtime_args,
+                            runtime_args.clone(),
                         ));
                     let consumed = gas_limit;
                     state_root_hash = scratch_state
@@ -410,7 +430,10 @@ pub fn execute_finalized_block(
                         .map_err(|_| BlockExecutionError::RootNotFound(state_root_hash))?;
                 }
                 lane_id if lane_id == AUCTION_LANE_ID => {
-                    match AuctionMethod::from_parts(entry_point, &runtime_args, chainspec) {
+                    let runtime_args = transaction_args
+                        .as_named()
+                        .ok_or(BlockExecutionError::InvalidTransactionArgs)?;
+                    match AuctionMethod::from_parts(entry_point, runtime_args, chainspec) {
                         Ok(auction_method) => {
                             let bidding_result = scratch_state.bidding(BiddingRequest::new(
                                 native_runtime_config.clone(),
@@ -441,7 +464,42 @@ pub fn execute_finalized_block(
                         }
                     };
                 }
-                _ => {
+                _ if is_v2_wasm => match WasmV2Request::new(
+                    gas_limit,
+                    chainspec.network_config.name.clone(),
+                    state_root_hash,
+                    parent_block_hash,
+                    block_height,
+                    &transaction,
+                ) {
+                    Ok(wasm_v2_request) => {
+                        let result = wasm_v2_request.execute(
+                            &execution_engine_v2,
+                            state_root_hash,
+                            &scratch_state,
+                        );
+                        match result {
+                            Ok(wasm_v2_result) => {
+                                info!(contract_hash=wasm_v2_result.contract_hash().map(base16::encode_lower).unwrap_or_default(),
+                                      pre_state_root_hash=%state_root_hash,
+                                      post_state_root_hash=%wasm_v2_result.post_state_hash(),
+                                      "install contract result");
+
+                                state_root_hash = wasm_v2_result.state_root_hash();
+
+                                artifact_builder.with_wasm_v2_result(wasm_v2_result);
+                            }
+                            Err(wasm_v2_error) => {
+                                artifact_builder.with_wasm_v2_error(wasm_v2_error);
+                            }
+                        }
+                    }
+                    Err(ire) => {
+                        debug!(%transaction_hash, ?lane_id, ?ire, "unable to get wasm v2 request");
+                        artifact_builder.with_invalid_wasm_v2_request(ire);
+                    }
+                },
+                _ if !is_v2_wasm => {
                     let wasm_v1_start = Instant::now();
                     let session_input_data = transaction.to_session_input_data();
                     match WasmV1Request::new_session(
@@ -469,7 +527,7 @@ pub fn execute_finalized_block(
                                 .map_err(|_| BlockExecutionError::RootNotFound(state_root_hash))?;
                         }
                         Err(ire) => {
-                            debug!(%transaction_hash, ?lane_id, ?ire, "unable to get wasm v1  request");
+                            debug!(%transaction_hash, ?lane_id, ?ire, "unable to get wasm v1 request");
                             artifact_builder.with_invalid_wasm_v1_request(&ire);
                         }
                     };
@@ -479,6 +537,7 @@ pub fn execute_finalized_block(
                             .observe(wasm_v1_start.elapsed().as_secs_f64());
                     }
                 }
+                _ => unreachable!("either v1 or v2 wasm"),
             }
         } else {
             debug!(%transaction_hash, "not eligible for execution");
@@ -653,6 +712,7 @@ pub fn execute_finalized_block(
                 scratch_state.handle_fee(handle_fee_request)
             }
         };
+
         state_root_hash =
             scratch_state.commit_effects(state_root_hash, handle_fee_result.effects().clone())?;
 
@@ -1055,8 +1115,6 @@ pub fn execute_finalized_block(
         last_switch_block_hash,
     ));
 
-    // TODO: this should just use the data_access_layer.query mechanism to avoid
-    // leaking data provisioning abstraction
     let proof_of_checksum_registry = match data_access_layer.tracking_copy(state_root_hash)? {
         Some(tc) => match tc.reader().read_with_proof(&Key::ChecksumRegistry)? {
             Some(proof) => proof,
@@ -1104,7 +1162,8 @@ where
     S: StateProvider,
 {
     let transaction_config = &chainspec.transaction_config;
-    let maybe_transaction = MetaTransaction::from(&input_transaction, transaction_config);
+    let maybe_transaction =
+        MetaTransaction::from_transaction(&input_transaction, transaction_config);
     if let Err(error) = maybe_transaction {
         return SpeculativeExecutionResult::invalid_transaction(error);
     }
@@ -1130,7 +1189,14 @@ where
             let transaction_hash = transaction.hash();
             let initiator_addr = transaction.initiator_addr();
             let authorization_keys = transaction.authorization_keys();
-            let runtime_args = transaction.session_args().clone();
+            let runtime_args = match transaction.session_args().as_named() {
+                Some(runtime_args) => runtime_args.clone(),
+                None => {
+                    return SpeculativeExecutionResult::InvalidTransaction(InvalidTransaction::V1(
+                        InvalidTransactionV1::ExpectedNamedArguments,
+                    ));
+                }
+            };
 
             let result = state_provider.transfer(TransferRequest::with_runtime_args(
                 native_runtime_config.clone(),

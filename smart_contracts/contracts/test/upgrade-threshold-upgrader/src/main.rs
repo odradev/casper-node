@@ -5,12 +5,13 @@ extern crate alloc;
 
 use alloc::{collections::BTreeMap, vec};
 use casper_contract::{
-    contract_api::{account, runtime, storage},
+    contract_api::{entity, runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
     account::AccountHash,
-    addressable_entity::{ActionType, NamedKeys, Weight},
+    addressable_entity::{ActionType, Weight},
+    contracts::NamedKeys,
     CLType, EntryPoint, EntryPointAccess, EntryPointPayment, EntryPointType, EntryPoints, Key,
     PackageHash, Parameter,
 };
@@ -30,19 +31,19 @@ const CONTRACT_HASH_NAME: &str = "contract_hash_name";
 pub extern "C" fn add_associated_key() {
     let entity_account_hash: AccountHash = runtime::get_named_arg(ARG_ENTITY_ACCOUNT_HASH);
     let weight: u8 = runtime::get_named_arg(ARG_KEY_WEIGHT);
-    account::add_associated_key(entity_account_hash, Weight::new(weight)).unwrap_or_revert();
+    entity::add_associated_key(entity_account_hash, Weight::new(weight)).unwrap_or_revert();
 }
 
 #[no_mangle]
 pub extern "C" fn manage_action_threshold() {
     let new_threshold = runtime::get_named_arg(ARG_NEW_UPGRADE_THRESHOLD);
-    account::set_action_threshold(ActionType::UpgradeManagement, new_threshold).unwrap_or_revert()
+    entity::set_action_threshold(ActionType::UpgradeManagement, new_threshold).unwrap_or_revert()
 }
 
 #[no_mangle]
 pub extern "C" fn remove_associated_key() {
     let entity_account_hash: AccountHash = runtime::get_named_arg(ARG_ENTITY_ACCOUNT_HASH);
-    account::remove_associated_key(entity_account_hash).unwrap_or_revert();
+    entity::remove_associated_key(entity_account_hash).unwrap_or_revert();
 }
 
 #[no_mangle]
@@ -87,7 +88,7 @@ pub extern "C" fn call() {
     };
     // this should overwrite the previous contract obj with the new contract obj at the same uref
     let (new_contract_hash, _new_contract_version) = storage::add_contract_version(
-        contract_package,
+        contract_package.into(),
         entry_points,
         NamedKeys::new(),
         BTreeMap::new(),

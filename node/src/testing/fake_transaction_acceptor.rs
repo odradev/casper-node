@@ -63,7 +63,8 @@ impl FakeTransactionAcceptor {
         maybe_responder: Option<Responder<Result<(), Error>>>,
     ) -> Effects<Event> {
         let meta_transaction =
-            MetaTransaction::from(&transaction, &self.chainspec.transaction_config).unwrap();
+            MetaTransaction::from_transaction(&transaction, &self.chainspec.transaction_config)
+                .unwrap();
         let event_metadata = Box::new(EventMetadata::new(
             transaction.clone(),
             meta_transaction,

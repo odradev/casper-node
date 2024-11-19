@@ -35,7 +35,7 @@ fn should_charge_minimum_for_do_nothing_session() {
 
     builder.exec(do_nothing_request).commit();
 
-    let gas = builder.last_exec_gas_cost();
+    let gas = builder.last_exec_gas_consumed();
     assert_eq!(gas, Gas::zero());
 }
 
@@ -66,7 +66,7 @@ fn should_execute_do_minimum_session() {
 
     builder.exec(do_minimum_request).expect_success().commit();
 
-    let gas = builder.last_exec_gas_cost();
+    let gas = builder.last_exec_gas_consumed();
     assert_eq!(gas, Gas::from(DEFAULT_NOP_COST));
 }
 
@@ -100,6 +100,6 @@ fn should_charge_minimum_for_do_nothing_payment() {
 
     builder.exec(do_nothing_request).commit();
 
-    let gas = builder.last_exec_gas_cost();
+    let gas = builder.last_exec_gas_consumed();
     assert_eq!(gas, Gas::zero());
 }

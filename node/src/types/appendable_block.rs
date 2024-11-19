@@ -156,22 +156,23 @@ impl AppendableBlock {
         } = self;
 
         fn collate(
-            category: u8,
+            lane: u8,
             collater: &mut BTreeMap<u8, Vec<(TransactionHash, BTreeSet<Approval>)>>,
             items: &BTreeMap<TransactionHash, TransactionFootprint>,
         ) {
             let mut ret = vec![];
-            for (x, y) in items.iter().filter(|(_, y)| y.lane_id == category) {
+            for (x, y) in items.iter().filter(|(_, y)| y.lane_id == lane) {
                 ret.push((*x, y.approvals.clone()));
             }
             if !ret.is_empty() {
-                collater.insert(category, ret);
+                collater.insert(lane, ret);
             }
         }
 
         let mut transactions = BTreeMap::new();
         collate(MINT_LANE_ID, &mut transactions, &footprints);
         collate(AUCTION_LANE_ID, &mut transactions, &footprints);
+        collate(INSTALL_UPGRADE_LANE_ID, &mut transactions, &footprints);
         for lane_id in self
             .transaction_config
             .transaction_v1_config
@@ -195,10 +196,10 @@ impl AppendableBlock {
         self.timestamp
     }
 
-    fn category_count(&self, category: u8) -> usize {
+    fn category_lane(&self, lane: u8) -> usize {
         self.transactions
             .iter()
-            .filter(|(_, f)| f.lane_id == category)
+            .filter(|(_, f)| f.lane_id == lane)
             .count()
     }
 
@@ -211,9 +212,9 @@ impl AppendableBlock {
 impl Display for AppendableBlock {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         let total_count = self.transactions.len();
-        let mint_count = self.category_count(MINT_LANE_ID);
-        let auction_count = self.category_count(AUCTION_LANE_ID);
-        let install_upgrade_count = self.category_count(INSTALL_UPGRADE_LANE_ID);
+        let mint_count = self.category_lane(MINT_LANE_ID);
+        let auction_count = self.category_lane(AUCTION_LANE_ID);
+        let install_upgrade_count = self.category_lane(INSTALL_UPGRADE_LANE_ID);
         let wasm_count = total_count - mint_count - auction_count - install_upgrade_count;
         let total_gas_limit: Gas = self
             .transactions
@@ -246,6 +247,10 @@ impl Display for AppendableBlock {
 
 #[cfg(test)]
 mod tests {
+    use casper_types::{
+        testing::TestRng, SingleBlockRewardedSignatures, TimeDiff, LARGE_WASM_LANE_ID,
+    };
+
     use super::*;
     use std::collections::HashSet;
 
@@ -253,5 +258,47 @@ mod tests {
         pub(crate) fn transaction_hashes(&self) -> HashSet<TransactionHash> {
             self.transactions.keys().copied().collect()
         }
+    }
+
+    #[test]
+    pub fn should_build_block_payload_from_all_transactions() {
+        let mut test_rng = TestRng::new();
+        let mut appendable_block = AppendableBlock::new(
+            TransactionConfig::default(),
+            0,
+            Timestamp::now() + TimeDiff::from_millis(15000),
+        );
+        let transfer_footprint = TransactionFootprint::random_of_lane(MINT_LANE_ID, &mut test_rng);
+        let auction_footprint =
+            TransactionFootprint::random_of_lane(AUCTION_LANE_ID, &mut test_rng);
+        let install_upgrade_footprint =
+            TransactionFootprint::random_of_lane(INSTALL_UPGRADE_LANE_ID, &mut test_rng);
+        let large_wasm_footprint =
+            TransactionFootprint::random_of_lane(LARGE_WASM_LANE_ID, &mut test_rng);
+        let signatures = RewardedSignatures::new(vec![SingleBlockRewardedSignatures::random(
+            &mut test_rng,
+            2,
+        )]);
+        appendable_block
+            .add_transaction(&transfer_footprint)
+            .unwrap();
+        appendable_block
+            .add_transaction(&auction_footprint)
+            .unwrap();
+        appendable_block
+            .add_transaction(&install_upgrade_footprint)
+            .unwrap();
+        appendable_block
+            .add_transaction(&large_wasm_footprint)
+            .unwrap();
+        let block_payload = appendable_block.into_block_payload(vec![], signatures.clone(), false);
+        let transaction_hashes: BTreeSet<TransactionHash> =
+            block_payload.all_transaction_hashes().collect();
+        assert!(transaction_hashes.contains(&transfer_footprint.transaction_hash));
+        assert!(transaction_hashes.contains(&auction_footprint.transaction_hash));
+        assert!(transaction_hashes.contains(&install_upgrade_footprint.transaction_hash));
+        assert!(transaction_hashes.contains(&large_wasm_footprint.transaction_hash));
+        assert_eq!(transaction_hashes.len(), 4);
+        assert_eq!(*block_payload.rewarded_signatures(), signatures);
     }
 }

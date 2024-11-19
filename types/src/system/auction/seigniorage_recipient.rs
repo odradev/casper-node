@@ -410,9 +410,9 @@ mod tests {
             stake: U512::max_value(),
             delegation_rate: DelegationRate::max_value(),
             delegator_stake: BTreeMap::from_iter(vec![
-                (delegator_1_key, U512::max_value()),
-                (delegator_2_key, U512::max_value()),
-                (delegator_3_key, U512::max_value()),
+                (delegator_1_key, U512::MAX),
+                (delegator_2_key, U512::MAX),
+                (delegator_3_key, U512::MAX),
             ]),
             reservation_delegation_rates: BTreeMap::new(),
         };

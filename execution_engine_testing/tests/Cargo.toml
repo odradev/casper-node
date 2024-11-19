@@ -10,6 +10,7 @@ casper-engine-test-support = { path = "../test_support" }
 casper-execution-engine = { path = "../../execution_engine", features = ["test-support"] }
 casper-storage = { path = "../../storage" }
 casper-types = { path = "../../types", default-features = false, features = ["datasize", "json-schema"] }
+ed25519-dalek = { version = "2.1.1", default-features = false, features = ["alloc", "zeroize"] }
 casper-wasm = "0.46.0"
 clap = "2"
 fs_extra = "1.2.0"
@@ -18,7 +19,7 @@ rand = "0.8.3"
 serde = "1"
 serde_json = "1"
 tempfile = "3.4.0"
-wabt = "0.10.0"
+wat = "1.219.1"
 wasmprinter = "0.219.0"
 walrus = "0.20.2"
 

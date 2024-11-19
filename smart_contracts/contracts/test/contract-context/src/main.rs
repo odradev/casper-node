@@ -10,9 +10,9 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    addressable_entity::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, NamedKeys},
-    runtime_args, AddressableEntityHash, CLType, EntityVersion, EntryPointPayment, Key,
-    PackageHash, ENTITY_INITIAL_VERSION,
+    addressable_entity::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints},
+    contracts::{ContractHash, ContractPackageHash, ContractVersion, NamedKeys},
+    runtime_args, AddressableEntityHash, CLType, EntryPointPayment, Key, ENTITY_INITIAL_VERSION,
 };
 
 const PACKAGE_HASH_KEY: &str = "package_hash_key";
@@ -82,7 +82,7 @@ pub extern "C" fn session_code_caller_as_contract() {
     let contract_package_key: Key = runtime::get_named_arg(PACKAGE_HASH_KEY);
     let contract_package_hash = contract_package_key.into_package_hash().unwrap_or_revert();
     runtime::call_versioned_contract::<()>(
-        contract_package_hash,
+        contract_package_hash.into(),
         Some(ENTITY_INITIAL_VERSION),
         SESSION_CODE,
         runtime_args! {},
@@ -115,7 +115,7 @@ fn create_entrypoints_1() -> EntryPoints {
     entry_points
 }
 
-fn install_version_1(package_hash: PackageHash) -> (AddressableEntityHash, EntityVersion) {
+fn install_version_1(package_hash: ContractPackageHash) -> (ContractHash, ContractVersion) {
     let contract_named_keys = {
         let contract_variable = storage::new_uref(0);
 
@@ -142,5 +142,8 @@ pub extern "C" fn call() {
     runtime::put_key(PACKAGE_ACCESS_KEY, access_uref.into());
     let (contract_hash, contract_version) = install_version_1(contract_package_hash);
     runtime::put_key(CONTRACT_VERSION, storage::new_uref(contract_version).into());
-    runtime::put_key(CONTRACT_HASH_KEY, Key::contract_entity_key(contract_hash));
+    runtime::put_key(
+        CONTRACT_HASH_KEY,
+        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
+    );
 }

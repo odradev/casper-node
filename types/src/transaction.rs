@@ -82,8 +82,9 @@ pub(crate) use transaction_v1::fields_container::FieldsContainer;
 #[cfg(any(feature = "testing", feature = "gens", test))]
 pub use transaction_v1::TransactionV1Payload;
 pub use transaction_v1::{
-    arg_handling, InvalidTransactionV1, TransactionV1, TransactionV1DecodeFromJsonError,
-    TransactionV1Error, TransactionV1ExcessiveSizeError, TransactionV1Hash,
+    arg_handling, InvalidTransactionV1, TransactionArgs, TransactionV1,
+    TransactionV1DecodeFromJsonError, TransactionV1Error, TransactionV1ExcessiveSizeError,
+    TransactionV1Hash,
 };
 #[cfg(any(feature = "std", test))]
 pub use transaction_v1::{TransactionV1Builder, TransactionV1BuilderError};
@@ -217,7 +218,7 @@ impl Transaction {
         match self {
             Transaction::Deploy(txn) => txn.session().is_standard_payment(Phase::Payment),
             Transaction::V1(txn) => match txn.pricing_mode() {
-                PricingMode::Classic {
+                PricingMode::PaymentLimited {
                     standard_payment, ..
                 } => *standard_payment,
                 _ => true,
@@ -299,6 +300,30 @@ impl Transaction {
             Transaction::V1(transaction_v1) => {
                 Transaction::V1(transaction_v1.with_approvals(approvals))
             }
+        }
+    }
+
+    /// Get [`TransactionV1`]
+    pub fn as_transaction_v1(&self) -> Option<&TransactionV1> {
+        match self {
+            Transaction::Deploy(_) => None,
+            Transaction::V1(v1) => Some(v1),
+        }
+    }
+
+    /// Authorization keys.
+    pub fn authorization_keys(&self) -> BTreeSet<AccountHash> {
+        match self {
+            Transaction::Deploy(deploy) => deploy
+                .approvals()
+                .iter()
+                .map(|approval| approval.signer().to_account_hash())
+                .collect(),
+            Transaction::V1(transaction_v1) => transaction_v1
+                .approvals()
+                .iter()
+                .map(|approval| approval.signer().to_account_hash())
+                .collect(),
         }
     }
 

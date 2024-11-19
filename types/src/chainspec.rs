@@ -44,8 +44,6 @@ pub use activation_point::ActivationPoint;
 pub use chainspec_raw_bytes::ChainspecRawBytes;
 #[cfg(any(feature = "testing", test))]
 pub use core_config::DEFAULT_FEE_HANDLING;
-#[cfg(any(feature = "testing", test))]
-pub use core_config::DEFAULT_GAS_HOLD_BALANCE_HANDLING;
 #[cfg(any(feature = "std", test))]
 pub use core_config::DEFAULT_REFUND_HANDLING;
 pub use core_config::{
@@ -309,9 +307,9 @@ impl Chainspec {
         self
     }
 
-    /// Set allow reservations.
-    pub fn with_allow_reservations(&mut self, allow_reservations: bool) -> &mut Self {
-        self.core_config.allow_reservations = allow_reservations;
+    /// Set allow prepaid.
+    pub fn with_allow_prepaid(&mut self, allow_prepaid: bool) -> &mut Self {
+        self.core_config.allow_prepaid = allow_prepaid;
         self
     }
 }

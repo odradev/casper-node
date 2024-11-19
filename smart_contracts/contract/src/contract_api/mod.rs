@@ -2,6 +2,7 @@
 
 pub mod account;
 pub mod cryptography;
+pub mod entity;
 pub mod runtime;
 pub mod storage;
 pub mod system;

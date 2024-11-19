@@ -138,7 +138,6 @@ impl RewardsInfo {
         // We need just one block from before the upgrade to determine the validators in
         // the following era.
         let range_to_fetch = cited_block_height_start.saturating_sub(1)..executable_block.height;
-
         let mut cited_blocks =
             collect_past_blocks_batched(effect_builder, range_to_fetch.clone()).await?;
 
@@ -213,7 +212,6 @@ impl RewardsInfo {
                 } else {
                     block.era_id
                 };
-
                 (era, protocol_version, state_root_hash)
             })
             .collect();
@@ -245,10 +243,8 @@ impl RewardsInfo {
                         .1
                 };
 
-                let enable_entity = data_access_layer.enable_addressable_entity;
-
                 let total_supply_request =
-                    TotalSupplyRequest::new(state_root_hash, protocol_version, enable_entity);
+                    TotalSupplyRequest::new(state_root_hash, protocol_version);
                 let total_supply = match data_access_layer.total_supply(total_supply_request) {
                     TotalSupplyResult::RootNotFound
                     | TotalSupplyResult::MintNotFound
@@ -259,13 +255,10 @@ impl RewardsInfo {
                     TotalSupplyResult::Success { total_supply } => total_supply,
                 };
 
-                let seigniorage_rate_request = RoundSeigniorageRateRequest::new(
-                    state_root_hash,
-                    protocol_version,
-                    enable_entity,
-                );
+                let seigniorage_rate_request =
+                    RoundSeigniorageRateRequest::new(state_root_hash, protocol_version);
                 let seigniorage_rate =
-                    match data_access_layer.round_seigniorage_rate(seigniorage_rate_request) {
+                    match data_access_layer.round_seigniorage_rate(seignorate_rate_request) {
                         RoundSeigniorageRateResult::RootNotFound
                         | RoundSeigniorageRateResult::MintNotFound
                         | RoundSeigniorageRateResult::ValueNotFound(_)

@@ -10,7 +10,7 @@ use casper_contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    addressable_entity::NamedKeys, ApiError, CLType, EntryPoint, EntryPointAccess,
+    contracts::NamedKeys, AddressableEntityHash, ApiError, CLType, EntryPoint, EntryPointAccess,
     EntryPointPayment, EntryPointType, EntryPoints, Key, Parameter, PublicKey, URef, U512,
 };
 
@@ -227,7 +227,7 @@ pub extern "C" fn call() {
     );
     runtime::put_key(
         &format!("{}_{}", faucet::CONTRACT_NAME, id),
-        Key::contract_entity_key(contract_hash),
+        Key::contract_entity_key(AddressableEntityHash::new(contract_hash.value())),
     );
 
     // This is specifically for this installing account, which would allow one installing account

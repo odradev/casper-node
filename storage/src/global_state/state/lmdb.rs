@@ -46,7 +46,6 @@ pub struct LmdbGlobalState {
     pub(crate) environment: Arc<LmdbEnvironment>,
     /// Trie store held within LMDB.
     pub(crate) trie_store: Arc<LmdbTrieStore>,
-    // TODO: make this a lazy-static
     /// Empty root hash used for a new trie.
     pub(crate) empty_root_hash: Digest,
     /// Max query depth
@@ -423,6 +422,10 @@ impl StateProvider for LmdbGlobalState {
         >(&txn, self.trie_store.deref(), trie_raw)?;
         txn.commit()?;
         Ok(missing_hashes)
+    }
+
+    fn enable_entity(&self) -> bool {
+        self.enable_entity
     }
 }
 

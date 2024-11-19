@@ -28,7 +28,7 @@ use ed25519_dalek::{
 use hex_fmt::HexFmt;
 use k256::ecdsa::{
     signature::{Signer, Verifier},
-    Signature as Secp256k1Signature, SigningKey as Secp256k1SecretKey,
+    RecoveryId, Signature as Secp256k1Signature, SigningKey as Secp256k1SecretKey, VerifyingKey,
     VerifyingKey as Secp256k1PublicKey,
 };
 #[cfg(feature = "json-schema")]
@@ -215,9 +215,9 @@ impl SecretKey {
 
     /// Constructs a new secp256k1 variant from a byte slice.
     pub fn secp256k1_from_bytes<T: AsRef<[u8]>>(bytes: T) -> Result<Self, Error> {
-        Ok(SecretKey::Secp256k1(
-            Secp256k1SecretKey::from_slice(bytes.as_ref()).map_err(|_| Error::SignatureError)?,
-        ))
+        Ok(SecretKey::Secp256k1(Secp256k1SecretKey::from_slice(
+            bytes.as_ref(),
+        )?))
     }
 
     /// Generates a new ed25519 variant using the system's secure random number generator.
@@ -1195,6 +1195,29 @@ pub fn sign<T: AsRef<[u8]>>(
         }
         _ => panic!("secret and public key types must match"),
     }
+}
+
+/// Attempts to recover a Secp256k1 [`PublicKey`] from a message and a signature over it.
+pub fn recover_secp256k1<T: AsRef<[u8]>>(
+    message: T,
+    signature: &Signature,
+    recovery_id: u8,
+) -> Result<PublicKey, Error> {
+    let Signature::Secp256k1(signature) = signature else {
+        return Err(Error::AsymmetricKey(String::from(
+            "public keys can only be recovered from Secp256k1 signatures",
+        )));
+    };
+
+    let Ok(key) = VerifyingKey::recover_from_msg(
+        message.as_ref(),
+        signature,
+        RecoveryId::try_from(recovery_id)?,
+    ) else {
+        return Err(Error::AsymmetricKey(String::from("Key extraction failed")));
+    };
+
+    Ok(PublicKey::Secp256k1(key))
 }
 
 /// Verifies the signature of the given message against the given public key.

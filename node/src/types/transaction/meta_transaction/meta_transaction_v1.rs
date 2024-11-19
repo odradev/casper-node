@@ -1,15 +1,13 @@
-use super::tranasction_lane::{calculate_transaction_lane, TransactionLane};
+use super::transaction_lane::{calculate_transaction_lane, TransactionLane};
 use casper_types::{
     arg_handling, bytesrepr::ToBytes, crypto, Approval, Chainspec, Digest, DisplayIter, Gas,
     HashAddr, InitiatorAddr, InvalidTransaction, InvalidTransactionV1, PricingHandling,
-    PricingMode, RuntimeArgs, TimeDiff, Timestamp, TransactionConfig, TransactionEntryPoint,
-    TransactionScheduling, TransactionTarget, TransactionV1, TransactionV1ExcessiveSizeError,
-    TransactionV1Hash, U512,
+    PricingMode, TimeDiff, Timestamp, TransactionArgs, TransactionConfig, TransactionEntryPoint,
+    TransactionRuntime, TransactionScheduling, TransactionTarget, TransactionV1,
+    TransactionV1ExcessiveSizeError, TransactionV1Hash, U512,
 };
 use core::fmt::{self, Debug, Display, Formatter};
-#[cfg(feature = "datasize")]
 use datasize::DataSize;
-#[cfg(any(feature = "once_cell", test))]
 use once_cell::sync::OnceCell;
 use serde::Serialize;
 use std::collections::BTreeSet;
@@ -19,10 +17,11 @@ const ARGS_MAP_KEY: u16 = 0;
 const TARGET_MAP_KEY: u16 = 1;
 const ENTRY_POINT_MAP_KEY: u16 = 2;
 const SCHEDULING_MAP_KEY: u16 = 3;
-const EXPECTED_NUMBER_OF_FIELDS: usize = 4;
+const TRANSFERRED_VALUE_MAP_KEY: u16 = 4;
+const SEED_MAP_KEY: u16 = 5;
+const EXPECTED_NUMBER_OF_FIELDS: usize = 6;
 
-#[cfg_attr(feature = "datasize", derive(DataSize))]
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, DataSize)]
 pub struct MetaTransactionV1 {
     hash: TransactionV1Hash,
     chain_name: String,
@@ -30,7 +29,7 @@ pub struct MetaTransactionV1 {
     ttl: TimeDiff,
     pricing_mode: PricingMode,
     initiator_addr: InitiatorAddr,
-    args: RuntimeArgs,
+    args: TransactionArgs,
     target: TransactionTarget,
     entry_point: TransactionEntryPoint,
     transaction_lane: TransactionLane,
@@ -38,22 +37,20 @@ pub struct MetaTransactionV1 {
     approvals: BTreeSet<Approval>,
     serialized_length: usize,
     payload_hash: Digest,
+    transferred_value: u64,
+    seed: Option<[u8; 32]>,
     has_valid_hash: Result<(), InvalidTransactionV1>,
-    #[cfg_attr(any(all(feature = "std", feature = "once_cell"), test), serde(skip))]
-    #[cfg_attr(
-        all(any(feature = "once_cell", test), feature = "datasize"),
-        data_size(skip)
-    )]
-    #[cfg(any(feature = "once_cell", test))]
+    #[serde(skip)]
+    #[data_size(skip)]
     is_verified: OnceCell<Result<(), InvalidTransactionV1>>,
 }
 
 impl MetaTransactionV1 {
-    pub fn from(
+    pub fn from_transaction_v1(
         v1: &TransactionV1,
         transaction_config: &TransactionConfig,
     ) -> Result<MetaTransactionV1, InvalidTransaction> {
-        let args: RuntimeArgs = v1.deserialize_field(ARGS_MAP_KEY).map_err(|error| {
+        let args: TransactionArgs = v1.deserialize_field(ARGS_MAP_KEY).map_err(|error| {
             InvalidTransaction::V1(InvalidTransactionV1::CouldNotDeserializeField { error })
         })?;
         let target: TransactionTarget = v1.deserialize_field(TARGET_MAP_KEY).map_err(|error| {
@@ -67,6 +64,14 @@ impl MetaTransactionV1 {
             v1.deserialize_field(SCHEDULING_MAP_KEY).map_err(|error| {
                 InvalidTransaction::V1(InvalidTransactionV1::CouldNotDeserializeField { error })
             })?;
+        let transferred_value =
+            v1.deserialize_field(TRANSFERRED_VALUE_MAP_KEY)
+                .map_err(|error| {
+                    InvalidTransaction::V1(InvalidTransactionV1::CouldNotDeserializeField { error })
+                })?;
+        let seed = v1.deserialize_field(SEED_MAP_KEY).map_err(|error| {
+            InvalidTransaction::V1(InvalidTransactionV1::CouldNotDeserializeField { error })
+        })?;
 
         if v1.number_of_fields() != EXPECTED_NUMBER_OF_FIELDS {
             return Err(InvalidTransaction::V1(
@@ -87,6 +92,7 @@ impl MetaTransactionV1 {
         let transaction_lane =
             TransactionLane::try_from(lane_id).map_err(Into::<InvalidTransaction>::into)?;
         let has_valid_hash = v1.has_valid_hash();
+        let approvals = v1.approvals().clone();
         Ok(MetaTransactionV1::new(
             *v1.hash(),
             v1.chain_name().to_string(),
@@ -101,9 +107,30 @@ impl MetaTransactionV1 {
             scheduling,
             serialized_length,
             payload_hash,
-            v1.approvals().clone(),
+            approvals,
+            transferred_value,
+            seed,
             has_valid_hash,
         ))
+    }
+
+    fn is_native_mint(&self) -> bool {
+        self.transaction_lane == TransactionLane::Mint
+    }
+
+    fn is_native_auction(&self) -> bool {
+        self.transaction_lane == TransactionLane::Auction
+    }
+
+    pub(crate) fn is_v2_wasm(&self) -> bool {
+        match self.target {
+            TransactionTarget::Native => false,
+            TransactionTarget::Stored { runtime, .. }
+            | TransactionTarget::Session { runtime, .. } => {
+                matches!(runtime, TransactionRuntime::VmCasperV2)
+                    && (!self.is_native_mint() && !self.is_native_auction())
+            }
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -114,7 +141,7 @@ impl MetaTransactionV1 {
         ttl: TimeDiff,
         pricing_mode: PricingMode,
         initiator_addr: InitiatorAddr,
-        args: RuntimeArgs,
+        args: TransactionArgs,
         target: TransactionTarget,
         entry_point: TransactionEntryPoint,
         transaction_lane: TransactionLane,
@@ -122,6 +149,8 @@ impl MetaTransactionV1 {
         serialized_length: usize,
         payload_hash: Digest,
         approvals: BTreeSet<Approval>,
+        transferred_value: u64,
+        seed: Option<[u8; 32]>,
         has_valid_hash: Result<(), InvalidTransactionV1>,
     ) -> Self {
         Self {
@@ -140,13 +169,14 @@ impl MetaTransactionV1 {
             serialized_length,
             payload_hash,
             has_valid_hash,
-            #[cfg(any(feature = "once_cell", test))]
+            transferred_value,
+            seed,
             is_verified: OnceCell::new(),
         }
     }
 
     /// Returns the runtime args of the transaction.
-    pub fn args(&self) -> &RuntimeArgs {
+    pub fn args(&self) -> &TransactionArgs {
         &self.args
     }
 
@@ -165,11 +195,7 @@ impl MetaTransactionV1 {
     ///   * approvals are non empty, and
     ///   * all approvals are valid signatures of the signed hash
     pub fn verify(&self) -> Result<(), InvalidTransactionV1> {
-        #[cfg(any(feature = "once_cell", test))]
         return self.is_verified.get_or_init(|| self.do_verify()).clone();
-
-        #[cfg(not(any(feature = "once_cell", test)))]
-        self.do_verify()
     }
 
     /// Returns `Ok` if and only if this transaction's body hashes to the value of `body_hash()`,
@@ -269,6 +295,14 @@ impl MetaTransactionV1 {
     pub fn ttl(&self) -> TimeDiff {
         self.ttl
     }
+    /// Returns the scheduling of the transaction.
+    pub(crate) fn transaction_runtime(&self) -> Option<TransactionRuntime> {
+        match self.target {
+            TransactionTarget::Native => None,
+            TransactionTarget::Stored { runtime, .. } => Some(runtime),
+            TransactionTarget::Session { runtime, .. } => Some(runtime),
+        }
+    }
 
     /// Returns `Ok` if and only if:
     ///   * the chain_name is correct,
@@ -280,6 +314,37 @@ impl MetaTransactionV1 {
         at: Timestamp,
     ) -> Result<(), InvalidTransactionV1> {
         let transaction_config = chainspec.transaction_config.clone();
+
+        match self.transaction_runtime() {
+            Some(expected_runtime @ TransactionRuntime::VmCasperV1) => {
+                if !transaction_config.runtime_config.vm_casper_v1 {
+                    // NOTE: In current implementation native transactions should be executed on
+                    // both VmCasperV1 and VmCasperV2. This may change once we
+                    // have a more stable VmCasperV2 that can also process calls
+                    // to system contracts in VM2 chunked args style.
+
+                    return Err(InvalidTransactionV1::InvalidTransactionRuntime {
+                        expected: expected_runtime,
+                    });
+                }
+            }
+            Some(expected_runtime @ TransactionRuntime::VmCasperV2) => {
+                if !transaction_config.runtime_config.vm_casper_v2 {
+                    // NOTE: In current implementation native transactions should be executed on
+                    // both VmCasperV1 and VmCasperV2. This may change once we
+                    // have a more stable VmCasperV2 that can also process calls
+                    // to system contracts in VM2 chunked args style.
+
+                    return Err(InvalidTransactionV1::InvalidTransactionRuntime {
+                        expected: expected_runtime,
+                    });
+                }
+            }
+            None => {
+                // Native transactions are config compliant by default
+            }
+        }
+
         self.is_valid_size(
             transaction_config
                 .transaction_v1_config
@@ -312,7 +377,7 @@ impl MetaTransactionV1 {
         let pricing_mode = &self.pricing_mode;
 
         match pricing_mode {
-            PricingMode::Classic { .. } => {
+            PricingMode::PaymentLimited { .. } => {
                 if let PricingHandling::Classic = price_handling {
                 } else {
                     return Err(InvalidTransactionV1::InvalidPricingMode {
@@ -328,8 +393,8 @@ impl MetaTransactionV1 {
                     });
                 }
             }
-            PricingMode::Reserved { .. } => {
-                if !chainspec.core_config.allow_reservations {
+            PricingMode::Prepaid { .. } => {
+                if !chainspec.core_config.allow_prepaid {
                     // Currently Reserved isn't implemented and we should
                     // not be accepting transactions with this mode.
                     return Err(InvalidTransactionV1::InvalidPricingMode {
@@ -560,7 +625,7 @@ impl MetaTransactionV1 {
     /// Returns the gas price tolerance for the given transaction.
     pub fn gas_price_tolerance(&self) -> u8 {
         match self.pricing_mode {
-            PricingMode::Classic {
+            PricingMode::PaymentLimited {
                 gas_price_tolerance,
                 ..
             } => gas_price_tolerance,
@@ -568,21 +633,33 @@ impl MetaTransactionV1 {
                 gas_price_tolerance,
                 ..
             } => gas_price_tolerance,
-            PricingMode::Reserved { .. } => {
-                // TODO: Change this when reserve gets implemented.
+            PricingMode::Prepaid { .. } => {
+                // TODO: Change this when prepaid gets implemented.
                 0u8
             }
         }
     }
 
+    /// Returns the serialized length of the transaction.
     pub fn serialized_length(&self) -> usize {
         self.serialized_length
     }
 
+    /// Returns the gas limit for the transaction.
     pub fn gas_limit(&self, chainspec: &Chainspec) -> Result<Gas, InvalidTransaction> {
         self.pricing_mode()
             .gas_limit(chainspec, self.entry_point(), self.transaction_lane as u8)
             .map_err(Into::into)
+    }
+
+    /// Returns the seed of the transaction.
+    pub(crate) fn seed(&self) -> Option<[u8; 32]> {
+        self.seed
+    }
+
+    /// Returns the transferred value of the transaction.
+    pub fn transferred_value(&self) -> u64 {
+        self.transferred_value
     }
 }
 
