@@ -10,6 +10,7 @@ use casper_types::{
     account::AccountHash,
     bytesrepr::{self, FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
     contracts::{ContractHash, ContractPackageHash},
+    system::auction::DelegatorKind,
     BlockIdentifier, EntityAddr, GlobalStateIdentifier, PackageAddr, PublicKey, TransactionHash,
 };
 
@@ -60,9 +61,9 @@ pub enum InformationRequest {
         era_identifier: Option<EraIdentifier>,
         /// Public key of the validator to get the reward for.
         validator: Box<PublicKey>,
-        /// Public key of the delegator to get the reward for.
+        /// Identity of the delegator to get the reward for.
         /// If `None`, the reward for the validator is returned.
-        delegator: Option<Box<PublicKey>>,
+        delegator: Option<Box<DelegatorKind>>,
     },
     /// Returns the current Casper protocol version.
     ProtocolVersion,
@@ -152,7 +153,9 @@ impl InformationRequest {
             InformationRequestTag::Reward => InformationRequest::Reward {
                 era_identifier: rng.gen::<bool>().then(|| EraIdentifier::random(rng)),
                 validator: PublicKey::random(rng).into(),
-                delegator: rng.gen::<bool>().then(|| PublicKey::random(rng).into()),
+                delegator: rng
+                    .gen::<bool>()
+                    .then(|| Box::new(DelegatorKind::PublicKey(PublicKey::random(rng)))),
             },
             InformationRequestTag::ProtocolVersion => InformationRequest::ProtocolVersion,
             InformationRequestTag::Package => InformationRequest::Package {
@@ -341,7 +344,7 @@ impl TryFrom<(InformationRequestTag, &[u8])> for InformationRequest {
             InformationRequestTag::Reward => {
                 let (era_identifier, remainder) = <Option<EraIdentifier>>::from_bytes(key_bytes)?;
                 let (validator, remainder) = PublicKey::from_bytes(remainder)?;
-                let (delegator, remainder) = <Option<PublicKey>>::from_bytes(remainder)?;
+                let (delegator, remainder) = <Option<DelegatorKind>>::from_bytes(remainder)?;
                 (
                     InformationRequest::Reward {
                         era_identifier,

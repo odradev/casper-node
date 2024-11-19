@@ -59,7 +59,7 @@ use casper_types::{
     runtime_args,
     system::{
         auction::{
-            BidKind, EraValidators, UnbondingPurses, ValidatorWeights, WithdrawPurses,
+            BidKind, EraValidators, Unbond, UnbondKind, ValidatorWeights, WithdrawPurses,
             ARG_ERA_END_TIMESTAMP_MILLIS, ARG_EVICTED_VALIDATORS, AUCTION_DELAY_KEY, ERA_ID_KEY,
             METHOD_RUN_AUCTION, UNBONDING_DELAY_KEY,
         },
@@ -1749,8 +1749,8 @@ where
             .expect("should have named keys")
     }
 
-    /// Gets [`UnbondingPurses`].
-    pub fn get_unbonds(&mut self) -> UnbondingPurses {
+    /// Gets [`Vec<Unbond>`].
+    pub fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Unbond> {
         let state_root_hash = self.get_post_state_hash();
 
         let tracking_copy = self
@@ -1762,17 +1762,15 @@ where
         let reader = tracking_copy.reader();
 
         let unbond_keys = reader
-            .keys_with_prefix(&[KeyTag::Unbond as u8])
+            .keys_with_prefix(&[KeyTag::BidAddr as u8])
             .unwrap_or_default();
 
         let mut ret = BTreeMap::new();
 
         for key in unbond_keys.into_iter() {
-            let read_result = reader.read(&key);
-            if let (Key::Unbond(account_hash), Ok(Some(StoredValue::Unbonding(unbonding_purses)))) =
-                (key, read_result)
-            {
-                ret.insert(account_hash, unbonding_purses);
+            if let Ok(Some(StoredValue::BidKind(BidKind::Unbond(unbond)))) = reader.read(&key) {
+                let unbond_kind = unbond.unbond_kind();
+                ret.insert(unbond_kind.clone(), *unbond);
             }
         }
 

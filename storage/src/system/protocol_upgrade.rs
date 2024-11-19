@@ -568,7 +568,7 @@ where
             .check_next_version(&self.config.new_protocol_version())
             .is_major_version();
 
-        let contract_entry_points: EntryPoints = (contract.entry_points().clone()).into();
+        let contract_entry_points: EntryPoints = contract.entry_points().clone().into();
         let entry_points_unchanged = contract_entry_points == entry_points;
         if entry_points_unchanged && !is_major_bump {
             // We don't need to do anything if entry points are unchanged, or there's no major
@@ -1180,9 +1180,9 @@ where
 
                 let delegators = existing_bid.delegators().clone();
                 for (_, delegator) in delegators {
-                    let delegator_bid_addr = BidAddr::new_from_public_keys(
+                    let delegator_bid_addr = BidAddr::new_delegator_kind(
                         validator_public_key,
-                        Some(delegator.delegator_public_key()),
+                        delegator.delegator_kind(),
                     );
                     // the previous code was removing a delegator bid from the embedded
                     // collection within their validator's bid when the delegator fully

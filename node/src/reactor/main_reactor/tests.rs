@@ -31,7 +31,7 @@ use casper_storage::{
 use casper_types::{
     execution::{ExecutionResult, ExecutionResultV2, TransformKindV2, TransformV2},
     system::{
-        auction::{BidAddr, BidKind, BidsExt, DelegationRate},
+        auction::{BidAddr, BidKind, BidsExt, DelegationRate, DelegatorKind},
         AUCTION,
     },
     testing::TestRng,
@@ -842,10 +842,12 @@ impl TestFixture {
             .data_access_layer()
             .bids(bids_request);
 
+        let delegator_kind = delegator_public_key.map(|pk| DelegatorKind::PublicKey(pk.clone()));
+
         if let BidsResult::Success { bids } = bids_result {
             match bids.iter().find(|bid_kind| {
                 &bid_kind.validator_public_key() == validator_public_key
-                    && bid_kind.delegator_public_key().as_ref() == delegator_public_key
+                    && bid_kind.delegator_kind() == delegator_kind
             }) {
                 None => {
                     if should_exist {

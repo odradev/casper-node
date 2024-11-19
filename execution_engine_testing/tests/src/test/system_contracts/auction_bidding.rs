@@ -15,8 +15,8 @@ use casper_types::{
     runtime_args,
     system::{
         auction::{
-            self, BidsExt, DelegationRate, UnbondingPurses, ARG_VALIDATOR_PUBLIC_KEYS,
-            INITIAL_ERA_ID, METHOD_SLASH,
+            self, BidsExt, DelegationRate, UnbondKind, ARG_VALIDATOR_PUBLIC_KEYS, INITIAL_ERA_ID,
+            METHOD_SLASH,
         },
         mint,
     },
@@ -86,7 +86,7 @@ fn should_run_successful_bond_and_unbond_and_slashing() {
         GENESIS_ACCOUNT_STAKE.into()
     );
 
-    let unbond_purses: UnbondingPurses = builder.get_unbonds();
+    let unbond_purses = builder.get_unbonds();
     assert_eq!(unbond_purses.len(), 0);
 
     //
@@ -113,46 +113,45 @@ fn should_run_successful_bond_and_unbond_and_slashing() {
 
     let account_balance_before = builder.get_purse_balance(unbonding_purse);
 
-    let unbond_purses: UnbondingPurses = builder.get_unbonds();
-    assert_eq!(unbond_purses.len(), 1);
+    let unbonds = builder.get_unbonds();
+    let unbond = {
+        assert_eq!(unbonds.len(), 1);
+        let unbond_kind = UnbondKind::Validator((*DEFAULT_ACCOUNT_PUBLIC_KEY).clone());
+        let unbond = unbonds.get(&unbond_kind).expect("should have unbond");
+        assert_eq!(unbond.eras().len(), 1, "unexpected era count");
+        assert_eq!(unbond.validator_public_key(), &default_public_key_arg,);
+        assert!(unbond.is_validator());
+        unbond
+    };
 
-    let unbond_list = unbond_purses
-        .get(&*DEFAULT_ACCOUNT_ADDR)
-        .expect("should have unbond");
-    assert_eq!(unbond_list.len(), 1);
-    assert_eq!(
-        unbond_list[0].validator_public_key(),
-        &default_public_key_arg,
-    );
-    assert!(unbond_list[0].is_validator());
-
-    assert_eq!(unbond_list[0].era_of_creation(), INITIAL_ERA_ID,);
-
-    let unbond_era_1 = unbond_list[0].era_of_creation();
+    let unbond_era_1 = unbond.eras().first().expect("should have era");
+    assert_eq!(unbond_era_1.era_of_creation(), INITIAL_ERA_ID,);
 
     builder.run_auction(
         DEFAULT_GENESIS_TIMESTAMP_MILLIS + DEFAULT_LOCKED_FUNDS_PERIOD_MILLIS,
         Vec::new(),
     );
-    let unbond_purses: UnbondingPurses = builder.get_unbonds();
-    assert_eq!(unbond_purses.len(), 1);
 
-    let unbond_list = unbond_purses
-        .get(&*DEFAULT_ACCOUNT_ADDR)
-        .expect("should have unbond");
-    assert_eq!(unbond_list.len(), 1);
-    assert_eq!(
-        unbond_list[0].validator_public_key(),
-        &default_public_key_arg,
-    );
-    assert!(unbond_list[0].is_validator());
+    let unbonds = builder.get_unbonds();
+    let unbond = {
+        assert_eq!(unbonds.len(), 1);
+
+        let unbond = unbonds
+            .get(&UnbondKind::Validator(
+                (*DEFAULT_ACCOUNT_PUBLIC_KEY).clone(),
+            ))
+            .expect("should have unbond");
+        assert_eq!(unbond.eras().len(), 1);
+        assert_eq!(unbond.validator_public_key(), &default_public_key_arg,);
+        assert!(unbond.is_validator());
+        unbond
+    };
 
     let account_balance = builder.get_purse_balance(unbonding_purse);
     assert_eq!(account_balance_before, account_balance);
 
-    assert_eq!(unbond_list[0].amount(), &unbond_amount,);
-
-    let unbond_era_2 = unbond_list[0].era_of_creation();
+    let unbond_era_2 = unbond.eras().first().expect("should have eras");
+    assert_eq!(unbond_era_2.amount(), &unbond_amount,);
 
     assert_eq!(unbond_era_2, unbond_era_1);
 
@@ -170,8 +169,9 @@ fn should_run_successful_bond_and_unbond_and_slashing() {
 
     builder.exec(exec_request_5).expect_success().commit();
 
-    let unbond_purses: UnbondingPurses = builder.get_unbonds();
-    assert!(!unbond_purses.contains_key(&*DEFAULT_ACCOUNT_ADDR));
+    let unbonds = builder.get_unbonds();
+    let unbond_kind = UnbondKind::Validator((*DEFAULT_ACCOUNT_PUBLIC_KEY).clone());
+    assert!(!unbonds.contains_key(&unbond_kind));
 
     let bids = builder.get_bids();
     assert!(bids.validator_bid(&DEFAULT_ACCOUNT_PUBLIC_KEY).is_none());
@@ -375,7 +375,7 @@ fn should_run_successful_bond_and_unbond_with_release() {
         GENESIS_ACCOUNT_STAKE.into()
     );
 
-    let unbond_purses: UnbondingPurses = builder.get_unbonds();
+    let unbond_purses = builder.get_unbonds();
     assert_eq!(unbond_purses.len(), 0);
 
     //
@@ -401,46 +401,42 @@ fn should_run_successful_bond_and_unbond_with_release() {
 
     builder.exec(exec_request_2).expect_success().commit();
 
-    let unbond_purses: UnbondingPurses = builder.get_unbonds();
-    assert_eq!(unbond_purses.len(), 1);
+    let unbonds = builder.get_unbonds();
+    assert_eq!(unbonds.len(), 1);
 
-    let unbond_list = unbond_purses
-        .get(&*DEFAULT_ACCOUNT_ADDR)
-        .expect("should have unbond");
-    assert_eq!(unbond_list.len(), 1);
-    assert_eq!(
-        unbond_list[0].validator_public_key(),
-        &default_public_key_arg,
-    );
-    assert!(unbond_list[0].is_validator());
+    let unbond_kind = UnbondKind::Validator((*DEFAULT_ACCOUNT_PUBLIC_KEY).clone());
+    let unbond = unbonds.get(&unbond_kind).expect("should have unbond");
+    assert_eq!(unbond.eras().len(), 1);
+    assert_eq!(unbond.validator_public_key(), &default_public_key_arg,);
+    assert!(unbond.is_validator());
 
-    assert_eq!(unbond_list[0].era_of_creation(), INITIAL_ERA_ID + 1);
-
-    let unbond_era_1 = unbond_list[0].era_of_creation();
+    let era = unbond.eras().first().expect("should have era");
+    let unbond_era_1 = era.era_of_creation();
+    assert_eq!(unbond_era_1, INITIAL_ERA_ID + 1);
 
     let account_balance_before_auction = builder.get_purse_balance(unbonding_purse);
 
     builder.run_auction(timestamp_millis, Vec::new());
     timestamp_millis += TIMESTAMP_MILLIS_INCREMENT;
-    let unbond_purses: UnbondingPurses = builder.get_unbonds();
-    assert_eq!(unbond_purses.len(), 1);
+    let unbonds = builder.get_unbonds();
+    assert_eq!(unbonds.len(), 1);
 
-    let unbond_list = unbond_purses
-        .get(&DEFAULT_ACCOUNT_ADDR)
-        .expect("should have unbond");
-    assert_eq!(unbond_list.len(), 1);
-    assert_eq!(
-        unbond_list[0].validator_public_key(),
-        &default_public_key_arg,
-    );
-    assert!(unbond_list[0].is_validator());
+    let unbond_kind = UnbondKind::Validator((*DEFAULT_ACCOUNT_PUBLIC_KEY).clone());
+    let unbond = unbond_purses.get(&unbond_kind).expect("should have unbond");
+    assert_eq!(unbond.eras().len(), 1);
+    assert_eq!(unbond.validator_public_key(), &default_public_key_arg,);
+    assert!(unbond.is_validator());
 
     assert_eq!(
         builder.get_purse_balance(unbonding_purse),
         account_balance_before_auction, // Not paid yet
     );
 
-    let unbond_era_2 = unbond_list[0].era_of_creation();
+    let unbond_era_2 = unbond
+        .eras()
+        .first()
+        .expect("should have eras")
+        .era_of_creation();
 
     assert_eq!(unbond_era_2, unbond_era_1); // era of withdrawal didn't change since first run
 
@@ -459,8 +455,9 @@ fn should_run_successful_bond_and_unbond_with_release() {
         account_balance_before_auction + unbond_amount
     );
 
-    let unbond_purses: UnbondingPurses = builder.get_unbonds();
-    assert!(!unbond_purses.contains_key(&*DEFAULT_ACCOUNT_ADDR));
+    let unbonds = builder.get_unbonds();
+    let unbond_kind = UnbondKind::Validator((*DEFAULT_ACCOUNT_PUBLIC_KEY).clone());
+    assert!(!unbonds.contains_key(&unbond_kind));
 
     let bids = builder.get_bids();
     assert!(!bids.is_empty());
@@ -550,7 +547,7 @@ fn should_run_successful_unbond_funds_after_changing_unbonding_delay() {
         GENESIS_ACCOUNT_STAKE.into()
     );
 
-    let unbond_purses: UnbondingPurses = builder.get_unbonds();
+    let unbond_purses = builder.get_unbonds();
     assert_eq!(unbond_purses.len(), 0);
 
     //
@@ -578,44 +575,40 @@ fn should_run_successful_unbond_funds_after_changing_unbonding_delay() {
 
     let account_balance_before_auction = builder.get_purse_balance(unbonding_purse);
 
-    let unbond_purses: UnbondingPurses = builder.get_unbonds();
-    assert_eq!(unbond_purses.len(), 1);
+    let unbonds = builder.get_unbonds();
+    assert_eq!(unbonds.len(), 1);
 
-    let unbond_list = unbond_purses
-        .get(&*DEFAULT_ACCOUNT_ADDR)
-        .expect("should have unbond");
-    assert_eq!(unbond_list.len(), 1);
-    assert_eq!(
-        unbond_list[0].validator_public_key(),
-        &default_public_key_arg,
-    );
-    assert!(unbond_list[0].is_validator());
+    let unbond_kind = UnbondKind::Validator((*DEFAULT_ACCOUNT_PUBLIC_KEY).clone());
+    let unbond = unbonds.get(&unbond_kind).expect("should have unbond");
+    assert_eq!(unbond.eras().len(), 1);
+    assert_eq!(unbond.validator_public_key(), &default_public_key_arg,);
+    assert!(unbond.is_validator());
 
-    assert_eq!(unbond_list[0].era_of_creation(), INITIAL_ERA_ID + 1);
+    let era = unbond.eras().first().expect("should have eras");
+    assert_eq!(era.era_of_creation(), INITIAL_ERA_ID + 1);
 
-    let unbond_era_1 = unbond_list[0].era_of_creation();
+    let unbond_era_1 = era.era_of_creation();
 
     builder.run_auction(timestamp_millis, Vec::new());
 
-    let unbond_purses: UnbondingPurses = builder.get_unbonds();
+    let unbond_purses = builder.get_unbonds();
     assert_eq!(unbond_purses.len(), 1);
 
-    let unbond_list = unbond_purses
-        .get(&DEFAULT_ACCOUNT_ADDR)
-        .expect("should have unbond");
-    assert_eq!(unbond_list.len(), 1);
-    assert_eq!(
-        unbond_list[0].validator_public_key(),
-        &default_public_key_arg,
-    );
-    assert!(unbond_list[0].is_validator());
+    let unbond_kind = UnbondKind::Validator((*DEFAULT_ACCOUNT_PUBLIC_KEY).clone());
+    let unbond = unbond_purses.get(&unbond_kind).expect("should have unbond");
+    assert_eq!(unbond.validator_public_key(), &default_public_key_arg,);
+    assert!(unbond.is_validator());
 
     assert_eq!(
         builder.get_purse_balance(unbonding_purse),
         account_balance_before_auction, // Not paid yet
     );
 
-    let unbond_era_2 = unbond_list[0].era_of_creation();
+    let unbond_era_2 = unbond
+        .eras()
+        .first()
+        .expect("should have era")
+        .era_of_creation();
 
     assert_eq!(unbond_era_2, unbond_era_1); // era of withdrawal didn't change since first run
 
@@ -649,8 +642,9 @@ fn should_run_successful_unbond_funds_after_changing_unbonding_delay() {
         account_balance_before_auction + unbond_amount
     );
 
-    let unbond_purses: UnbondingPurses = builder.get_unbonds();
-    assert!(!unbond_purses.contains_key(&*DEFAULT_ACCOUNT_ADDR));
+    let unbonds = builder.get_unbonds();
+    let unbond_kind = UnbondKind::Validator((*DEFAULT_ACCOUNT_PUBLIC_KEY).clone());
+    assert!(!unbonds.contains_key(&unbond_kind));
 
     let bids = builder.get_bids();
     assert!(!bids.is_empty());

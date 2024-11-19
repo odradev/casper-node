@@ -15,10 +15,11 @@ use itertools::Itertools;
 
 use casper_engine_test_support::LmdbWasmTestBuilder;
 use casper_execution_engine::engine_state::engine_config::DEFAULT_PROTOCOL_VERSION;
+
 use casper_types::{
     system::auction::{
-        Bid, BidKind, BidsExt, Delegator, Reservation, SeigniorageRecipientV2,
-        SeigniorageRecipientsSnapshotV2, ValidatorBid, ValidatorCredit,
+        Bid, BidKind, BidsExt, DelegatorBid, Reservation, SeigniorageRecipientV2,
+        SeigniorageRecipientsSnapshotV2, Unbond, ValidatorBid, ValidatorCredit,
     },
     CLValue, EraId, PublicKey, StoredValue, U512,
 };
@@ -339,9 +340,9 @@ pub fn add_and_remove_bids<T: StateReader>(
                     BidKind::Validator(Box::new(new_bid))
                 }
                 BidKind::Delegator(delegator_bid) => {
-                    BidKind::Delegator(Box::new(Delegator::empty(
+                    BidKind::Delegator(Box::new(DelegatorBid::empty(
                         public_key.clone(),
-                        delegator_bid.delegator_public_key().clone(),
+                        delegator_bid.delegator_kind().clone(),
                         *delegator_bid.bonding_purse(),
                     )))
                 }
@@ -355,10 +356,15 @@ pub fn add_and_remove_bids<T: StateReader>(
                 BidKind::Reservation(reservation_bid) => {
                     BidKind::Reservation(Box::new(Reservation::new(
                         public_key.clone(),
-                        reservation_bid.delegator_public_key().clone(),
+                        reservation_bid.delegator_kind().clone(),
                         *reservation_bid.delegation_rate(),
                     )))
                 }
+                BidKind::Unbond(unbond) => BidKind::Unbond(Box::new(Unbond::new(
+                    unbond.validator_public_key().clone(),
+                    unbond.unbond_kind().clone(),
+                    unbond.eras().clone(),
+                ))),
             };
             state.set_bid(reset_bid, slash_instead_of_unbonding);
         }
@@ -453,7 +459,7 @@ fn create_or_update_bid<T: StateReader>(
                         .iter()
                         .map(|reservation| {
                             (
-                                reservation.delegator_public_key().clone(),
+                                reservation.delegator_kind().clone(),
                                 *reservation.delegation_rate(),
                             )
                         })
@@ -488,7 +494,7 @@ fn create_or_update_bid<T: StateReader>(
                         None => BTreeMap::new(),
                         Some(delegators) => delegators
                             .iter()
-                            .map(|d| (d.delegator_public_key().clone(), d.staked_amount()))
+                            .map(|d| (d.delegator_kind().clone(), d.staked_amount()))
                             .collect(),
                     };
 
@@ -529,20 +535,20 @@ fn create_or_update_bid<T: StateReader>(
         for delegator in delegators {
             let delegator_bid = match updated_recipient
                 .delegator_stake()
-                .get(delegator.delegator_public_key())
+                .get(delegator.delegator_kind())
             {
                 None => {
                     // todo!() this is a remove; the global state update tool does not
                     // yet support prune so in the meantime, setting the amount
                     // to 0.
-                    Delegator::empty(
+                    DelegatorBid::empty(
                         delegator.validator_public_key().clone(),
-                        delegator.delegator_public_key().clone(),
+                        delegator.delegator_kind().clone(),
                         *delegator.bonding_purse(),
                     )
                 }
-                Some(updated_delegator_stake) => Delegator::unlocked(
-                    delegator.delegator_public_key().clone(),
+                Some(updated_delegator_stake) => DelegatorBid::unlocked(
+                    delegator.delegator_kind().clone(),
                     *updated_delegator_stake,
                     *delegator.bonding_purse(),
                     validator_public_key.clone(),
@@ -567,7 +573,7 @@ fn create_or_update_bid<T: StateReader>(
             }
             // this is a entirely new delegator
             let delegator_bonding_purse = state.create_purse(*delegator_stake);
-            let delegator_bid = Delegator::unlocked(
+            let delegator_bid = DelegatorBid::unlocked(
                 delegator_pub_key.clone(),
                 *delegator_stake,
                 delegator_bonding_purse,
@@ -611,7 +617,7 @@ fn create_or_update_bid<T: StateReader>(
 
     for (delegator_pub_key, delegator_stake) in updated_recipient.delegator_stake() {
         let delegator_bonding_purse = state.create_purse(*delegator_stake);
-        let delegator_bid = Delegator::unlocked(
+        let delegator_bid = DelegatorBid::unlocked(
             delegator_pub_key.clone(),
             *delegator_stake,
             delegator_bonding_purse,

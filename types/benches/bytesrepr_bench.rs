@@ -9,7 +9,7 @@ use casper_types::{
     account::AccountHash,
     addressable_entity::{ActionThresholds, AddressableEntity, AssociatedKeys, EntityKind},
     bytesrepr::{self, Bytes, FromBytes, ToBytes},
-    system::auction::{Bid, Delegator, EraInfo, SeigniorageAllocation},
+    system::auction::{Bid, Delegator, DelegatorKind, EraInfo, SeigniorageAllocation},
     AccessRights, AddressableEntityHash, ByteCodeHash, CLTyped, CLValue, DeployHash, DeployInfo,
     EntityVersionKey, EntityVersions, Gas, Group, Groups, InitiatorAddr, Key, Package, PackageHash,
     PackageStatus, ProtocolVersion, PublicKey, SecretKey, TransactionHash, TransactionRuntime,
@@ -645,7 +645,7 @@ fn sample_era_info(delegators_len: u32) -> EraInfo {
     let mut base = EraInfo::new();
     let delegations = (0..delegators_len).map(|i| {
         let pk = u32_to_pk(i);
-        SeigniorageAllocation::delegator(pk.clone(), pk, U512::MAX)
+        SeigniorageAllocation::delegator(DelegatorKind::PublicKey(pk.clone()), pk, U512::MAX)
     });
     base.seigniorage_allocations_mut().extend(delegations);
     base

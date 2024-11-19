@@ -2,7 +2,7 @@ use crate::{
     account::{AccountHash, ACCOUNT_HASH_LENGTH},
     bytesrepr,
     bytesrepr::{FromBytes, ToBytes},
-    system::auction::error::Error,
+    system::auction::{error::Error, DelegatorKind},
     EraId, Key, KeyTag, PublicKey, URefAddr,
 };
 use alloc::vec::Vec;
@@ -25,6 +25,8 @@ const DELEGATED_PURSE_TAG: u8 = 3;
 const CREDIT_TAG: u8 = 4;
 const RESERVATION_ACCOUNT_TAG: u8 = 5;
 const RESERVATION_PURSE_TAG: u8 = 6;
+const UNBOND_ACCOUNT_TAG: u8 = 7;
+const UNBOND_PURSE_TAG: u8 = 8;
 
 /// Serialization tag for BidAddr variants.
 #[derive(
@@ -51,6 +53,10 @@ pub enum BidAddrTag {
     ReservedDelegationAccount = RESERVATION_ACCOUNT_TAG,
     /// BidAddr for reserved delegation purse bid.
     ReservedDelegationPurse = RESERVATION_PURSE_TAG,
+    /// BidAddr for unbonding accounts.
+    UnbondAccount = UNBOND_ACCOUNT_TAG,
+    /// BidAddr for unbonding purses.
+    UnbondPurse = UNBOND_PURSE_TAG,
 }
 
 impl Display for BidAddrTag {
@@ -64,6 +70,8 @@ impl Display for BidAddrTag {
             BidAddrTag::Credit => CREDIT_TAG,
             BidAddrTag::ReservedDelegationAccount => RESERVATION_ACCOUNT_TAG,
             BidAddrTag::ReservedDelegationPurse => RESERVATION_PURSE_TAG,
+            BidAddrTag::UnbondAccount => UNBOND_ACCOUNT_TAG,
+            BidAddrTag::UnbondPurse => UNBOND_PURSE_TAG,
         };
         write!(f, "{}", base16::encode_lower(&[tag]))
     }
@@ -97,6 +105,12 @@ impl BidAddrTag {
         }
         if value == RESERVATION_PURSE_TAG {
             return Some(BidAddrTag::ReservedDelegationPurse);
+        }
+        if value == UNBOND_ACCOUNT_TAG {
+            return Some(BidAddrTag::UnbondAccount);
+        }
+        if value == UNBOND_PURSE_TAG {
+            return Some(BidAddrTag::UnbondPurse);
         }
 
         None
@@ -147,6 +161,18 @@ pub enum BidAddr {
         /// The delegated purse addr.
         delegator: URefAddr,
     },
+    UnbondAccount {
+        /// The validator.
+        validator: AccountHash,
+        /// The unbonder.
+        unbonder: AccountHash,
+    },
+    UnbondPurse {
+        /// The validator.
+        validator: AccountHash,
+        /// The unbonder.
+        unbonder: URefAddr,
+    },
 }
 
 impl BidAddr {
@@ -188,6 +214,20 @@ impl BidAddr {
     #[allow(missing_docs)]
     pub const fn legacy(validator: [u8; ACCOUNT_HASH_LENGTH]) -> Self {
         BidAddr::Unified(AccountHash::new(validator))
+    }
+
+    /// Create a new instance of a [`BidAddr`].
+    pub fn new_delegator_kind(validator: &PublicKey, delegator_kind: &DelegatorKind) -> Self {
+        match delegator_kind {
+            DelegatorKind::PublicKey(pk) => BidAddr::DelegatedAccount {
+                validator: validator.to_account_hash(),
+                delegator: pk.to_account_hash(),
+            },
+            DelegatorKind::Purse(addr) => BidAddr::DelegatedPurse {
+                validator: validator.to_account_hash(),
+                delegator: *addr,
+            },
+        }
     }
 
     /// Create a new instance of a [`BidAddr`].
@@ -285,7 +325,9 @@ impl BidAddr {
             | BidAddr::DelegatedPurse { validator, .. }
             | BidAddr::Credit { validator, .. }
             | BidAddr::ReservedDelegationAccount { validator, .. }
-            | BidAddr::ReservedDelegationPurse { validator, .. } => *validator,
+            | BidAddr::ReservedDelegationPurse { validator, .. }
+            | BidAddr::UnbondAccount { validator, .. }
+            | BidAddr::UnbondPurse { validator, .. } => *validator,
         }
     }
 
@@ -296,9 +338,20 @@ impl BidAddr {
             | BidAddr::Validator(_)
             | BidAddr::Credit { .. }
             | BidAddr::DelegatedPurse { .. }
-            | BidAddr::ReservedDelegationPurse { .. } => None,
+            | BidAddr::ReservedDelegationPurse { .. }
+            | BidAddr::UnbondPurse { .. } => None,
             BidAddr::DelegatedAccount { delegator, .. }
             | BidAddr::ReservedDelegationAccount { delegator, .. } => Some(*delegator),
+            BidAddr::UnbondAccount {
+                validator,
+                unbonder,
+            } => {
+                if validator == unbonder {
+                    Some(*validator)
+                } else {
+                    None
+                }
+            }
         }
     }
 
@@ -309,9 +362,11 @@ impl BidAddr {
             | BidAddr::Validator(_)
             | BidAddr::Credit { .. }
             | BidAddr::DelegatedAccount { .. }
-            | BidAddr::ReservedDelegationAccount { .. } => None,
+            | BidAddr::ReservedDelegationAccount { .. }
+            | BidAddr::UnbondAccount { .. } => None,
             BidAddr::DelegatedPurse { delegator, .. }
             | BidAddr::ReservedDelegationPurse { delegator, .. } => Some(*delegator),
+            BidAddr::UnbondPurse { unbonder, .. } => Some(*unbonder),
         }
     }
 
@@ -323,7 +378,9 @@ impl BidAddr {
             | BidAddr::DelegatedAccount { .. }
             | BidAddr::DelegatedPurse { .. }
             | BidAddr::ReservedDelegationAccount { .. }
-            | BidAddr::ReservedDelegationPurse { .. } => None,
+            | BidAddr::ReservedDelegationPurse { .. }
+            | BidAddr::UnbondPurse { .. }
+            | BidAddr::UnbondAccount { .. } => None,
             BidAddr::Credit { era_id, .. } => Some(*era_id),
         }
     }
@@ -336,7 +393,9 @@ impl BidAddr {
             | BidAddr::Validator(_)
             | BidAddr::Credit { .. }
             | BidAddr::ReservedDelegationAccount { .. }
-            | BidAddr::ReservedDelegationPurse { .. } => false,
+            | BidAddr::ReservedDelegationPurse { .. }
+            | BidAddr::UnbondPurse { .. }
+            | BidAddr::UnbondAccount { .. } => false,
             BidAddr::DelegatedAccount { .. } | BidAddr::DelegatedPurse { .. } => true,
         }
     }
@@ -366,6 +425,14 @@ impl BidAddr {
                 validator,
                 delegator,
             } => ToBytes::serialized_length(validator) + ToBytes::serialized_length(delegator) + 1,
+            BidAddr::UnbondAccount {
+                validator,
+                unbonder,
+            } => ToBytes::serialized_length(validator) + ToBytes::serialized_length(unbonder) + 1,
+            BidAddr::UnbondPurse {
+                validator,
+                unbonder,
+            } => ToBytes::serialized_length(validator) + ToBytes::serialized_length(unbonder) + 1,
         }
     }
 
@@ -380,6 +447,8 @@ impl BidAddr {
             BidAddr::Credit { .. } => BidAddrTag::Credit,
             BidAddr::ReservedDelegationAccount { .. } => BidAddrTag::ReservedDelegationAccount,
             BidAddr::ReservedDelegationPurse { .. } => BidAddrTag::ReservedDelegationPurse,
+            BidAddr::UnbondAccount { .. } => BidAddrTag::UnbondAccount,
+            BidAddr::UnbondPurse { .. } => BidAddrTag::UnbondPurse,
         }
     }
 }
@@ -536,6 +605,14 @@ impl Display for BidAddr {
                 validator,
                 base16::encode_lower(&delegator),
             ),
+            BidAddr::UnbondAccount {
+                validator,
+                unbonder,
+            } => write!(f, "{}{}{}", tag, validator, unbonder,),
+            BidAddr::UnbondPurse {
+                validator,
+                unbonder,
+            } => write!(f, "{}{}{}", tag, validator, base16::encode_lower(&unbonder),),
         }
     }
 }
@@ -583,6 +660,18 @@ impl Debug for BidAddr {
                     "BidAddr::ReservedDelegationPurse({:?}{:?})",
                     validator, delegator
                 )
+            }
+            BidAddr::UnbondAccount {
+                validator,
+                unbonder,
+            } => {
+                write!(f, "BidAddr::UnbondAccount({:?}{:?})", validator, unbonder)
+            }
+            BidAddr::UnbondPurse {
+                validator,
+                unbonder,
+            } => {
+                write!(f, "BidAddr::UnbondPurse({:?}{:?})", validator, unbonder)
             }
         }
     }

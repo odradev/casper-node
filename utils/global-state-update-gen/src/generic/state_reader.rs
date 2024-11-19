@@ -3,11 +3,14 @@ use casper_types::{
     account::AccountHash,
     contracts::ContractHash,
     system::{
-        auction::{BidKind, UnbondingPurses, WithdrawPurses, SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY},
+        auction::{
+            BidKind, Unbond, UnbondKind, WithdrawPurses, SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY,
+        },
         mint::TOTAL_SUPPLY_KEY,
     },
     AddressableEntity, Key, StoredValue,
 };
+use std::collections::BTreeMap;
 
 pub trait StateReader {
     fn query(&mut self, key: Key) -> Option<StoredValue>;
@@ -22,7 +25,7 @@ pub trait StateReader {
 
     fn get_withdraws(&mut self) -> WithdrawPurses;
 
-    fn get_unbonds(&mut self) -> UnbondingPurses;
+    fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Unbond>;
 }
 
 impl<'a, T> StateReader for &'a mut T
@@ -53,7 +56,7 @@ where
         T::get_withdraws(self)
     }
 
-    fn get_unbonds(&mut self) -> UnbondingPurses {
+    fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Unbond> {
         T::get_unbonds(self)
     }
 }
@@ -121,7 +124,7 @@ impl StateReader for LmdbWasmTestBuilder {
         LmdbWasmTestBuilder::get_withdraw_purses(self)
     }
 
-    fn get_unbonds(&mut self) -> UnbondingPurses {
+    fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Unbond> {
         LmdbWasmTestBuilder::get_unbonds(self)
     }
 }

@@ -36,9 +36,9 @@ use crate::{
     package::{EntityVersionKey, EntityVersions, Groups, PackageStatus},
     system::{
         auction::{
-            gens::era_info_arb, Bid, BidAddr, BidKind, DelegationRate, Delegator, Reservation,
-            UnbondingPurse, ValidatorBid, ValidatorCredit, WithdrawPurse,
-            DELEGATION_RATE_DENOMINATOR,
+            gens::era_info_arb, Bid, BidAddr, BidKind, DelegationRate, Delegator, DelegatorBid,
+            DelegatorKind, Reservation, UnbondingPurse, ValidatorBid, ValidatorCredit,
+            WithdrawPurse, DELEGATION_RATE_DENOMINATOR,
         },
         mint::BalanceHoldAddr,
         SystemEntityType,
@@ -626,6 +626,7 @@ pub fn package_arb() -> impl Strategy<Value = Package> {
     )
 }
 
+#[allow(unused)]
 pub(crate) fn delegator_arb() -> impl Strategy<Value = Delegator> {
     (
         public_key_arb_no_system(),
@@ -636,6 +637,32 @@ pub(crate) fn delegator_arb() -> impl Strategy<Value = Delegator> {
         .prop_map(
             |(delegator_pk, staked_amount, bonding_purse, validator_pk)| {
                 Delegator::unlocked(delegator_pk, staked_amount, bonding_purse, validator_pk)
+            },
+        )
+}
+
+pub(crate) fn delegator_kind_arb() -> impl Strategy<Value = DelegatorKind> {
+    prop_oneof![
+        public_key_arb_no_system().prop_map(DelegatorKind::PublicKey),
+        array::uniform32(bits::u8::ANY).prop_map(DelegatorKind::Purse)
+    ]
+}
+
+pub(crate) fn delegator_bid_arb() -> impl Strategy<Value = DelegatorBid> {
+    (
+        public_key_arb_no_system(),
+        u512_arb(),
+        uref_arb(),
+        public_key_arb_no_system(),
+    )
+        .prop_map(
+            |(delegator_pk, staked_amount, bonding_purse, validator_pk)| {
+                DelegatorBid::unlocked(
+                    delegator_pk.into(),
+                    staked_amount,
+                    bonding_purse,
+                    validator_pk,
+                )
             },
         )
 }
@@ -651,11 +678,11 @@ pub(crate) fn reservation_bid_arb() -> impl Strategy<Value = BidKind> {
 pub(crate) fn reservation_arb() -> impl Strategy<Value = Reservation> {
     (
         public_key_arb_no_system(),
-        public_key_arb_no_system(),
+        delegator_kind_arb(),
         delegation_rate_arb(),
     )
-        .prop_map(|(validator_pk, delegator_pk, delegation_rate)| {
-            Reservation::new(validator_pk, delegator_pk, delegation_rate)
+        .prop_map(|(validator_pk, delegator_kind, delegation_rate)| {
+            Reservation::new(validator_pk, delegator_kind, delegation_rate)
         })
 }
 
@@ -668,7 +695,7 @@ pub(crate) fn unified_bid_arb(
         u512_arb(),
         delegation_rate_arb(),
         bool::ANY,
-        collection::vec(delegator_arb(), delegations_len),
+        collection::vec(delegator_bid_arb(), delegations_len),
     )
         .prop_map(
             |(
@@ -698,7 +725,7 @@ pub(crate) fn unified_bid_arb(
                 let delegators = bid.delegators_mut();
                 new_delegators.into_iter().for_each(|delegator| {
                     assert!(delegators
-                        .insert(delegator.delegator_public_key().clone(), delegator)
+                        .insert(delegator.delegator_kind().clone(), delegator)
                         .is_none());
                 });
                 BidKind::Unified(Box::new(bid))
@@ -706,8 +733,8 @@ pub(crate) fn unified_bid_arb(
         )
 }
 
-pub(crate) fn delegator_bid_arb() -> impl Strategy<Value = BidKind> {
-    delegator_arb().prop_map(|delegator| BidKind::Delegator(Box::new(delegator)))
+pub(crate) fn delegator_bid_kind_arb() -> impl Strategy<Value = BidKind> {
+    delegator_bid_arb().prop_map(|delegator| BidKind::Delegator(Box::new(delegator)))
 }
 
 pub(crate) fn validator_bid_arb() -> impl Strategy<Value = BidKind> {
@@ -846,7 +873,7 @@ pub fn stored_value_arb() -> impl Strategy<Value = StoredValue> {
         era_info_arb(1..10).prop_map(StoredValue::EraInfo),
         unified_bid_arb(0..3).prop_map(StoredValue::BidKind),
         validator_bid_arb().prop_map(StoredValue::BidKind),
-        delegator_bid_arb().prop_map(StoredValue::BidKind),
+        delegator_bid_kind_arb().prop_map(StoredValue::BidKind),
         reservation_bid_arb().prop_map(StoredValue::BidKind),
         credit_bid_arb().prop_map(StoredValue::BidKind),
         withdraws_arb(1..50).prop_map(StoredValue::Withdraw),

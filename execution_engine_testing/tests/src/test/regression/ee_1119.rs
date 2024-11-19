@@ -12,7 +12,7 @@ use casper_types::{
     runtime_args,
     system::{
         auction::{
-            BidsExt, DelegationRate, UnbondingPurses, ARG_DELEGATOR, ARG_VALIDATOR,
+            BidsExt, DelegationRate, UnbondKind, ARG_DELEGATOR, ARG_VALIDATOR,
             ARG_VALIDATOR_PUBLIC_KEYS, METHOD_SLASH,
         },
         mint::TOTAL_SUPPLY_KEY,
@@ -109,7 +109,7 @@ fn should_slash_validator_and_their_delegators() {
         U512::from(VALIDATOR_1_STAKE),
     );
 
-    let unbond_purses: UnbondingPurses = builder.get_unbonds();
+    let unbond_purses = builder.get_unbonds();
     assert_eq!(unbond_purses.len(), 0);
 
     //
@@ -157,21 +157,27 @@ fn should_slash_validator_and_their_delegators() {
 
     builder.exec(withdraw_bid_request).expect_success().commit();
 
-    let unbond_purses: UnbondingPurses = builder.get_unbonds();
+    let unbond_purses = builder.get_unbonds();
     assert_eq!(unbond_purses.len(), 2);
 
-    let unbond_list = unbond_purses
-        .get(&VALIDATOR_1_ADDR)
+    let unbond_kind = UnbondKind::Validator(VALIDATOR_1.clone());
+
+    let unbond = unbond_purses
+        .get(&unbond_kind)
         .cloned()
         .expect("should have unbond");
-    assert_eq!(unbond_list.len(), 1);
-    assert_eq!(unbond_list[0].validator_public_key(), &*VALIDATOR_1,);
-    assert_eq!(unbond_list[0].unbonder_public_key(), &*VALIDATOR_1,);
-    assert!(unbond_list[0].is_validator());
-    assert_eq!(unbond_list[0].amount(), &unbond_amount);
+    assert_eq!(unbond.eras().len(), 1);
+    assert_eq!(unbond.validator_public_key(), &*VALIDATOR_1,);
+    assert_eq!(
+        unbond.unbond_kind(),
+        &UnbondKind::Validator(VALIDATOR_1.clone()),
+    );
+    assert!(unbond.is_validator());
+    let era = unbond.eras().first().expect("should have eras");
+    assert_eq!(era.amount(), &unbond_amount);
 
     assert!(
-        unbond_purses.contains_key(&*DEFAULT_ACCOUNT_ADDR),
+        unbond_purses.contains_key(&unbond_kind),
         "should be part of unbonds"
     );
 
@@ -187,7 +193,7 @@ fn should_slash_validator_and_their_delegators() {
 
     builder.exec(slash_request_1).expect_success().commit();
 
-    let unbond_purses_noop: UnbondingPurses = builder.get_unbonds();
+    let unbond_purses_noop = builder.get_unbonds();
     assert_eq!(
         unbond_purses, unbond_purses_noop,
         "slashing default validator should be noop because no unbonding was done"
@@ -217,7 +223,7 @@ fn should_slash_validator_and_their_delegators() {
 
     builder.exec(slash_request_2).expect_success().commit();
 
-    let unbond_purses: UnbondingPurses = builder.get_unbonds();
+    let unbond_purses = builder.get_unbonds();
     assert_eq!(unbond_purses.len(), 0);
 
     let bids = builder.get_bids();

@@ -3,7 +3,9 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use casper_types::{
-    account::AccountHash, system::auction::DelegationRate, ProtocolVersion, PublicKey, U512,
+    account::AccountHash,
+    system::auction::{DelegationRate, DelegatorKind},
+    ProtocolVersion, PublicKey, U512,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -43,20 +45,30 @@ pub struct ValidatorConfig {
 }
 
 impl ValidatorConfig {
-    pub fn delegators_map(&self) -> Option<BTreeMap<PublicKey, U512>> {
+    pub fn delegators_map(&self) -> Option<BTreeMap<DelegatorKind, U512>> {
         self.delegators.as_ref().map(|delegators| {
             delegators
                 .iter()
-                .map(|delegator| (delegator.public_key.clone(), delegator.delegated_amount))
+                .map(|delegator| {
+                    (
+                        DelegatorKind::PublicKey(delegator.public_key.clone()),
+                        delegator.delegated_amount,
+                    )
+                })
                 .collect()
         })
     }
 
-    pub fn reservations_map(&self) -> Option<BTreeMap<PublicKey, DelegationRate>> {
+    pub fn reservations_map(&self) -> Option<BTreeMap<DelegatorKind, DelegationRate>> {
         self.reservations.as_ref().map(|reservations| {
             reservations
                 .iter()
-                .map(|reservation| (reservation.public_key.clone(), reservation.delegation_rate))
+                .map(|reservation| {
+                    (
+                        DelegatorKind::PublicKey(reservation.public_key.clone()),
+                        reservation.delegation_rate,
+                    )
+                })
                 .collect()
         })
     }

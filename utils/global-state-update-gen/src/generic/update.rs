@@ -7,7 +7,7 @@ use casper_types::{account::AccountHash, AddressableEntity, CLValue, PublicKey, 
 use casper_types::{Key, StoredValue};
 
 #[cfg(test)]
-use casper_types::system::auction::{BidAddr, BidKind, Delegator, ValidatorBid};
+use casper_types::system::auction::{BidAddr, BidKind, DelegatorBid, DelegatorKind, ValidatorBid};
 
 #[cfg(test)]
 use super::state_reader::StateReader;
@@ -103,7 +103,7 @@ impl Update {
     }
 
     #[track_caller]
-    pub(crate) fn delegators(&self, validator_bid: &ValidatorBid) -> Vec<Delegator> {
+    pub(crate) fn delegators(&self, validator_bid: &ValidatorBid) -> Vec<DelegatorBid> {
         let mut ret = vec![];
 
         for (_, v) in self.entries.clone() {
@@ -122,11 +122,11 @@ impl Update {
     pub(crate) fn delegator(
         &self,
         validator_bid: &ValidatorBid,
-        delegator_public_key: &PublicKey,
-    ) -> Option<Delegator> {
+        delegator_kind: &DelegatorKind,
+    ) -> Option<DelegatorBid> {
         let delegators = self.delegators(validator_bid);
         for delegator in delegators {
-            if delegator.delegator_public_key() != delegator_public_key {
+            if delegator.delegator_kind() != delegator_kind {
                 continue;
             }
             return Some(delegator);

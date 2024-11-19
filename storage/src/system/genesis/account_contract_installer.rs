@@ -29,13 +29,14 @@ use casper_types::{
     system::{
         auction,
         auction::{
-            BidAddr, BidKind, Delegator, SeigniorageRecipient, SeigniorageRecipientV2,
-            SeigniorageRecipients, SeigniorageRecipientsSnapshot, SeigniorageRecipientsSnapshotV2,
-            SeigniorageRecipientsV2, Staking, ValidatorBid, AUCTION_DELAY_KEY,
-            DEFAULT_SEIGNIORAGE_RECIPIENTS_SNAPSHOT_VERSION, DELEGATION_RATE_DENOMINATOR,
-            ERA_END_TIMESTAMP_MILLIS_KEY, ERA_ID_KEY, INITIAL_ERA_END_TIMESTAMP_MILLIS,
-            INITIAL_ERA_ID, LOCKED_FUNDS_PERIOD_KEY, SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY,
-            SEIGNIORAGE_RECIPIENTS_SNAPSHOT_VERSION_KEY, UNBONDING_DELAY_KEY, VALIDATOR_SLOTS_KEY,
+            BidAddr, BidKind, Delegator, DelegatorBid, DelegatorKind, SeigniorageRecipient,
+            SeigniorageRecipientV2, SeigniorageRecipients, SeigniorageRecipientsSnapshot,
+            SeigniorageRecipientsSnapshotV2, SeigniorageRecipientsV2, Staking, ValidatorBid,
+            AUCTION_DELAY_KEY, DEFAULT_SEIGNIORAGE_RECIPIENTS_SNAPSHOT_VERSION,
+            DELEGATION_RATE_DENOMINATOR, ERA_END_TIMESTAMP_MILLIS_KEY, ERA_ID_KEY,
+            INITIAL_ERA_END_TIMESTAMP_MILLIS, INITIAL_ERA_ID, LOCKED_FUNDS_PERIOD_KEY,
+            SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY, SEIGNIORAGE_RECIPIENTS_SNAPSHOT_VERSION_KEY,
+            UNBONDING_DELAY_KEY, VALIDATOR_SLOTS_KEY,
         },
         handle_payment,
         handle_payment::ACCUMULATION_PURSE_KEY,
@@ -295,7 +296,7 @@ where
 
             for genesis_validator in genesis_validators {
                 let public_key = genesis_validator.public_key();
-                let mut delegators: BTreeMap<PublicKey, Delegator> = BTreeMap::new();
+                let mut delegators = BTreeMap::new();
 
                 let staked_amount = genesis_validator.staked_amount().value();
                 if staked_amount.is_zero() {
@@ -341,18 +342,17 @@ where
                             let purse_uref =
                                 self.create_purse(delegator_delegated_amount.value())?;
 
-                            let delegator = Delegator::locked(
-                                (*delegator_public_key).clone(),
+                            let delegator_kind: DelegatorKind =
+                                (*delegator_public_key).clone().into();
+                            let delegator = DelegatorBid::locked(
+                                delegator_kind.clone(),
                                 delegator_delegated_amount.value(),
                                 purse_uref,
                                 (*validator_public_key).clone(),
                                 release_timestamp_millis,
                             );
 
-                            if delegators
-                                .insert((*delegator_public_key).clone(), delegator)
-                                .is_some()
-                            {
+                            if delegators.insert(delegator_kind, delegator).is_some() {
                                 return Err(GenesisError::DuplicatedDelegatorEntry {
                                     validator_public_key: (*validator_public_key).clone(),
                                     delegator_public_key: (*delegator_public_key).clone(),
@@ -446,10 +446,10 @@ where
 
         // store all delegator and validator bids
         for (validator_public_key, (validator_bid, delegators)) in staked {
-            for (delegator_public_key, delegator_bid) in delegators {
-                let delegator_bid_key = Key::BidAddr(BidAddr::new_from_public_keys(
+            for (delegator_kind, delegator_bid) in delegators {
+                let delegator_bid_key = Key::BidAddr(BidAddr::new_delegator_kind(
                     &validator_public_key.clone(),
-                    Some(&delegator_public_key.clone()),
+                    &delegator_kind,
                 ));
                 self.tracking_copy.borrow_mut().write(
                     delegator_bid_key,
@@ -604,7 +604,7 @@ where
 
         let mut seigniorage_recipients = SeigniorageRecipientsV2::new();
         for (validator_public_key, (validator_bid, delegators)) in staked {
-            let mut delegator_stake: BTreeMap<PublicKey, U512> = BTreeMap::new();
+            let mut delegator_stake = BTreeMap::new();
             for (k, v) in delegators {
                 delegator_stake.insert(k.clone(), v.staked_amount());
             }
