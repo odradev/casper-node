@@ -1507,8 +1507,7 @@ where
                             maybe_system_entity_type,
                         )
                     }
-                    Some(_) => return Err(ExecError::UnexpectedStoredValueVariant),
-                    None => {
+                    Some(_) | None => {
                         if !self.context.engine_config().enable_entity {
                             return Err(ExecError::KeyNotFound(Key::Hash(contract_hash)));
                         }
@@ -1601,8 +1600,7 @@ where
                             maybe_system_entity_type,
                         )
                     }
-                    Some(_) => return Err(ExecError::UnexpectedStoredValueVariant),
-                    None => {
+                    Some(_) | None => {
                         if !self.context.engine_config().enable_entity {
                             return Err(ExecError::KeyNotFound(Key::Hash(hash_addr)));
                         }
@@ -2642,16 +2640,24 @@ where
                 // addressable entity format
                 let account_hash = self.context.get_initiator();
 
-                let (_package_key, access_key) = match self
+                let access_key = match self
                     .context
                     .read_gs(&Key::Hash(previous_entity.package_hash().value()))?
-                    .and_then(|stored_value| stored_value.into_cl_value())
                 {
+                    Some(StoredValue::ContractPackage(contract_package)) => {
+                        contract_package.access_key()
+                    }
+                    Some(StoredValue::CLValue(cl_value)) => {
+                        let (_key, uref) = cl_value
+                            .into_t::<(Key, URef)>()
+                            .map_err(ExecError::CLValue)?;
+                        uref
+                    }
+                    Some(_other) => return Err(ExecError::UnexpectedStoredValueVariant),
                     None => {
                         return Err(ExecError::UpgradeAuthorizationFailure);
                     }
-                    Some(cl_value) => cl_value.into_t::<(Key, URef)>().map_err(ExecError::CLValue),
-                }?;
+                };
 
                 let has_access = self.context.validate_uref(&access_key).is_ok();
 
