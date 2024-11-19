@@ -258,7 +258,7 @@ impl RewardsInfo {
                 let seigniorage_rate_request =
                     RoundSeigniorageRateRequest::new(state_root_hash, protocol_version);
                 let seigniorage_rate =
-                    match data_access_layer.round_seigniorage_rate(seignorate_rate_request) {
+                    match data_access_layer.round_seigniorage_rate(seigniorage_rate_request) {
                         RoundSeigniorageRateResult::RootNotFound
                         | RoundSeigniorageRateResult::MintNotFound
                         | RoundSeigniorageRateResult::ValueNotFound(_)
