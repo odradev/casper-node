@@ -164,6 +164,7 @@ mod tests {
 
         let execution_result = ExecutionResult::from(ExecutionResultV2::random(rng));
         let serialized = serde_json::to_string(&execution_result).unwrap();
+        println!("{:#}", serialized);
         let deserialized = serde_json::from_str(&serialized).unwrap();
         assert_eq!(execution_result, deserialized);
     }

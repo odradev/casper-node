@@ -1767,6 +1767,16 @@ mod tests {
         let encoded = entity_addr.to_formatted_string();
         let decoded = EntityAddr::from_formatted_str(&encoded).expect("must get entity addr");
         assert_eq!(decoded, entity_addr);
+
+        let entity_addr = EntityAddr::SmartContract([5; 32]);
+        let encoded = entity_addr.to_formatted_string();
+        let decoded = EntityAddr::from_formatted_str(&encoded).expect("must get entity addr");
+        assert_eq!(decoded, entity_addr);
+
+        let entity_addr = EntityAddr::System([5; 32]);
+        let encoded = entity_addr.to_formatted_string();
+        let decoded = EntityAddr::from_formatted_str(&encoded).expect("must get entity addr");
+        assert_eq!(decoded, entity_addr);
     }
 
     #[test]
