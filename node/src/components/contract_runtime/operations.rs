@@ -17,7 +17,7 @@ use casper_storage::{
         mint::BalanceIdentifierTransferArgs,
         AuctionMethod, BalanceHoldKind, BalanceHoldRequest, BalanceIdentifier, BalanceRequest,
         BiddingRequest, BlockGlobalRequest, BlockGlobalResult, BlockRewardsRequest,
-        BlockRewardsResult, DataAccessLayer, EntryPointsRequest, EntryPointsResult,
+        BlockRewardsResult, DataAccessLayer, EntryPointResult, EntryPointsRequest,
         EraValidatorsRequest, EraValidatorsResult, EvictItem, FeeRequest, FeeResult, FlushRequest,
         HandleFeeMode, HandleFeeRequest, HandleRefundMode, HandleRefundRequest,
         InsufficientBalanceHandling, ProofHandling, PruneRequest, PruneResult, StepRequest,
@@ -28,16 +28,14 @@ use casper_storage::{
         StateProvider, StateReader,
     },
     system::runtime_native::Config as NativeRuntimeConfig,
-    tracking_copy::TrackingCopyError,
 };
 use casper_types::{
     bytesrepr::{self, ToBytes, U32_SERIALIZED_LENGTH},
     execution::{Effects, ExecutionResult, TransformKindV2, TransformV2},
     system::handle_payment::ARG_AMOUNT,
     BlockHash, BlockHeader, BlockTime, BlockV2, CLValue, Chainspec, ChecksumRegistry, Digest,
-    EntityAddr, EntryPointAddr, EraEndV2, EraId, FeeHandling, Gas, InvalidTransaction,
-    InvalidTransactionV1, Key, ProtocolVersion, PublicKey, RefundHandling, Transaction,
-    AUCTION_LANE_ID, MINT_LANE_ID, U512,
+    EntityAddr, EraEndV2, EraId, FeeHandling, Gas, InvalidTransaction, InvalidTransactionV1, Key,
+    ProtocolVersion, PublicKey, RefundHandling, Transaction, AUCTION_LANE_ID, MINT_LANE_ID, U512,
 };
 
 use super::{
@@ -1251,19 +1249,13 @@ fn invoked_contract_will_pay(
         Some((hash_addr, entry_point_name)) => (hash_addr, entry_point_name),
     };
     let entity_addr = EntityAddr::new_smart_contract(hash_addr);
-    let entry_point_addr =
-        match EntryPointAddr::new_v1_entry_point_addr(entity_addr, &entry_point_name) {
-            Ok(addr) => addr,
-            Err(bre) => return Err(StateResultError::Failure(TrackingCopyError::BytesRepr(bre))),
-        };
-    let entry_point_key = Key::entry_point(entry_point_addr);
-    let entry_point_request = EntryPointsRequest::new(state_root_hash, entry_point_key);
+    let entry_point_request = EntryPointsRequest::new(state_root_hash, entry_point_name, hash_addr);
     let entry_point_response = state_provider.entry_point(entry_point_request);
     match entry_point_response {
-        EntryPointsResult::RootNotFound => Err(StateResultError::RootNotFound),
-        EntryPointsResult::ValueNotFound(msg) => Err(StateResultError::ValueNotFound(msg)),
-        EntryPointsResult::Failure(tce) => Err(StateResultError::Failure(tce)),
-        EntryPointsResult::Success { entry_point } => {
+        EntryPointResult::RootNotFound => Err(StateResultError::RootNotFound),
+        EntryPointResult::ValueNotFound(msg) => Err(StateResultError::ValueNotFound(msg)),
+        EntryPointResult::Failure(tce) => Err(StateResultError::Failure(tce)),
+        EntryPointResult::Success { entry_point } => {
             if entry_point.will_pay_direct_invocation() {
                 Ok(Some(entity_addr))
             } else {

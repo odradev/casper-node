@@ -36,8 +36,9 @@ use casper_types::{
         },
         AUCTION, HANDLE_PAYMENT, MINT,
     },
-    Account, AddressableEntity, BlockGlobalAddr, CLValue, Digest, EntityAddr, HoldsEpoch, Key,
-    KeyTag, Phase, PublicKey, RuntimeArgs, StoredValue, SystemHashRegistry, U512,
+    Account, AddressableEntity, BlockGlobalAddr, CLValue, Digest, EntityAddr, EntryPoint,
+    EntryPointAddr, EntryPointValue, HoldsEpoch, Key, KeyTag, Phase, PublicKey, RuntimeArgs,
+    StoredValue, SystemHashRegistry, U512,
 };
 
 #[cfg(test)]
@@ -59,7 +60,8 @@ use crate::{
         BalanceHoldKind, BalanceHoldMode, BalanceHoldRequest, BalanceHoldResult, BalanceIdentifier,
         BalanceRequest, BalanceResult, BidsRequest, BidsResult, BlockGlobalKind,
         BlockGlobalRequest, BlockGlobalResult, BlockRewardsError, BlockRewardsRequest,
-        BlockRewardsResult, EntryPointsRequest, EntryPointsResult, EraValidatorsRequest,
+        BlockRewardsResult, ContractRequest, ContractResult, EntryPointExistsResult,
+        EntryPointResult, EntryPointsRequest, EraValidatorsRequest,
         ExecutionResultsChecksumRequest, ExecutionResultsChecksumResult, FeeError, FeeRequest,
         FeeResult, FlushRequest, FlushResult, GenesisRequest, GenesisResult, HandleRefundMode,
         HandleRefundRequest, HandleRefundResult, InsufficientBalanceHandling, MessageTopicsRequest,
@@ -1885,24 +1887,91 @@ pub trait StateProvider: Send + Sync + Sized {
     }
 
     /// Gets an entry point value.
-    fn entry_point(&self, request: EntryPointsRequest) -> EntryPointsResult {
-        let state_hash = request.state_hash();
-        let query_request = QueryRequest::new(state_hash, request.key(), vec![]);
-
-        match self.query(query_request) {
-            QueryResult::RootNotFound => EntryPointsResult::RootNotFound,
-            QueryResult::ValueNotFound(msg) => EntryPointsResult::ValueNotFound(msg),
-            QueryResult::Failure(tce) => EntryPointsResult::Failure(tce),
-            QueryResult::Success { value, .. } => {
-                if let StoredValue::EntryPoint(entry_point_value) = *value {
-                    EntryPointsResult::Success {
-                        entry_point: entry_point_value,
+    fn entry_point(&self, request: EntryPointsRequest) -> EntryPointResult {
+        let state_root_hash = request.state_hash();
+        let contract_hash = request.contract_hash();
+        let entry_point_name = request.entry_point_name();
+        match EntryPointAddr::new_v1_entry_point_addr(
+            EntityAddr::SmartContract(contract_hash),
+            entry_point_name,
+        ) {
+            Ok(entry_point_addr) => {
+                let key = Key::EntryPoint(entry_point_addr);
+                let query_request = QueryRequest::new(request.state_hash(), key, vec![]);
+                //We first check if the entry point exists as a stand alone 2.x entity
+                match self.query(query_request) {
+                    QueryResult::RootNotFound => EntryPointResult::RootNotFound,
+                    QueryResult::ValueNotFound(query_result_not_found_msg) => {
+                        //If the entry point was not found as a 2.x entity, we check if it exists
+                        // as part of a 1.x contract
+                        let contract_key = Key::Hash(contract_hash);
+                        let contract_request = ContractRequest::new(state_root_hash, contract_key);
+                        match self.contract(contract_request) {
+                            ContractResult::Failure(tce) => EntryPointResult::Failure(tce),
+                            ContractResult::ValueNotFound(_) => {
+                                EntryPointResult::ValueNotFound(query_result_not_found_msg)
+                            }
+                            ContractResult::RootNotFound => EntryPointResult::RootNotFound,
+                            ContractResult::Success { contract } => {
+                                match contract.entry_points().get(entry_point_name) {
+                                    Some(contract_entry_point) => EntryPointResult::Success {
+                                        entry_point: EntryPointValue::V1CasperVm(EntryPoint::from(
+                                            contract_entry_point,
+                                        )),
+                                    },
+                                    None => {
+                                        EntryPointResult::ValueNotFound(query_result_not_found_msg)
+                                    }
+                                }
+                            }
+                        }
                     }
-                } else {
-                    error!("Expected to get entry point value received other variant");
-                    EntryPointsResult::Failure(TrackingCopyError::UnexpectedStoredValueVariant)
+                    QueryResult::Failure(tce) => EntryPointResult::Failure(tce),
+                    QueryResult::Success { value, .. } => {
+                        if let StoredValue::EntryPoint(entry_point) = *value {
+                            EntryPointResult::Success { entry_point }
+                        } else {
+                            error!("Expected to get entry point value received other variant");
+                            EntryPointResult::Failure(
+                                TrackingCopyError::UnexpectedStoredValueVariant,
+                            )
+                        }
+                    }
                 }
             }
+            Err(_) => EntryPointResult::Failure(
+                //TODO maybe we can have a better error type here
+                TrackingCopyError::ValueNotFound("Entry point not found".to_string()),
+            ),
+        }
+    }
+
+    /// Gets an contract value.
+    fn contract(&self, request: ContractRequest) -> ContractResult {
+        let query_request = QueryRequest::new(request.state_hash(), request.key(), vec![]);
+
+        match self.query(query_request) {
+            QueryResult::RootNotFound => ContractResult::RootNotFound,
+            QueryResult::ValueNotFound(msg) => ContractResult::ValueNotFound(msg),
+            QueryResult::Failure(tce) => ContractResult::Failure(tce),
+            QueryResult::Success { value, .. } => {
+                if let StoredValue::Contract(contract) = *value {
+                    ContractResult::Success { contract }
+                } else {
+                    error!("Expected to get contract value received other variant");
+                    ContractResult::Failure(TrackingCopyError::UnexpectedStoredValueVariant)
+                }
+            }
+        }
+    }
+
+    /// Gets an entry point value.
+    fn entry_point_exists(&self, request: EntryPointsRequest) -> EntryPointExistsResult {
+        match self.entry_point(request) {
+            EntryPointResult::RootNotFound => EntryPointExistsResult::RootNotFound,
+            EntryPointResult::ValueNotFound(msg) => EntryPointExistsResult::ValueNotFound(msg),
+            EntryPointResult::Success { .. } => EntryPointExistsResult::Success,
+            EntryPointResult::Failure(error) => EntryPointExistsResult::Failure(error),
         }
     }
 

@@ -452,9 +452,10 @@ impl ContractRuntime {
                 }
                 .ignore()
             }
-            ContractRuntimeRequest::GetEntryPoint {
+            ContractRuntimeRequest::GetEntryPointExists {
                 state_root_hash,
-                key,
+                contract_hash,
+                entry_point_name,
                 responder,
             } => {
                 trace!(?state_root_hash, "get entry point");
@@ -462,8 +463,9 @@ impl ContractRuntime {
                 let data_access_layer = Arc::clone(&self.data_access_layer);
                 async move {
                     let start = Instant::now();
-                    let request = EntryPointsRequest::new(state_root_hash, key);
-                    let result = data_access_layer.entry_point(request);
+                    let request =
+                        EntryPointsRequest::new(state_root_hash, entry_point_name, contract_hash);
+                    let result = data_access_layer.entry_point_exists(request);
                     metrics.entry_points.observe(start.elapsed().as_secs_f64());
                     trace!(?result, "get addressable entity");
                     responder.respond(result).await
