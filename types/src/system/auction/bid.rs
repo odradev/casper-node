@@ -432,7 +432,7 @@ mod tests {
 
     use crate::{
         bytesrepr,
-        system::auction::{bid::VestingSchedule, Bid, DelegationRate, Delegator},
+        system::auction::{bid::VestingSchedule, Bid, DelegationRate, DelegatorBid},
         AccessRights, PublicKey, SecretKey, URef, U512,
     };
 
@@ -507,16 +507,16 @@ mod tests {
         let delegator_2_bonding_purse = URef::new([62; 32], AccessRights::ADD);
         let delegator_2_staked_amount = U512::from(3000);
 
-        let delegator_1 = Delegator::locked(
-            delegator_1_pk.clone(),
+        let delegator_1 = DelegatorBid::locked(
+            delegator_1_pk.clone().into(),
             delegator_1_staked_amount,
             delegator_1_bonding_purse,
             validator_pk.clone(),
             delegator_1_release_timestamp,
         );
 
-        let delegator_2 = Delegator::locked(
-            delegator_2_pk.clone(),
+        let delegator_2 = DelegatorBid::locked(
+            delegator_2_pk.clone().into(),
             delegator_2_staked_amount,
             delegator_2_bonding_purse,
             validator_pk.clone(),
@@ -539,8 +539,8 @@ mod tests {
         {
             let delegators = bid.delegators_mut();
 
-            delegators.insert(delegator_1_pk.clone(), delegator_1);
-            delegators.insert(delegator_2_pk.clone(), delegator_2);
+            delegators.insert(delegator_1_pk.clone().into(), delegator_1);
+            delegators.insert(delegator_2_pk.clone().into(), delegator_2);
         }
 
         assert!(bid.process_with_vesting_schedule(
@@ -550,7 +550,7 @@ mod tests {
 
         let delegator_1_updated_1 = bid
             .delegators()
-            .get(&delegator_1_pk.clone())
+            .get(&delegator_1_pk.clone().into())
             .cloned()
             .unwrap();
         assert!(delegator_1_updated_1
@@ -561,7 +561,7 @@ mod tests {
 
         let delegator_2_updated_1 = bid
             .delegators()
-            .get(&delegator_2_pk.clone())
+            .get(&delegator_2_pk.clone().into())
             .cloned()
             .unwrap();
         assert!(delegator_2_updated_1
@@ -577,7 +577,7 @@ mod tests {
 
         let delegator_1_updated_2 = bid
             .delegators()
-            .get(&delegator_1_pk.clone())
+            .get(&delegator_1_pk.clone().into())
             .cloned()
             .unwrap();
         assert!(delegator_1_updated_2
@@ -590,7 +590,7 @@ mod tests {
 
         let delegator_2_updated_2 = bid
             .delegators()
-            .get(&delegator_2_pk.clone())
+            .get(&delegator_2_pk.clone().into())
             .cloned()
             .unwrap();
         assert!(delegator_2_updated_2
