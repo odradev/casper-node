@@ -91,10 +91,8 @@ where
         }
     }
 
-    fn get_main_purse(&self) -> URef {
-        self.runtime_footprint()
-            .main_purse()
-            .expect("tried to get main purse")
+    fn get_main_purse(&self) -> Option<URef> {
+        self.runtime_footprint().main_purse()
     }
 
     fn is_administrator(&self, account_hash: &AccountHash) -> bool {

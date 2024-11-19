@@ -159,6 +159,16 @@ pub enum Error {
     /// # use casper_types::system::mint::Error;
     /// assert_eq!(23, Error::ForgedReference as u8);
     ForgedReference = 23,
+    /// Available balance can never be greater than total balance.
+    /// ```
+    /// # use casper_types::system::mint::Error;
+    /// assert_eq!(24, Error::InconsistentBalances as u8);
+    InconsistentBalances = 24,
+    /// Unable to get the system registry.
+    /// ```
+    /// # use casper_types::system::mint::Error;
+    /// assert_eq!(25, Error::UnableToGetSystemRegistry as u8);
+    UnableToGetSystemRegistry = 25,
 
     #[cfg(test)]
     #[doc(hidden)]
@@ -216,6 +226,10 @@ impl TryFrom<u8> for Error {
                 Ok(Error::DisabledUnrestrictedTransfers)
             }
             d if d == Error::ForgedReference as u8 => Ok(Error::ForgedReference),
+            d if d == Error::InconsistentBalances as u8 => Ok(Error::InconsistentBalances),
+            d if d == Error::UnableToGetSystemRegistry as u8 => {
+                Ok(Error::UnableToGetSystemRegistry)
+            }
             _ => Err(TryFromU8ForError(())),
         }
     }
@@ -277,6 +291,12 @@ impl Display for Error {
                 formatter.write_str("Disabled unrestricted transfers")
             }
             Error::ForgedReference => formatter.write_str("Forged reference"),
+            Error::InconsistentBalances => {
+                formatter.write_str("Available balance can never be greater than total balance")
+            }
+            Error::UnableToGetSystemRegistry => {
+                formatter.write_str("Unable to get the system registry")
+            }
             #[cfg(test)]
             Error::Sentinel => formatter.write_str("Sentinel error"),
         }

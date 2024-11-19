@@ -453,7 +453,7 @@ impl Display for Error {
             Error::ReservationNotFound => formatter.write_str("Reservation not found"),
             Error::ExceededReservationSlotsLimit => formatter.write_str("Validator exceeded allowed number of reserved delegator slots"),
             Error::ExceededReservationsLimit => formatter.write_str("All reserved slots for validator are already occupied"),
-            Error::ReservationSlotsCountTooSmall => formatter.write_str("Reserved slots count is less than number of existing reservations")
+            Error::ReservationSlotsCountTooSmall => formatter.write_str("Reserved slots count is less than number of existing reservations"),
         }
     }
 }

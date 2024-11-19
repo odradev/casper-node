@@ -37,7 +37,7 @@ pub trait RuntimeProvider {
     fn sub_approved_spending_limit(&mut self, amount: U512);
 
     /// Returns main purse of the sender account.
-    fn get_main_purse(&self) -> URef;
+    fn get_main_purse(&self) -> Option<URef>;
 
     /// Returns `true` if the account hash belongs to an administrator account, otherwise `false`.
     fn is_administrator(&self, account_hash: &AccountHash) -> bool;
