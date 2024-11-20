@@ -5,12 +5,11 @@ use std::{
 
 use criterion::{black_box, criterion_group, criterion_main, Bencher, Criterion};
 
-use casper_types::system::auction::DelegatorBid;
 use casper_types::{
     account::AccountHash,
     addressable_entity::{ActionThresholds, AddressableEntity, AssociatedKeys, EntityKind},
     bytesrepr::{self, Bytes, FromBytes, ToBytes},
-    system::auction::{Bid, DelegatorKind, EraInfo, SeigniorageAllocation},
+    system::auction::{Bid, DelegatorBid, DelegatorKind, EraInfo, SeigniorageAllocation},
     AccessRights, AddressableEntityHash, ByteCodeHash, CLTyped, CLValue, DeployHash, DeployInfo,
     EntityVersionKey, EntityVersions, Gas, Group, Groups, InitiatorAddr, Key, Package, PackageHash,
     PackageStatus, ProtocolVersion, PublicKey, SecretKey, TransactionHash, TransactionRuntime,
