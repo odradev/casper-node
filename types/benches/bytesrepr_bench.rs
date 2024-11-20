@@ -5,11 +5,12 @@ use std::{
 
 use criterion::{black_box, criterion_group, criterion_main, Bencher, Criterion};
 
+use casper_types::system::auction::DelegatorBid;
 use casper_types::{
     account::AccountHash,
     addressable_entity::{ActionThresholds, AddressableEntity, AssociatedKeys, EntityKind},
     bytesrepr::{self, Bytes, FromBytes, ToBytes},
-    system::auction::{Bid, Delegator, DelegatorKind, EraInfo, SeigniorageAllocation},
+    system::auction::{Bid, DelegatorKind, EraInfo, SeigniorageAllocation},
     AccessRights, AddressableEntityHash, ByteCodeHash, CLTyped, CLValue, DeployHash, DeployInfo,
     EntityVersionKey, EntityVersions, Gas, Group, Groups, InitiatorAddr, Key, Package, PackageHash,
     PackageStatus, ProtocolVersion, PublicKey, SecretKey, TransactionHash, TransactionRuntime,
@@ -544,14 +545,19 @@ fn u32_to_pk(i: u32) -> PublicKey {
     PublicKey::from(&sk)
 }
 
-fn sample_delegators(delegators_len: u32) -> Vec<Delegator> {
+fn sample_delegators(delegators_len: u32) -> Vec<DelegatorBid> {
     (0..delegators_len)
         .map(|i| {
             let delegator_pk = u32_to_pk(i);
             let staked_amount = U512::from_dec_str("123123123123123").unwrap();
             let bonding_purse = URef::default();
             let validator_pk = u32_to_pk(i);
-            Delegator::unlocked(delegator_pk, staked_amount, bonding_purse, validator_pk)
+            DelegatorBid::unlocked(
+                delegator_pk.into(),
+                staked_amount,
+                bonding_purse,
+                validator_pk,
+            )
         })
         .collect()
 }
@@ -572,7 +578,7 @@ fn sample_bid(delegators_len: u32) -> Bid {
     let curr_delegators = bid.delegators_mut();
     for delegator in new_delegators.into_iter() {
         assert!(curr_delegators
-            .insert(delegator.delegator_public_key().clone(), delegator)
+            .insert(delegator.delegator_kind().clone(), delegator)
             .is_none());
     }
     bid
