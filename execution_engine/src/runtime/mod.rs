@@ -8,7 +8,7 @@ mod host_function_flag;
 mod mint_internal;
 pub mod stack;
 mod utils;
-mod wasm_prep;
+pub(crate) mod wasm_prep;
 
 use std::{
     cmp,
@@ -71,8 +71,9 @@ use crate::{
 };
 pub use stack::{RuntimeStack, RuntimeStackFrame, RuntimeStackOverflow};
 pub use wasm_prep::{
-    PreprocessingError, WasmValidationError, DEFAULT_BR_TABLE_MAX_SIZE, DEFAULT_MAX_GLOBALS,
-    DEFAULT_MAX_PARAMETER_COUNT, DEFAULT_MAX_TABLE_SIZE,
+    cycles_for_instruction, preprocess, PreprocessingError, WasmValidationError,
+    DEFAULT_BR_TABLE_MAX_SIZE, DEFAULT_MAX_GLOBALS, DEFAULT_MAX_PARAMETER_COUNT,
+    DEFAULT_MAX_TABLE_SIZE,
 };
 
 #[derive(Debug)]
@@ -1274,7 +1275,7 @@ where
         let wasm_config = engine_config.wasm_config();
         #[cfg(feature = "test-support")]
         let max_stack_height = wasm_config.v1().max_stack_height();
-        let module = wasm_prep::preprocess(*wasm_config, module_bytes)?;
+        let module = preprocess(*wasm_config, module_bytes)?;
         let (instance, memory) =
             utils::instance_and_memory(module.clone(), protocol_version, engine_config)?;
         self.memory = Some(memory);
