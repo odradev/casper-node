@@ -31,7 +31,7 @@ use rand::{
 #[cfg(feature = "json-schema")]
 use schemars::JsonSchema;
 use serde::{de::Error as SerdeError, Deserialize, Deserializer, Serialize, Serializer};
-use tracing::warn;
+use tracing::{error, warn};
 
 use crate::{
     account::{AccountHash, ACCOUNT_HASH_LENGTH},
@@ -1585,7 +1585,16 @@ impl ToBytes for Key {
 
 impl FromBytes for Key {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (tag, remainder) = KeyTag::from_bytes(bytes)?;
+        if bytes.is_empty() {
+            error!("FromBytes for Key: bytes length should not be 0");
+        }
+        let (tag, remainder) = match KeyTag::from_bytes(bytes) {
+            Ok((tag, rem)) => (tag, rem),
+            Err(err) => {
+                error!(%err, "FromBytes for Key");
+                return Err(err);
+            }
+        };
         match tag {
             KeyTag::Account => {
                 let (account_hash, rem) = AccountHash::from_bytes(remainder)?;

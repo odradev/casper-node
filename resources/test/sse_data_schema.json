@@ -2392,15 +2392,15 @@
               "type": "object",
               "required": [
                 "amount",
-                "delegator_public_key",
+                "delegator_kind",
                 "validator_public_key"
               ],
               "properties": {
-                "delegator_public_key": {
+                "delegator_kind": {
                   "description": "Delegator's public key",
                   "allOf": [
                     {
-                      "$ref": "#/definitions/PublicKey"
+                      "$ref": "#/definitions/DelegatorKind"
                     }
                   ]
                 },
@@ -2422,6 +2422,44 @@
                 }
               },
               "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "DelegatorKind": {
+      "description": "Auction bid variants. Kinds of delegation bids.",
+      "oneOf": [
+        {
+          "description": "Delegation from public key.",
+          "type": "object",
+          "required": [
+            "PublicKey"
+          ],
+          "properties": {
+            "PublicKey": {
+              "$ref": "#/definitions/PublicKey"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Delegation from purse.",
+          "type": "object",
+          "required": [
+            "Purse"
+          ],
+          "properties": {
+            "Purse": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint8",
+                "minimum": 0.0
+              },
+              "maxItems": 32,
+              "minItems": 32
             }
           },
           "additionalProperties": false
@@ -2565,7 +2603,7 @@
           ]
         },
         "delegators": {
-          "description": "This validator's delegators, indexed by their public keys.",
+          "description": "This validator's delegators, indexed by their kind.",
           "allOf": [
             {
               "$ref": "#/definitions/Array_of_PublicKeyAndDelegator"
@@ -2622,7 +2660,7 @@
           "description": "The public key of the delegator.",
           "allOf": [
             {
-              "$ref": "#/definitions/PublicKey"
+              "$ref": "#/definitions/DelegatorKind"
             }
           ]
         },
@@ -2630,24 +2668,24 @@
           "description": "The delegator details.",
           "allOf": [
             {
-              "$ref": "#/definitions/Delegator"
+              "$ref": "#/definitions/DelegatorBid"
             }
           ]
         }
       }
     },
-    "Delegator": {
+    "DelegatorBid": {
       "description": "Represents a party delegating their stake to a validator (or \"delegatee\")",
       "type": "object",
       "required": [
         "bonding_purse",
-        "delegator_public_key",
+        "delegator_kind",
         "staked_amount",
         "validator_public_key"
       ],
       "properties": {
-        "delegator_public_key": {
-          "$ref": "#/definitions/PublicKey"
+        "delegator_kind": {
+          "$ref": "#/definitions/DelegatorKind"
         },
         "staked_amount": {
           "$ref": "#/definitions/U512"
@@ -2862,7 +2900,7 @@
           ],
           "properties": {
             "Delegator": {
-              "$ref": "#/definitions/Delegator"
+              "$ref": "#/definitions/DelegatorBid"
             }
           },
           "additionalProperties": false
@@ -2902,6 +2940,19 @@
           "properties": {
             "Reservation": {
               "$ref": "#/definitions/Reservation"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Unbond",
+          "type": "object",
+          "required": [
+            "Unbond"
+          ],
+          "properties": {
+            "Unbond": {
+              "$ref": "#/definitions/Unbond"
             }
           },
           "additionalProperties": false
@@ -3065,20 +3116,20 @@
       "type": "object",
       "required": [
         "delegation_rate",
-        "delegator_public_key",
+        "delegator_kind",
         "validator_public_key"
       ],
       "properties": {
-        "delegator_public_key": {
-          "description": "Delegator public key",
+        "delegator_kind": {
+          "description": "Delegator kind.",
           "allOf": [
             {
-              "$ref": "#/definitions/PublicKey"
+              "$ref": "#/definitions/DelegatorKind"
             }
           ]
         },
         "validator_public_key": {
-          "description": "Validator public key",
+          "description": "Validator public key.",
           "allOf": [
             {
               "$ref": "#/definitions/PublicKey"
@@ -3086,10 +3137,139 @@
           ]
         },
         "delegation_rate": {
-          "description": "Individual delegation rate",
+          "description": "Individual delegation rate.",
           "type": "integer",
           "format": "uint8",
           "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "Unbond": {
+      "type": "object",
+      "required": [
+        "eras",
+        "unbond_kind",
+        "validator_public_key"
+      ],
+      "properties": {
+        "validator_public_key": {
+          "description": "Validators public key.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/PublicKey"
+            }
+          ]
+        },
+        "unbond_kind": {
+          "description": "Unbond kind.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/UnbondKind"
+            }
+          ]
+        },
+        "eras": {
+          "description": "Unbond amounts per era.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/UnbondEra"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "UnbondKind": {
+      "description": "Unbond variants.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "Validator"
+          ],
+          "properties": {
+            "Validator": {
+              "$ref": "#/definitions/PublicKey"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "DelegatedPublicKey"
+          ],
+          "properties": {
+            "DelegatedPublicKey": {
+              "$ref": "#/definitions/PublicKey"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "DelegatedPurse"
+          ],
+          "properties": {
+            "DelegatedPurse": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint8",
+                "minimum": 0.0
+              },
+              "maxItems": 32,
+              "minItems": 32
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "UnbondEra": {
+      "description": "Unbond amounts per era.",
+      "type": "object",
+      "required": [
+        "amount",
+        "bonding_purse",
+        "era_of_creation"
+      ],
+      "properties": {
+        "bonding_purse": {
+          "description": "Bonding Purse",
+          "allOf": [
+            {
+              "$ref": "#/definitions/URef"
+            }
+          ]
+        },
+        "era_of_creation": {
+          "description": "Era in which this unbonding request was created.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/EraId"
+            }
+          ]
+        },
+        "amount": {
+          "description": "Unbonding Amount.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/U512"
+            }
+          ]
+        },
+        "new_validator": {
+          "description": "The validator public key to re-delegate to.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PublicKey"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false

@@ -342,16 +342,7 @@ impl BidAddr {
             | BidAddr::UnbondPurse { .. } => None,
             BidAddr::DelegatedAccount { delegator, .. }
             | BidAddr::ReservedDelegationAccount { delegator, .. } => Some(*delegator),
-            BidAddr::UnbondAccount {
-                validator,
-                unbonder,
-            } => {
-                if validator == unbonder {
-                    Some(*validator)
-                } else {
-                    None
-                }
-            }
+            BidAddr::UnbondAccount { unbonder, .. } => Some(*unbonder),
         }
     }
 
@@ -529,6 +520,28 @@ impl FromBytes for BidAddr {
                     BidAddr::ReservedDelegationPurse {
                         validator,
                         delegator,
+                    },
+                    remainder,
+                ))
+            }
+            tag if tag == BidAddrTag::UnbondAccount as u8 => {
+                let (validator, remainder) = AccountHash::from_bytes(remainder)?;
+                let (unbonder, remainder) = AccountHash::from_bytes(remainder)?;
+                Ok((
+                    BidAddr::UnbondAccount {
+                        validator,
+                        unbonder,
+                    },
+                    remainder,
+                ))
+            }
+            tag if tag == BidAddrTag::UnbondPurse as u8 => {
+                let (validator, remainder) = AccountHash::from_bytes(remainder)?;
+                let (unbonder, remainder) = URefAddr::from_bytes(remainder)?;
+                Ok((
+                    BidAddr::UnbondPurse {
+                        validator,
+                        unbonder,
                     },
                     remainder,
                 ))

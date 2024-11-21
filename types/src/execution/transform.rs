@@ -5,6 +5,7 @@ use datasize::DataSize;
 #[cfg(feature = "json-schema")]
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use tracing::error;
 
 use super::TransformKindV2;
 use crate::{
@@ -45,11 +46,6 @@ impl TransformV2 {
 }
 
 impl ToBytes for TransformV2 {
-    fn write_bytes(&self, writer: &mut Vec<u8>) -> Result<(), bytesrepr::Error> {
-        self.key.write_bytes(writer)?;
-        self.kind.write_bytes(writer)
-    }
-
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let mut buffer = bytesrepr::allocate_buffer(self)?;
         self.write_bytes(&mut buffer)?;
@@ -59,12 +55,34 @@ impl ToBytes for TransformV2 {
     fn serialized_length(&self) -> usize {
         self.key.serialized_length() + self.kind.serialized_length()
     }
+
+    fn write_bytes(&self, writer: &mut Vec<u8>) -> Result<(), bytesrepr::Error> {
+        self.key.write_bytes(writer)?;
+        if let Err(err) = self.kind.write_bytes(writer) {
+            error!(%err, "ToBytes for TransformV2");
+            Err(err)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl FromBytes for TransformV2 {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
-        let (key, remainder) = Key::from_bytes(bytes)?;
-        let (transform, remainder) = TransformKindV2::from_bytes(remainder)?;
+        let (key, remainder) = match Key::from_bytes(bytes) {
+            Ok((k, rem)) => (k, rem),
+            Err(err) => {
+                error!(%err, "FromBytes for TransformV2: key");
+                return Err(err);
+            }
+        };
+        let (transform, remainder) = match TransformKindV2::from_bytes(remainder) {
+            Ok((tk, rem)) => (tk, rem),
+            Err(err) => {
+                error!(%err, "FromBytes for TransformV2: transform");
+                return Err(err);
+            }
+        };
         let transform_entry = TransformV2 {
             key,
             kind: transform,

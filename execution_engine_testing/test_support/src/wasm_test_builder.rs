@@ -1751,7 +1751,7 @@ where
             .expect("should have named keys")
     }
 
-    /// Gets [`Vec<Unbond>`].
+    /// Gets [`BTreeMap<UnbondKind, Unbond>`].
     pub fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Unbond> {
         let state_root_hash = self.get_post_state_hash();
 
