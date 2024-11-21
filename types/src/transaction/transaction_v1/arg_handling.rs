@@ -50,19 +50,14 @@ const REDELEGATE_ARG_NEW_VALIDATOR: RequiredArg<PublicKey> = RequiredArg::new("n
 #[cfg(any(all(feature = "std", feature = "testing"), test))]
 const ACTIVATE_BID_ARG_VALIDATOR: RequiredArg<PublicKey> = RequiredArg::new(ARG_VALIDATOR);
 
-#[cfg(any(all(feature = "std", feature = "testing"), test))]
 const CHANGE_BID_PUBLIC_KEY_ARG_PUBLIC_KEY: RequiredArg<PublicKey> = RequiredArg::new("public_key");
-#[cfg(any(all(feature = "std", feature = "testing"), test))]
 const CHANGE_BID_PUBLIC_KEY_ARG_NEW_PUBLIC_KEY: RequiredArg<PublicKey> =
     RequiredArg::new("new_public_key");
 
-#[cfg(any(all(feature = "std", feature = "testing"), test))]
 const ADD_RESERVATIONS_ARG_RESERVATIONS: RequiredArg<Vec<Reservation>> =
     RequiredArg::new("reservations");
 
-#[cfg(any(all(feature = "std", feature = "testing"), test))]
 const CANCEL_RESERVATIONS_ARG_VALIDATOR: RequiredArg<PublicKey> = RequiredArg::new("validator");
-#[cfg(any(all(feature = "std", feature = "testing"), test))]
 const CANCEL_RESERVATIONS_ARG_DELEGATORS: RequiredArg<Vec<PublicKey>> =
     RequiredArg::new("delegators");
 
