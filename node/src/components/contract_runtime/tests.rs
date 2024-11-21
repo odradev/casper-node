@@ -405,7 +405,7 @@ mod test_mod {
     use tempfile::tempdir;
 
     use casper_storage::{
-        data_access_layer::{EntryPointExistsResult, EntryPointsRequest},
+        data_access_layer::{EntryPointExistsRequest, EntryPointExistsResult},
         global_state::{
             state::{CommitProvider, StateProvider},
             trie::Trie,
@@ -605,7 +605,8 @@ mod test_mod {
             ProtocolVersion::V2_0_0,
         );
         let (contract_runtime, state_hash) = create_test_state(rng, initial_state);
-        let request = EntryPointsRequest::new(state_hash, entry_point_name.to_string(), hash_addr);
+        let request =
+            EntryPointExistsRequest::new(state_hash, entry_point_name.to_string(), hash_addr);
         let res = contract_runtime
             .data_access_layer()
             .entry_point_exists(request);
@@ -620,7 +621,8 @@ mod test_mod {
         let entry_point_name = "ep1";
         let initial_state = create_entry_point(entity_addr, entry_point_name);
         let (contract_runtime, state_hash) = create_test_state(rng, initial_state);
-        let request = EntryPointsRequest::new(state_hash, entry_point_name.to_string(), hash_addr);
+        let request =
+            EntryPointExistsRequest::new(state_hash, entry_point_name.to_string(), hash_addr);
         let res = contract_runtime
             .data_access_layer()
             .entry_point_exists(request);
@@ -634,7 +636,7 @@ mod test_mod {
         let entity_addr = EntityAddr::new_smart_contract(hash_addr);
         let initial_state = create_entry_point(entity_addr, "ep1");
         let (contract_runtime, state_hash) = create_test_state(rng, initial_state);
-        let request = EntryPointsRequest::new(state_hash, "ep2".to_string(), hash_addr);
+        let request = EntryPointExistsRequest::new(state_hash, "ep2".to_string(), hash_addr);
         let res = contract_runtime
             .data_access_layer()
             .entry_point_exists(request);

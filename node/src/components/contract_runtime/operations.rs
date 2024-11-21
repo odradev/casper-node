@@ -17,7 +17,7 @@ use casper_storage::{
         mint::BalanceIdentifierTransferArgs,
         AuctionMethod, BalanceHoldKind, BalanceHoldRequest, BalanceIdentifier, BalanceRequest,
         BiddingRequest, BlockGlobalRequest, BlockGlobalResult, BlockRewardsRequest,
-        BlockRewardsResult, DataAccessLayer, EntryPointResult, EntryPointsRequest,
+        BlockRewardsResult, DataAccessLayer, EntryPointRequest, EntryPointResult,
         EraValidatorsRequest, EraValidatorsResult, EvictItem, FeeRequest, FeeResult, FlushRequest,
         HandleFeeMode, HandleFeeRequest, HandleRefundMode, HandleRefundRequest,
         InsufficientBalanceHandling, ProofHandling, PruneRequest, PruneResult, StepRequest,
@@ -1249,7 +1249,7 @@ fn invoked_contract_will_pay(
         Some((hash_addr, entry_point_name)) => (hash_addr, entry_point_name),
     };
     let entity_addr = EntityAddr::new_smart_contract(hash_addr);
-    let entry_point_request = EntryPointsRequest::new(state_root_hash, entry_point_name, hash_addr);
+    let entry_point_request = EntryPointRequest::new(state_root_hash, entry_point_name, hash_addr);
     let entry_point_response = state_provider.entry_point(entry_point_request);
     match entry_point_response {
         EntryPointResult::RootNotFound => Err(StateResultError::RootNotFound),

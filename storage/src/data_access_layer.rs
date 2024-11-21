@@ -66,7 +66,9 @@ pub use bids::{BidsRequest, BidsResult};
 pub use block_global::{BlockGlobalKind, BlockGlobalRequest, BlockGlobalResult};
 pub use block_rewards::{BlockRewardsError, BlockRewardsRequest, BlockRewardsResult};
 pub use contract::{ContractRequest, ContractResult};
-pub use entry_points::{EntryPointExistsResult, EntryPointResult, EntryPointsRequest};
+pub use entry_points::{
+    EntryPointExistsRequest, EntryPointExistsResult, EntryPointRequest, EntryPointResult,
+};
 pub use era_validators::{EraValidatorsRequest, EraValidatorsResult};
 pub use execution_results_checksum::{
     ExecutionResultsChecksumRequest, ExecutionResultsChecksumResult,

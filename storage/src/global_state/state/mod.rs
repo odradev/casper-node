@@ -60,8 +60,8 @@ use crate::{
         BalanceHoldKind, BalanceHoldMode, BalanceHoldRequest, BalanceHoldResult, BalanceIdentifier,
         BalanceRequest, BalanceResult, BidsRequest, BidsResult, BlockGlobalKind,
         BlockGlobalRequest, BlockGlobalResult, BlockRewardsError, BlockRewardsRequest,
-        BlockRewardsResult, ContractRequest, ContractResult, EntryPointExistsResult,
-        EntryPointResult, EntryPointsRequest, EraValidatorsRequest,
+        BlockRewardsResult, ContractRequest, ContractResult, EntryPointExistsRequest,
+        EntryPointExistsResult, EntryPointRequest, EntryPointResult, EraValidatorsRequest,
         ExecutionResultsChecksumRequest, ExecutionResultsChecksumResult, FeeError, FeeRequest,
         FeeResult, FlushRequest, FlushResult, GenesisRequest, GenesisResult, HandleRefundMode,
         HandleRefundRequest, HandleRefundResult, InsufficientBalanceHandling, MessageTopicsRequest,
@@ -1887,7 +1887,7 @@ pub trait StateProvider: Send + Sync + Sized {
     }
 
     /// Gets an entry point value.
-    fn entry_point(&self, request: EntryPointsRequest) -> EntryPointResult {
+    fn entry_point(&self, request: EntryPointRequest) -> EntryPointResult {
         let state_root_hash = request.state_hash();
         let contract_hash = request.contract_hash();
         let entry_point_name = request.entry_point_name();
@@ -1966,8 +1966,8 @@ pub trait StateProvider: Send + Sync + Sized {
     }
 
     /// Gets an entry point value.
-    fn entry_point_exists(&self, request: EntryPointsRequest) -> EntryPointExistsResult {
-        match self.entry_point(request) {
+    fn entry_point_exists(&self, request: EntryPointExistsRequest) -> EntryPointExistsResult {
+        match self.entry_point(request.into()) {
             EntryPointResult::RootNotFound => EntryPointExistsResult::RootNotFound,
             EntryPointResult::ValueNotFound(msg) => EntryPointExistsResult::ValueNotFound(msg),
             EntryPointResult::Success { .. } => EntryPointExistsResult::Success,

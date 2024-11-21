@@ -32,7 +32,7 @@ use casper_execution_engine::engine_state::{EngineConfigBuilder, ExecutionEngine
 use casper_storage::{
     data_access_layer::{
         AddressableEntityRequest, AddressableEntityResult, BlockStore, DataAccessLayer,
-        EntryPointsRequest, ExecutionResultsChecksumRequest, FlushRequest, FlushResult,
+        EntryPointExistsRequest, ExecutionResultsChecksumRequest, FlushRequest, FlushResult,
         GenesisRequest, GenesisResult, TrieRequest,
     },
     global_state::{
@@ -463,8 +463,11 @@ impl ContractRuntime {
                 let data_access_layer = Arc::clone(&self.data_access_layer);
                 async move {
                     let start = Instant::now();
-                    let request =
-                        EntryPointsRequest::new(state_root_hash, entry_point_name, contract_hash);
+                    let request = EntryPointExistsRequest::new(
+                        state_root_hash,
+                        entry_point_name,
+                        contract_hash,
+                    );
                     let result = data_access_layer.entry_point_exists(request);
                     metrics.entry_points.observe(start.elapsed().as_secs_f64());
                     trace!(?result, "get addressable entity");
