@@ -2931,8 +2931,9 @@ async fn add_and_withdraw_bid_transaction() {
             PublicKey::from(&**BOB_SECRET_KEY),
             0,
             bid_amount,
-            test.chainspec().core_config.minimum_delegation_amount,
-            test.chainspec().core_config.maximum_delegation_amount,
+            None,
+            None,
+            None,
         )
         .unwrap()
         .with_chain_name(CHAIN_NAME)
@@ -3090,18 +3091,12 @@ async fn insufficient_funds_add_bid() {
     let bid_amount = bob_initial_balance.total;
 
     let mut txn = Transaction::from(
-        TransactionV1Builder::new_add_bid(
-            BOB_PUBLIC_KEY.clone(),
-            0,
-            bid_amount,
-            test.chainspec().core_config.minimum_delegation_amount,
-            test.chainspec().core_config.maximum_delegation_amount,
-        )
-        .unwrap()
-        .with_chain_name(CHAIN_NAME)
-        .with_initiator_addr(PublicKey::from(&**BOB_SECRET_KEY))
-        .build()
-        .unwrap(),
+        TransactionV1Builder::new_add_bid(BOB_PUBLIC_KEY.clone(), 0, bid_amount, None, None, None)
+            .unwrap()
+            .with_chain_name(CHAIN_NAME)
+            .with_initiator_addr(PublicKey::from(&**BOB_SECRET_KEY))
+            .build()
+            .unwrap(),
     );
     txn.sign(&BOB_SECRET_KEY);
 
