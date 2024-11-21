@@ -62,6 +62,8 @@ pub enum AuctionMethod {
         /// The minimum bid amount a validator must submit to have
         /// their bid considered as valid.
         minimum_bid_amount: u64,
+        /// Number of delegator slots which can be reserved for specific delegators
+        reserved_slots: u32,
     },
     /// Withdraw bid.
     WithdrawBid {
@@ -188,6 +190,8 @@ impl AuctionMethod {
         let maximum_delegation_amount =
             Self::get_named_argument(runtime_args, auction::ARG_MAXIMUM_DELEGATION_AMOUNT)
                 .unwrap_or(global_maximum_delegation);
+        let reserved_slots =
+            Self::get_named_argument(runtime_args, auction::ARG_RESERVED_SLOTS).unwrap_or(0);
 
         Ok(Self::AddBid {
             public_key,
@@ -196,6 +200,7 @@ impl AuctionMethod {
             minimum_delegation_amount,
             maximum_delegation_amount,
             minimum_bid_amount: global_minimum_bid_amount,
+            reserved_slots,
         })
     }
 
