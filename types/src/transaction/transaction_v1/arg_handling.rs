@@ -25,10 +25,11 @@ const TRANSFER_ARG_ID: OptionalArg<u64> = OptionalArg::new("id");
 const ADD_BID_ARG_PUBLIC_KEY: RequiredArg<PublicKey> = RequiredArg::new("public_key");
 const ADD_BID_ARG_DELEGATION_RATE: RequiredArg<u8> = RequiredArg::new("delegation_rate");
 const ADD_BID_ARG_AMOUNT: RequiredArg<U512> = RequiredArg::new("amount");
-const ADD_BID_ARG_MINIMUM_DELEGATION_AMOUNT: RequiredArg<u64> =
-    RequiredArg::new("minimum_delegation_amount");
-const ADD_BID_ARG_MAXIMUM_DELEGATION_AMOUNT: RequiredArg<u64> =
-    RequiredArg::new("maximum_delegation_amount");
+const ADD_BID_ARG_MINIMUM_DELEGATION_AMOUNT: OptionalArg<u64> =
+    OptionalArg::new("minimum_delegation_amount");
+const ADD_BID_ARG_MAXIMUM_DELEGATION_AMOUNT: OptionalArg<u64> =
+    OptionalArg::new("maximum_delegation_amount");
+const ADD_BID_ARG_RESERVED_SLOTS: OptionalArg<u32> = OptionalArg::new("delegation_rate");
 
 const WITHDRAW_BID_ARG_PUBLIC_KEY: RequiredArg<PublicKey> = RequiredArg::new("public_key");
 const WITHDRAW_BID_ARG_AMOUNT: RequiredArg<U512> = RequiredArg::new("amount");
@@ -247,15 +248,23 @@ pub fn new_add_bid_args<A: Into<U512>>(
     public_key: PublicKey,
     delegation_rate: u8,
     amount: A,
-    minimum_delegation_amount: u64,
-    maximum_delegation_amount: u64,
+    maybe_minimum_delegation_amount: Option<u64>,
+    maybe_maximum_delegation_amount: Option<u64>,
+    maybe_reserved_slots: Option<u32>,
 ) -> Result<RuntimeArgs, CLValueError> {
     let mut args = RuntimeArgs::new();
     ADD_BID_ARG_PUBLIC_KEY.insert(&mut args, public_key)?;
     ADD_BID_ARG_DELEGATION_RATE.insert(&mut args, delegation_rate)?;
     ADD_BID_ARG_AMOUNT.insert(&mut args, amount.into())?;
-    ADD_BID_ARG_MINIMUM_DELEGATION_AMOUNT.insert(&mut args, minimum_delegation_amount)?;
-    ADD_BID_ARG_MAXIMUM_DELEGATION_AMOUNT.insert(&mut args, maximum_delegation_amount)?;
+    if let Some(minimum_delegation_amount) = maybe_minimum_delegation_amount {
+        ADD_BID_ARG_MINIMUM_DELEGATION_AMOUNT.insert(&mut args, minimum_delegation_amount)?;
+    };
+    if let Some(maximum_delegation_amount) = maybe_maximum_delegation_amount {
+        ADD_BID_ARG_MAXIMUM_DELEGATION_AMOUNT.insert(&mut args, maximum_delegation_amount)?;
+    };
+    if let Some(reserved_slots) = maybe_reserved_slots {
+        ADD_BID_ARG_RESERVED_SLOTS.insert(&mut args, reserved_slots)?;
+    };
     Ok(args)
 }
 
@@ -268,6 +277,9 @@ pub fn has_valid_add_bid_args(args: &TransactionArgs) -> Result<(), InvalidTrans
     let _public_key = ADD_BID_ARG_PUBLIC_KEY.get(args)?;
     let _delegation_rate = ADD_BID_ARG_DELEGATION_RATE.get(args)?;
     let _amount = ADD_BID_ARG_AMOUNT.get(args)?;
+    let _minimum_delegation_amount = ADD_BID_ARG_MINIMUM_DELEGATION_AMOUNT.get(args)?;
+    let _maximum_delegation_amount = ADD_BID_ARG_MAXIMUM_DELEGATION_AMOUNT.get(args)?;
+    let _reserved_slots = ADD_BID_ARG_RESERVED_SLOTS.get(args)?;
     Ok(())
 }
 
@@ -381,6 +393,17 @@ pub fn has_valid_activate_bid_args(args: &TransactionArgs) -> Result<(), Invalid
     Ok(())
 }
 
+/// Creates a `RuntimeArgs` suitable for use in a change bid public key transaction.
+pub fn new_change_bid_public_key_args(
+    public_key: PublicKey,
+    new_public_key: PublicKey,
+) -> Result<RuntimeArgs, CLValueError> {
+    let mut args = RuntimeArgs::new();
+    CHANGE_BID_PUBLIC_KEY_ARG_PUBLIC_KEY.insert(&mut args, public_key)?;
+    CHANGE_BID_PUBLIC_KEY_ARG_NEW_PUBLIC_KEY.insert(&mut args, new_public_key)?;
+    Ok(args)
+}
+
 /// Checks the given `RuntimeArgs` are suitable for use in a change bid public key transaction.
 #[cfg(any(all(feature = "std", feature = "testing"), test))]
 pub fn has_valid_change_bid_public_key_args(
@@ -394,6 +417,15 @@ pub fn has_valid_change_bid_public_key_args(
     Ok(())
 }
 
+/// Creates a `RuntimeArgs` suitable for use in a add resrvations transaction.
+pub fn new_add_reservations_args(
+    reservations: Vec<Reservation>,
+) -> Result<RuntimeArgs, CLValueError> {
+    let mut args = RuntimeArgs::new();
+    ADD_RESERVATIONS_ARG_RESERVATIONS.insert(&mut args, reservations)?;
+    Ok(args)
+}
+
 /// Checks the given `TransactionArgs` are suitable for use in a add reservations transaction.
 #[cfg(any(all(feature = "std", feature = "testing"), test))]
 pub fn has_valid_add_reservations_args(args: &TransactionArgs) -> Result<(), InvalidTransactionV1> {
@@ -402,6 +434,17 @@ pub fn has_valid_add_reservations_args(args: &TransactionArgs) -> Result<(), Inv
         .ok_or(InvalidTransactionV1::ExpectedNamedArguments)?;
     let _reservations = ADD_RESERVATIONS_ARG_RESERVATIONS.get(args)?;
     Ok(())
+}
+
+/// Creates a `RuntimeArgs` suitable for use in a cancel reservations transaction.
+pub fn new_cancel_reservations_args(
+    validator: PublicKey,
+    delegators: Vec<PublicKey>,
+) -> Result<RuntimeArgs, CLValueError> {
+    let mut args = RuntimeArgs::new();
+    CANCEL_RESERVATIONS_ARG_VALIDATOR.insert(&mut args, validator)?;
+    CANCEL_RESERVATIONS_ARG_DELEGATORS.insert(&mut args, delegators)?;
+    Ok(args)
 }
 
 /// Checks the given `TransactionArgs` are suitable for use in a add reservations transaction.
@@ -572,8 +615,10 @@ mod tests {
     fn should_validate_add_bid_args() {
         let rng = &mut TestRng::new();
 
-        let minimum_delegation_amount = rng.gen::<u32>() as u64;
-        let maximum_delegation_amount = minimum_delegation_amount + rng.gen::<u32>() as u64;
+        let minimum_delegation_amount = rng.gen::<bool>().then(|| rng.gen());
+        let maximum_delegation_amount = minimum_delegation_amount
+            .map(|minimum_delegation_amount| minimum_delegation_amount + rng.gen::<u32>() as u64);
+        let reserved_slots = rng.gen::<bool>().then(|| rng.gen::<u32>());
 
         // Check random args.
         let mut args = new_add_bid_args(
@@ -582,6 +627,7 @@ mod tests {
             rng.gen::<u64>(),
             minimum_delegation_amount,
             maximum_delegation_amount,
+            reserved_slots,
         )
         .unwrap();
         has_valid_add_bid_args(&TransactionArgs::Named(args.clone())).unwrap();

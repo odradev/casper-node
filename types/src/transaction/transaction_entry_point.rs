@@ -34,8 +34,10 @@ use serde::{Deserialize, Serialize};
 pub enum TransactionEntryPoint {
     /// The default entry point name.
     Call,
+
     /// A non-native, arbitrary entry point.
     Custom(String),
+
     /// The `transfer` native entry point, used to transfer `Motes` from a source purse to a target
     /// purse.
     ///
@@ -55,14 +57,16 @@ pub enum TransactionEntryPoint {
         )
     )]
     Transfer,
+
     /// The `add_bid` native entry point, used to create or top off a bid purse.
     ///
     /// Requires the following runtime args:
     ///   * "public_key": `PublicKey`
     ///   * "delegation_rate": `u8`
     ///   * "amount": `U512`
-    ///   * "minimum_delegation_amount": `u64`
-    ///   * "maximum_delegation_amount": `u64`
+    ///   * "minimum_delegation_amount": `Option<u64>`
+    ///   * "maximum_delegation_amount": `Option<u64>`
+    ///   * "reserved_slots": `Option<u32>`
     #[cfg_attr(
         feature = "json-schema",
         schemars(
@@ -70,6 +74,7 @@ pub enum TransactionEntryPoint {
         )
     )]
     AddBid,
+
     /// The `withdraw_bid` native entry point, used to decrease a stake.
     ///
     /// Requires the following runtime args:
@@ -157,12 +162,12 @@ pub enum TransactionEntryPoint {
         )
     )]
     ChangeBidPublicKey,
+
     /// The `add_reservations` native entry point, used to add delegators to validator's reserve
     /// list.
     ///
     /// Requires the following runtime args:
-    ///   * "validator": `PublicKey`
-    ///   * "delegators": `&[PublicKey]`
+    ///   * "reservations": `Vec<Reservation>`
     #[cfg_attr(
         feature = "json-schema",
         schemars(
@@ -171,12 +176,13 @@ pub enum TransactionEntryPoint {
         )
     )]
     AddReservations,
+
     /// The `cancel_reservations` native entry point, used to remove delegators from validator's
     /// reserve list.
     ///
     /// Requires the following runtime args:
     ///   * "validator": `PublicKey`
-    ///   * "delegators": `&[PublicKey]`
+    ///   * "delegators": `Vec<PublicKey>`
     #[cfg_attr(
         feature = "json-schema",
         schemars(

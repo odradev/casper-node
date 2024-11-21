@@ -9,9 +9,10 @@ use super::{
     InitiatorAddrAndSecretKey, PricingMode, TransactionArgs, TransactionV1,
 };
 use crate::{
-    bytesrepr::Bytes, transaction::FieldsContainer, AddressableEntityHash, CLValue, CLValueError,
-    EntityVersion, PackageHash, PublicKey, RuntimeArgs, SecretKey, TimeDiff, Timestamp,
-    TransactionEntryPoint, TransactionInvocationTarget, TransferTarget, URef, U512,
+    bytesrepr::Bytes, system::auction::Reservation, transaction::FieldsContainer,
+    AddressableEntityHash, CLValue, CLValueError, EntityVersion, PackageHash, PublicKey,
+    RuntimeArgs, SecretKey, TimeDiff, Timestamp, TransactionEntryPoint,
+    TransactionInvocationTarget, TransferTarget, URef, U512,
 };
 #[cfg(any(feature = "testing", test))]
 use crate::{testing::TestRng, transaction::Approval, TransactionConfig, TransactionV1Hash};
@@ -198,8 +199,9 @@ impl<'a> TransactionV1Builder<'a> {
         public_key: PublicKey,
         delegation_rate: u8,
         amount: A,
-        minimum_delegation_amount: u64,
-        maximum_delegation_amount: u64,
+        minimum_delegation_amount: Option<u64>,
+        maximum_delegation_amount: Option<u64>,
+        reserved_slots: Option<u32>,
     ) -> Result<Self, CLValueError> {
         let args = arg_handling::new_add_bid_args(
             public_key,
@@ -207,6 +209,7 @@ impl<'a> TransactionV1Builder<'a> {
             amount,
             minimum_delegation_amount,
             maximum_delegation_amount,
+            reserved_slots,
         )?;
         let mut builder = TransactionV1Builder::new();
         builder.args = TransactionArgs::Named(args);
@@ -273,6 +276,50 @@ impl<'a> TransactionV1Builder<'a> {
         builder.args = TransactionArgs::Named(args);
         builder.target = TransactionTarget::Native;
         builder.entry_point = TransactionEntryPoint::Redelegate;
+        builder.scheduling = Self::DEFAULT_SCHEDULING;
+        Ok(builder)
+    }
+
+    /// Returns a new `TransactionV1Builder` suitable for building a native change_bid_public_key
+    /// transaction.
+    pub fn new_change_bid_public_key<A: Into<U512>>(
+        public_key: PublicKey,
+        new_public_key: PublicKey,
+    ) -> Result<Self, CLValueError> {
+        let args = arg_handling::new_change_bid_public_key_args(public_key, new_public_key)?;
+        let mut builder = TransactionV1Builder::new();
+        builder.args = TransactionArgs::Named(args);
+        builder.target = TransactionTarget::Native;
+        builder.entry_point = TransactionEntryPoint::ChangeBidPublicKey;
+        builder.scheduling = Self::DEFAULT_SCHEDULING;
+        Ok(builder)
+    }
+
+    /// Returns a new `TransactionV1Builder` suitable for building a native add_reservations
+    /// transaction.
+    pub fn new_add_reservations<A: Into<U512>>(
+        reservations: Vec<Reservation>,
+    ) -> Result<Self, CLValueError> {
+        let args = arg_handling::new_add_reservations_args(reservations)?;
+        let mut builder = TransactionV1Builder::new();
+        builder.args = TransactionArgs::Named(args);
+        builder.target = TransactionTarget::Native;
+        builder.entry_point = TransactionEntryPoint::AddReservations;
+        builder.scheduling = Self::DEFAULT_SCHEDULING;
+        Ok(builder)
+    }
+
+    /// Returns a new `TransactionV1Builder` suitable for building a native cancel_reservations
+    /// transaction.
+    pub fn new_cancel_reservations<A: Into<U512>>(
+        validator: PublicKey,
+        delegators: Vec<PublicKey>,
+    ) -> Result<Self, CLValueError> {
+        let args = arg_handling::new_cancel_reservations_args(validator, delegators)?;
+        let mut builder = TransactionV1Builder::new();
+        builder.args = TransactionArgs::Named(args);
+        builder.target = TransactionTarget::Native;
+        builder.entry_point = TransactionEntryPoint::CancelReservations;
         builder.scheduling = Self::DEFAULT_SCHEDULING;
         Ok(builder)
     }

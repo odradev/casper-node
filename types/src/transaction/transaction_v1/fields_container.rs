@@ -161,14 +161,19 @@ impl FieldsContainer {
                 let public_key = PublicKey::random(rng);
                 let delegation_rate = rng.gen();
                 let amount = rng.gen::<u64>();
-                let minimum_delegation_amount = rng.gen::<u32>() as u64;
-                let maximum_delegation_amount = minimum_delegation_amount + rng.gen::<u32>() as u64;
+                let minimum_delegation_amount = rng.gen::<bool>().then(|| rng.gen());
+                let maximum_delegation_amount =
+                    minimum_delegation_amount.map(|minimum_delegation_amount| {
+                        minimum_delegation_amount + rng.gen::<u32>() as u64
+                    });
+                let reserved_slots = rng.gen::<bool>().then(|| rng.gen::<u32>());
                 let args = arg_handling::new_add_bid_args(
                     public_key,
                     delegation_rate,
                     amount,
                     minimum_delegation_amount,
                     maximum_delegation_amount,
+                    reserved_slots,
                 )
                 .unwrap();
                 FieldsContainer::new(
@@ -299,14 +304,17 @@ impl FieldsContainer {
         let public_key = PublicKey::random(rng);
         let delegation_rate = rng.gen();
         let amount = rng.gen::<u64>();
-        let minimum_delegation_amount = rng.gen::<u32>() as u64;
-        let maximum_delegation_amount = minimum_delegation_amount + rng.gen::<u32>() as u64;
+        let minimum_delegation_amount = rng.gen::<bool>().then(|| rng.gen());
+        let maximum_delegation_amount = minimum_delegation_amount
+            .map(|minimum_delegation_amount| minimum_delegation_amount + rng.gen::<u32>() as u64);
+        let reserved_slots = rng.gen::<bool>().then(|| rng.gen::<u32>());
         let args = arg_handling::new_add_bid_args(
             public_key,
             delegation_rate,
             amount,
             minimum_delegation_amount,
             maximum_delegation_amount,
+            reserved_slots,
         )
         .unwrap();
         FieldsContainer::new(
