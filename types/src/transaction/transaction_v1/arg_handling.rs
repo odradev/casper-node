@@ -54,10 +54,13 @@ const CHANGE_BID_PUBLIC_KEY_ARG_PUBLIC_KEY: RequiredArg<PublicKey> = RequiredArg
 const CHANGE_BID_PUBLIC_KEY_ARG_NEW_PUBLIC_KEY: RequiredArg<PublicKey> =
     RequiredArg::new("new_public_key");
 
+#[cfg(any(all(feature = "std", feature = "testing"), test))]
 const ADD_RESERVATIONS_ARG_RESERVATIONS: RequiredArg<Vec<Reservation>> =
     RequiredArg::new("reservations");
 
+#[cfg(any(all(feature = "std", feature = "testing"), test))]
 const CANCEL_RESERVATIONS_ARG_VALIDATOR: RequiredArg<PublicKey> = RequiredArg::new("validator");
+#[cfg(any(all(feature = "std", feature = "testing"), test))]
 const CANCEL_RESERVATIONS_ARG_DELEGATORS: RequiredArg<Vec<PublicKey>> =
     RequiredArg::new("delegators");
 
@@ -413,6 +416,7 @@ pub fn has_valid_change_bid_public_key_args(
 }
 
 /// Creates a `RuntimeArgs` suitable for use in a add resrvations transaction.
+#[cfg(any(all(feature = "std", feature = "testing"), test))]
 pub fn new_add_reservations_args(
     reservations: Vec<Reservation>,
 ) -> Result<RuntimeArgs, CLValueError> {
@@ -432,6 +436,7 @@ pub fn has_valid_add_reservations_args(args: &TransactionArgs) -> Result<(), Inv
 }
 
 /// Creates a `RuntimeArgs` suitable for use in a cancel reservations transaction.
+#[cfg(any(all(feature = "std", feature = "testing"), test))]
 pub fn new_cancel_reservations_args(
     validator: PublicKey,
     delegators: Vec<PublicKey>,
