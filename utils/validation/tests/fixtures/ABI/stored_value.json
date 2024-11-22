@@ -74,13 +74,9 @@
             },
             "delegators": [
               {
-                "delegator_public_key": {
-                  "PublicKey": "0202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f2"
-                },
+                "delegator_public_key": "0202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f2",
                 "delegator": {
-                  "delegator_kind": {
-                    "PublicKey": "0202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f2"
-                  },
+                  "delegator_public_key": "0202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f2",
                   "staked_amount": "1000000000",
                   "bonding_purse": "uref-0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b-007",
                   "validator_public_key": "01197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61",
@@ -96,7 +92,7 @@
         }
       }
     ],
-    "output": "0801197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d610a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a070500743ba40b6401ffffffffffffffff0001000000000202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f2000202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f20400ca9a3b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0701197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d6101ffffffffffffffff0000"
+    "output": "0801197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d610a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a070500743ba40b6401ffffffffffffffff00010000000202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f20202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f20400ca9a3b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0701197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d6101ffffffffffffffff0000"
   },
   "ByteCode": {
     "input": [
@@ -117,10 +113,11 @@
       {
         "type": "StoredValue",
         "value": {
-          "CLValue": [
-            "String",
-            "0d00000048656c6c6f2c20776f726c6421"
-          ]
+          "CLValue": {
+            "cl_type": "String",
+            "bytes": "0d00000048656c6c6f2c20776f726c6421",
+            "parsed": "Hello, world!"
+          }
         }
       }
     ],
@@ -340,13 +337,9 @@
               },
               "delegators": [
                 {
-                  "delegator_public_key": {
-                    "PublicKey": "0202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f2"
-                  },
+                  "delegator_public_key": "0202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f2",
                   "delegator": {
-                    "delegator_kind": {
-                      "PublicKey": "0202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f2"
-                    },
+                    "delegator_public_key": "0202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f2",
                     "staked_amount": "1000000000",
                     "bonding_purse": "uref-0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b-007",
                     "validator_public_key": "01197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61",
@@ -363,7 +356,7 @@
         }
       }
     ],
-    "output": "0b0001197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d610a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a070500743ba40b6401ffffffffffffffff0001000000000202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f2000202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f20400ca9a3b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0701197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d6101ffffffffffffffff0000"
+    "output": "0b0001197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d610a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a070500743ba40b6401ffffffffffffffff00010000000202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f20202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f20400ca9a3b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0701197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d6101ffffffffffffffff0000"
   },
   "ValidatorBid": {
     "input": [
