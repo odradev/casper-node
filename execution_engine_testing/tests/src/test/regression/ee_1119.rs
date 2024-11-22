@@ -162,10 +162,12 @@ fn should_slash_validator_and_their_delegators() {
 
     let unbond_kind = UnbondKind::Validator(VALIDATOR_1.clone());
 
-    let unbond = unbond_purses
+    let unbonds = unbond_purses
         .get(&unbond_kind)
         .cloned()
         .expect("should have unbond");
+    assert_eq!(unbonds.len(), 1);
+    let unbond = unbonds.first().expect("must get unbond");
     assert_eq!(unbond.eras().len(), 1);
     assert_eq!(unbond.validator_public_key(), &*VALIDATOR_1,);
     assert_eq!(

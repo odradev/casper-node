@@ -117,7 +117,11 @@ fn should_run_successful_bond_and_unbond_and_slashing() {
     let unbond = {
         assert_eq!(unbonds.len(), 1);
         let unbond_kind = UnbondKind::Validator((*DEFAULT_ACCOUNT_PUBLIC_KEY).clone());
-        let unbond = unbonds.get(&unbond_kind).expect("should have unbond");
+        let unbond = unbonds
+            .get(&unbond_kind)
+            .expect("should have unbond")
+            .first()
+            .expect("must have one unbond entry");
         assert_eq!(unbond.eras().len(), 1, "unexpected era count");
         assert_eq!(unbond.validator_public_key(), &default_public_key_arg,);
         assert!(unbond.is_validator());
@@ -140,7 +144,9 @@ fn should_run_successful_bond_and_unbond_and_slashing() {
             .get(&UnbondKind::Validator(
                 (*DEFAULT_ACCOUNT_PUBLIC_KEY).clone(),
             ))
-            .expect("should have unbond");
+            .expect("should have unbond")
+            .first()
+            .expect("must have one unbond entry");
         assert_eq!(unbond.eras().len(), 1);
         assert_eq!(unbond.validator_public_key(), &default_public_key_arg,);
         assert!(unbond.is_validator());
@@ -405,7 +411,11 @@ fn should_run_successful_bond_and_unbond_with_release() {
     assert_eq!(unbonds.len(), 1);
 
     let unbond_kind = UnbondKind::Validator((*DEFAULT_ACCOUNT_PUBLIC_KEY).clone());
-    let unbond = unbonds.get(&unbond_kind).expect("should have unbond");
+    let unbond = unbonds
+        .get(&unbond_kind)
+        .expect("should have unbond")
+        .first()
+        .expect("must have one unbond entry");
     assert_eq!(unbond.eras().len(), 1);
     assert_eq!(unbond.validator_public_key(), &default_public_key_arg,);
     assert!(unbond.is_validator());
@@ -422,7 +432,11 @@ fn should_run_successful_bond_and_unbond_with_release() {
     assert_eq!(unbonds.len(), 1);
 
     let unbond_kind = UnbondKind::Validator((*DEFAULT_ACCOUNT_PUBLIC_KEY).clone());
-    let unbond = unbond_purses.get(&unbond_kind).expect("should have unbond");
+    let unbond = unbond_purses
+        .get(&unbond_kind)
+        .expect("should have unbond")
+        .first()
+        .expect("must have one unbond entry");
     assert_eq!(unbond.eras().len(), 1);
     assert_eq!(unbond.validator_public_key(), &default_public_key_arg,);
     assert!(unbond.is_validator());
@@ -579,7 +593,11 @@ fn should_run_successful_unbond_funds_after_changing_unbonding_delay() {
     assert_eq!(unbonds.len(), 1);
 
     let unbond_kind = UnbondKind::Validator((*DEFAULT_ACCOUNT_PUBLIC_KEY).clone());
-    let unbond = unbonds.get(&unbond_kind).expect("should have unbond");
+    let unbond = unbonds
+        .get(&unbond_kind)
+        .expect("should have unbond")
+        .first()
+        .expect("must have one unbond entry");
     assert_eq!(unbond.eras().len(), 1);
     assert_eq!(unbond.validator_public_key(), &default_public_key_arg,);
     assert!(unbond.is_validator());
@@ -595,7 +613,11 @@ fn should_run_successful_unbond_funds_after_changing_unbonding_delay() {
     assert_eq!(unbond_purses.len(), 1);
 
     let unbond_kind = UnbondKind::Validator((*DEFAULT_ACCOUNT_PUBLIC_KEY).clone());
-    let unbond = unbond_purses.get(&unbond_kind).expect("should have unbond");
+    let unbond = unbond_purses
+        .get(&unbond_kind)
+        .expect("should have unbond")
+        .first()
+        .expect("must have one unbond entry");
     assert_eq!(unbond.validator_public_key(), &default_public_key_arg,);
     assert!(unbond.is_validator());
 

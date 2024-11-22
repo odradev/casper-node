@@ -3146,7 +3146,7 @@ fn should_not_restake_after_full_unbond() {
     let unbond = withdraws
         .get(&unbond_kind)
         .expect("should have validator entry");
-    let delegator_unbond_amount = unbond.eras().first().expect("should be era").amount();
+    let delegator_unbond_amount = unbond[0].eras().first().expect("should be era").amount();
 
     assert_eq!(
         *delegator_unbond_amount,
@@ -3295,7 +3295,7 @@ fn delegator_full_unbond_during_first_reward_era() {
     let unbond = withdraws
         .get(&unbond_kind)
         .expect("should have validator entry");
-    let delegator_unbond_amount = unbond.eras().first().expect("should have era").amount();
+    let delegator_unbond_amount = unbond[0].eras().first().expect("should have era").amount();
 
     assert_eq!(
         *delegator_unbond_amount,

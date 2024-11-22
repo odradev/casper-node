@@ -12,7 +12,7 @@ use casper_types::{
     account::AccountHash,
     runtime_args,
     system::auction::{
-        BidsExt, DelegationRate, DelegatorKind, UnbondKind, ARG_DELEGATOR, ARG_VALIDATOR,
+        BidKind, BidsExt, DelegationRate, DelegatorKind, UnbondKind, ARG_DELEGATOR, ARG_VALIDATOR,
         ARG_VALIDATOR_PUBLIC_KEYS, METHOD_SLASH,
     },
     GenesisAccount, GenesisValidator, Motes, PublicKey, SecretKey, U512,
@@ -217,32 +217,49 @@ fn should_run_ee_1120_slash_delegators() {
     // should be an unbonding purse for each distinct undelegator
     unbond_purses_before.contains_key(&UnbondKind::Validator(expected_unbond_keys.1.clone()));
     let delegator_unbond = unbond_purses_before
-        .get(&UnbondKind::Validator(expected_unbond_keys.0.clone()))
+        .get(&UnbondKind::DelegatedPublicKey(
+            expected_unbond_keys.0.clone(),
+        ))
         .expect("should have entry");
+    println!("du {:?}", delegator_unbond);
     assert_eq!(
-        delegator_unbond.eras().len(),
+        delegator_unbond.len(),
         2,
         "this entity undelegated from 2 different validators"
     );
-    let undelegate_from_v1 = delegator_unbond.eras().first().expect("should have entry");
+    let undelegate_from_v1 = delegator_unbond[1]
+        .eras()
+        .first()
+        .expect("should have entry");
     assert_eq!(undelegate_from_v1.amount().as_u64(), UNDELEGATE_AMOUNT_1);
-    let undelegate_from_v2 = delegator_unbond.eras().first().expect("should have entry");
+    let undelegate_from_v2 = delegator_unbond[0]
+        .eras()
+        .first()
+        .expect("should have entry");
     assert_eq!(undelegate_from_v2.amount().as_u64(), UNDELEGATE_AMOUNT_2);
 
     let dual_role_unbond = unbond_purses_before
-        .get(&UnbondKind::Validator(expected_unbond_keys.1.clone()))
+        .get(&UnbondKind::DelegatedPublicKey(expected_unbond_keys.1.clone()))
         .expect("should have entry for entity that is both a validator and has also delegated to a different validator then unbonded from that other validator");
     assert_eq!(
-        dual_role_unbond.eras().len(),
+        dual_role_unbond.len(),
         1,
         "this entity undelegated from 1 validator"
     );
-    let undelegate_from_v1 = dual_role_unbond.eras().first().expect("should have entry");
+    let undelegate_from_v1 = dual_role_unbond[0]
+        .eras()
+        .first()
+        .expect("should have entry");
     assert_eq!(undelegate_from_v1.amount().as_u64(), UNDELEGATE_AMOUNT_3);
 
     // Check bids before slashing
 
-    let bids_before = builder.get_bids();
+    let bids_before: Vec<BidKind> = builder
+        .get_bids()
+        .iter()
+        .filter(|bid| !bid.is_unbond())
+        .map(|bid| bid.clone())
+        .collect();
     /*
         There should be 5 total bids at this point:
         VALIDATOR1 and VALIDATOR2 each have a validator bid
@@ -274,7 +291,12 @@ fn should_run_ee_1120_slash_delegators() {
     builder.exec(slash_request_1).expect_success().commit();
 
     // Compare bids after slashing validator 2
-    let bids_after = builder.get_bids();
+    let bids_after: Vec<BidKind> = builder
+        .get_bids()
+        .iter()
+        .filter(|bid| !bid.is_unbond())
+        .map(|bid| bid.clone())
+        .collect();
     assert_ne!(bids_before, bids_after);
     /*
         there should be 3 total bids at this point:
@@ -303,7 +325,7 @@ fn should_run_ee_1120_slash_delegators() {
     assert_ne!(unbond_purses_before, unbond_purses_after);
     assert!(!unbond_purses_after.contains_key(&UnbondKind::Validator(VALIDATOR_1.clone())));
     assert!(unbond_purses_after.contains_key(&UnbondKind::DelegatedPublicKey(DELEGATOR_1.clone())));
-    assert!(unbond_purses_after.contains_key(&UnbondKind::Validator(VALIDATOR_2.clone())));
+    assert!(unbond_purses_after.contains_key(&UnbondKind::DelegatedPublicKey(VALIDATOR_2.clone())));
 
     // slash validator 1 to clear remaining bids and unbonding purses
     let slash_request_2 = ExecuteRequestBuilder::contract_call_by_hash(

@@ -454,6 +454,10 @@ pub fn process_unbond_requests<P: Auction + ?Sized>(
         if let Some(unbonded) = expired {
             for unbond_era in unbonded {
                 if unbond_kind.is_validator() {
+                    provider.unbond(unbond_kind, &unbond_era).map_err(|err| {
+                        error!(?err, "error unbonding purse");
+                        ApiError::from(Error::TransferToUnbondingPurse)
+                    })?;
                     continue;
                 }
                 let redelegation_result = handle_redelegation(

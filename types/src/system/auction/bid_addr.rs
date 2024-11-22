@@ -189,6 +189,11 @@ impl BidAddr {
         BidAddr::Validator(AccountHash::new(validator))
     }
 
+    /// Constructs a new [`BidAddr`] instance from a validator's [`PublicKey`].
+    pub fn new_validator_addr_from_public_key(validator_public_key: PublicKey) -> Self {
+        BidAddr::Validator(validator_public_key.to_account_hash())
+    }
+
     /// Constructs a new [`BidAddr::DelegatedAccount`] instance from the [`AccountHash`] pair of a
     /// validator and a delegator.
     pub const fn new_delegator_account_addr(
@@ -274,6 +279,14 @@ impl BidAddr {
         BidAddr::ReservedDelegationPurse {
             validator: validator.to_account_hash(),
             delegator,
+        }
+    }
+
+    /// Create a new instance of a [`BidAddr`].
+    pub fn new_unbond_account(validator: PublicKey, unbonder: PublicKey) -> Self {
+        BidAddr::UnbondAccount {
+            validator: validator.to_account_hash(),
+            unbonder: unbonder.to_account_hash(),
         }
     }
 
