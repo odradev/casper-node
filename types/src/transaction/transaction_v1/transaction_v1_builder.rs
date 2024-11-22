@@ -8,11 +8,12 @@ use super::{
     fields_container::FieldsContainerError,
     InitiatorAddrAndSecretKey, PricingMode, TransactionArgs, TransactionV1,
 };
+#[cfg(any(all(feature = "std", feature = "testing"), test))]
+use crate::system::auction::Reservation;
 use crate::{
-    bytesrepr::Bytes, system::auction::Reservation, transaction::FieldsContainer,
-    AddressableEntityHash, CLValue, CLValueError, EntityVersion, PackageHash, PublicKey,
-    RuntimeArgs, SecretKey, TimeDiff, Timestamp, TransactionEntryPoint,
-    TransactionInvocationTarget, TransferTarget, URef, U512,
+    bytesrepr::Bytes, transaction::FieldsContainer, AddressableEntityHash, CLValue, CLValueError,
+    EntityVersion, PackageHash, PublicKey, RuntimeArgs, SecretKey, TimeDiff, Timestamp,
+    TransactionEntryPoint, TransactionInvocationTarget, TransferTarget, URef, U512,
 };
 #[cfg(any(feature = "testing", test))]
 use crate::{testing::TestRng, transaction::Approval, TransactionConfig, TransactionV1Hash};
@@ -297,9 +298,8 @@ impl<'a> TransactionV1Builder<'a> {
 
     /// Returns a new `TransactionV1Builder` suitable for building a native add_reservations
     /// transaction.
-    pub fn new_add_reservations<A: Into<U512>>(
-        reservations: Vec<Reservation>,
-    ) -> Result<Self, CLValueError> {
+    #[cfg(any(all(feature = "std", feature = "testing"), test))]
+    pub fn new_add_reservations(reservations: Vec<Reservation>) -> Result<Self, CLValueError> {
         let args = arg_handling::new_add_reservations_args(reservations)?;
         let mut builder = TransactionV1Builder::new();
         builder.args = TransactionArgs::Named(args);
@@ -311,7 +311,8 @@ impl<'a> TransactionV1Builder<'a> {
 
     /// Returns a new `TransactionV1Builder` suitable for building a native cancel_reservations
     /// transaction.
-    pub fn new_cancel_reservations<A: Into<U512>>(
+    #[cfg(any(all(feature = "std", feature = "testing"), test))]
+    pub fn new_cancel_reservations(
         validator: PublicKey,
         delegators: Vec<PublicKey>,
     ) -> Result<Self, CLValueError> {
