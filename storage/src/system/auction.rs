@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use itertools::Itertools;
 use num_rational::Ratio;
 use num_traits::{CheckedMul, CheckedSub};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 
 use crate::system::auction::detail::{
     process_with_vesting_schedule, read_delegator_bid, read_delegator_bids, read_validator_bid,
