@@ -29,7 +29,7 @@ const ADD_BID_ARG_MINIMUM_DELEGATION_AMOUNT: OptionalArg<u64> =
     OptionalArg::new("minimum_delegation_amount");
 const ADD_BID_ARG_MAXIMUM_DELEGATION_AMOUNT: OptionalArg<u64> =
     OptionalArg::new("maximum_delegation_amount");
-const ADD_BID_ARG_RESERVED_SLOTS: OptionalArg<u32> = OptionalArg::new("delegation_rate");
+const ADD_BID_ARG_RESERVED_SLOTS: OptionalArg<u32> = OptionalArg::new("reserved_slots");
 
 const WITHDRAW_BID_ARG_PUBLIC_KEY: RequiredArg<PublicKey> = RequiredArg::new("public_key");
 const WITHDRAW_BID_ARG_AMOUNT: RequiredArg<U512> = RequiredArg::new("amount");
