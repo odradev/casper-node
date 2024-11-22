@@ -1033,6 +1033,84 @@ mod tests {
     }
 
     #[test]
+    fn should_validate_change_bid_public_key_args() {
+        let rng = &mut TestRng::new();
+
+        // Check random args.
+        let mut args =
+            new_change_bid_public_key_args(PublicKey::random(rng), PublicKey::random(rng)).unwrap();
+        has_valid_change_bid_public_key_args(&TransactionArgs::Named(args.clone())).unwrap();
+
+        // Check with extra arg.
+        args.insert("a", 1).unwrap();
+        has_valid_change_bid_public_key_args(&TransactionArgs::Named(args)).unwrap();
+    }
+
+    #[test]
+    fn change_bid_public_key_args_with_missing_required_should_be_invalid() {
+        let rng = &mut TestRng::new();
+
+        // Missing "public_key".
+        let args = runtime_args! {
+            CHANGE_BID_PUBLIC_KEY_ARG_NEW_PUBLIC_KEY.name => PublicKey::random(rng),
+        };
+        let expected_error = InvalidTransactionV1::MissingArg {
+            arg_name: CHANGE_BID_PUBLIC_KEY_ARG_PUBLIC_KEY.name.to_string(),
+        };
+        assert_eq!(
+            has_valid_change_bid_public_key_args(&TransactionArgs::Named(args)),
+            Err(expected_error)
+        );
+
+        // Missing "new_public_key".
+        let args = runtime_args! {
+            CHANGE_BID_PUBLIC_KEY_ARG_PUBLIC_KEY.name => PublicKey::random(rng),
+        };
+        let expected_error = InvalidTransactionV1::MissingArg {
+            arg_name: CHANGE_BID_PUBLIC_KEY_ARG_NEW_PUBLIC_KEY.name.to_string(),
+        };
+        assert_eq!(
+            has_valid_change_bid_public_key_args(&TransactionArgs::Named(args)),
+            Err(expected_error)
+        );
+    }
+
+    #[test]
+    fn change_bid_public_key_args_with_wrong_type_should_be_invalid() {
+        let rng = &mut TestRng::new();
+
+        // Wrong "public_key" type.
+        let args = runtime_args! {
+            CHANGE_BID_PUBLIC_KEY_ARG_PUBLIC_KEY.name => rng.gen::<u8>(),
+            CHANGE_BID_PUBLIC_KEY_ARG_NEW_PUBLIC_KEY.name => PublicKey::random(rng),
+        };
+        let expected_error = InvalidTransactionV1::UnexpectedArgType {
+            arg_name: CHANGE_BID_PUBLIC_KEY_ARG_PUBLIC_KEY.name.to_string(),
+            expected: vec![CLType::PublicKey],
+            got: CLType::U8,
+        };
+        assert_eq!(
+            has_valid_change_bid_public_key_args(&TransactionArgs::Named(args)),
+            Err(expected_error)
+        );
+
+        // Wrong "new_public_key" type.
+        let args = runtime_args! {
+            CHANGE_BID_PUBLIC_KEY_ARG_PUBLIC_KEY.name => PublicKey::random(rng),
+            CHANGE_BID_PUBLIC_KEY_ARG_NEW_PUBLIC_KEY.name => rng.gen::<u8>(),
+        };
+        let expected_error = InvalidTransactionV1::UnexpectedArgType {
+            arg_name: CHANGE_BID_PUBLIC_KEY_ARG_NEW_PUBLIC_KEY.name.to_string(),
+            expected: vec![CLType::PublicKey],
+            got: CLType::U8,
+        };
+        assert_eq!(
+            has_valid_change_bid_public_key_args(&TransactionArgs::Named(args)),
+            Err(expected_error)
+        );
+    }
+
+    #[test]
     fn native_calls_require_named_args() {
         let args = TransactionArgs::Bytesrepr(vec![b'a'; 100].into());
         let expected_error = InvalidTransactionV1::ExpectedNamedArguments;
