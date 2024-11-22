@@ -4,7 +4,8 @@ use casper_types::{
     contracts::ContractHash,
     system::{
         auction::{
-            BidKind, Unbond, UnbondKind, WithdrawPurses, SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY,
+            BidKind, Unbond, UnbondKind, UnbondingPurse, WithdrawPurses,
+            SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY,
         },
         mint::TOTAL_SUPPLY_KEY,
     },
@@ -23,7 +24,11 @@ pub trait StateReader {
 
     fn get_bids(&mut self) -> Vec<BidKind>;
 
+    #[deprecated(note = "superseded by get_unbonding_purses")]
     fn get_withdraws(&mut self) -> WithdrawPurses;
+
+    #[deprecated(note = "superseded by get_unbonds")]
+    fn get_unbonding_purses(&mut self) -> BTreeMap<AccountHash, Vec<UnbondingPurse>>;
 
     fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Unbond>;
 }
@@ -52,8 +57,14 @@ where
         T::get_bids(self)
     }
 
+    #[allow(deprecated)]
     fn get_withdraws(&mut self) -> WithdrawPurses {
         T::get_withdraws(self)
+    }
+
+    #[allow(deprecated)]
+    fn get_unbonding_purses(&mut self) -> BTreeMap<AccountHash, Vec<UnbondingPurse>> {
+        T::get_unbonding_purses(self)
     }
 
     fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Unbond> {
@@ -122,6 +133,10 @@ impl StateReader for LmdbWasmTestBuilder {
 
     fn get_withdraws(&mut self) -> WithdrawPurses {
         LmdbWasmTestBuilder::get_withdraw_purses(self)
+    }
+
+    fn get_unbonding_purses(&mut self) -> BTreeMap<AccountHash, Vec<UnbondingPurse>> {
+        LmdbWasmTestBuilder::get_unbonding_purses(self)
     }
 
     fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Unbond> {

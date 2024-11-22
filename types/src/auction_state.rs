@@ -142,8 +142,11 @@ impl AuctionState {
                         0,
                     );
                     let mut delegators: BTreeMap<DelegatorKind, DelegatorBid> = BTreeMap::new();
-                    for (delegator_kind, delegator) in bid.delegators() {
-                        delegators.insert(delegator_kind.clone(), delegator.clone());
+                    for (delegator_public_key, delegator) in bid.delegators() {
+                        delegators.insert(
+                            DelegatorKind::PublicKey(delegator_public_key.clone()),
+                            DelegatorBid::from(delegator.clone()),
+                        );
                     }
                     staking.insert(public_key, (validator_bid, delegators));
                 }

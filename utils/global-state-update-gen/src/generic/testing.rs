@@ -9,7 +9,7 @@ use casper_types::{
     system::auction::{
         BidKind, BidsExt, DelegatorBid, DelegatorKind, SeigniorageRecipientV2,
         SeigniorageRecipientsSnapshotV2, SeigniorageRecipientsV2, Unbond, UnbondEra, UnbondKind,
-        ValidatorBid, WithdrawPurse, WithdrawPurses,
+        UnbondingPurse, ValidatorBid, WithdrawPurse, WithdrawPurses,
     },
     testing::TestRng,
     AccessRights, AddressableEntity, ByteCodeHash, CLValue, EntityKind, EraId, Key, PackageHash,
@@ -35,8 +35,10 @@ struct MockStateReader {
     seigniorage_recipients: SeigniorageRecipientsSnapshotV2,
     bids: Vec<BidKind>,
     withdraws: WithdrawPurses,
+    unbonding_purses: BTreeMap<AccountHash, Vec<UnbondingPurse>>,
     unbonds: BTreeMap<UnbondKind, Unbond>,
     protocol_version: ProtocolVersion,
+    last_bonding_purse: Option<URef>,
 }
 
 impl MockStateReader {
@@ -48,8 +50,10 @@ impl MockStateReader {
             seigniorage_recipients: SeigniorageRecipientsSnapshotV2::new(),
             bids: vec![],
             withdraws: WithdrawPurses::new(),
+            unbonding_purses: BTreeMap::new(),
             unbonds: BTreeMap::new(),
             protocol_version: ProtocolVersion::V1_0_0,
+            last_bonding_purse: None,
         }
     }
 
@@ -105,6 +109,7 @@ impl MockStateReader {
             }
 
             let bonding_purse = URef::new(rng.gen(), AccessRights::READ_ADD_WRITE);
+            self.last_bonding_purse = Some(bonding_purse);
             self.purses.insert(bonding_purse.addr(), stake);
             self.total_supply += stake;
 
@@ -126,6 +131,7 @@ impl MockStateReader {
             // create the bid
             for (delegator_kind, delegator_stake) in &delegators {
                 let bonding_purse = URef::new(rng.gen(), AccessRights::READ_ADD_WRITE);
+                self.last_bonding_purse = Some(bonding_purse);
                 self.purses.insert(bonding_purse.addr(), *delegator_stake);
                 self.total_supply += *delegator_stake;
 
@@ -183,25 +189,24 @@ impl MockStateReader {
     /// Returns the bonding purse if the unbonder exists in `self.bids`, or creates a new account
     /// with a nominal stake with the given validator and returns the new unbonder's bonding purse.
     fn create_or_get_unbonder_bonding_purse<R: Rng>(
-        &mut self,
+        mut self,
         validator_public_key: &PublicKey,
         unbond_kind: &UnbondKind,
         rng: &mut R,
-    ) -> URef {
+    ) -> Self {
         if let Some(purse) = self.unbonder_bonding_purse(validator_public_key, unbond_kind) {
-            return purse;
+            self.last_bonding_purse = Some(purse);
+            return self;
         }
-        // // create the account if it doesn't exist
-        // let account_hash = unbonder_public_key.to_account_hash();
-        // if !self.accounts.contains_key(&account_hash) {
-        //     *self = self.with_account(account_hash, U512::from(100), rng);
-        // }
 
         let bonding_purse = URef::new(rng.gen(), AccessRights::READ_ADD_WRITE);
-        let stake = U512::from(10);
-        self.purses.insert(bonding_purse.addr(), stake);
-        self.total_supply += stake;
-        bonding_purse
+        self.purses.insert(bonding_purse.addr(), U512::zero());
+        // it is not clear to me why this method would increment stake here? -Ed
+        // let stake = U512::from(10);
+        // self.purses.insert(bonding_purse.addr(), stake);
+        // self.total_supply += stake;
+        self.last_bonding_purse = Some(bonding_purse);
+        self
     }
 
     /// Creates a `WithdrawPurse` for 1 mote.  If the validator or delegator don't exist in
@@ -214,8 +219,8 @@ impl MockStateReader {
         amount: U512,
         rng: &mut R,
     ) -> Self {
-        let bonding_purse =
-            self.create_or_get_unbonder_bonding_purse(&validator_public_key, &unbond_kind, rng);
+        self = self.create_or_get_unbonder_bonding_purse(&validator_public_key, &unbond_kind, rng);
+        let bonding_purse = self.last_bonding_purse.expect("should have bonding purse");
 
         let unbonder_public_key = unbond_kind
             .maybe_public_key()
@@ -246,8 +251,8 @@ impl MockStateReader {
         amount: U512,
         rng: &mut R,
     ) -> Self {
-        let purse_uref =
-            self.create_or_get_unbonder_bonding_purse(&validator_public_key, &unbond_kind, rng);
+        self = self.create_or_get_unbonder_bonding_purse(&validator_public_key, &unbond_kind, rng);
+        let purse_uref = self.last_bonding_purse.expect("should have bonding purse");
         let unbond_era = UnbondEra::new(purse_uref, EraId::new(10), amount, None);
 
         match self.unbonds.get_mut(&unbond_kind) {
@@ -312,6 +317,10 @@ impl StateReader for MockStateReader {
 
     fn get_withdraws(&mut self) -> WithdrawPurses {
         self.withdraws.clone()
+    }
+
+    fn get_unbonding_purses(&mut self) -> BTreeMap<AccountHash, Vec<UnbondingPurse>> {
+        self.unbonding_purses.clone()
     }
 
     fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Unbond> {
@@ -884,7 +893,12 @@ fn should_replace_one_validator_with_unbonding() {
     update.assert_key_absent(&Key::Balance(bid_purse.addr()));
 
     // should write an unbonding purse
-    update.assert_unbonding_purse(bid_purse, &validator1, &validator1, 101);
+    update.assert_unbond_bid_kind(
+        bid_purse,
+        &validator1,
+        &UnbondKind::Validator(validator1.clone()),
+        101,
+    );
 
     // check bid overwrite
     let account1_hash = validator1.to_account_hash();
@@ -1345,7 +1359,12 @@ fn should_replace_a_delegator_with_unbonding() {
     update.assert_key_absent(&Key::Balance(delegator1_bid_purse.addr()));
 
     // check that the old delegator has been unbonded
-    update.assert_unbonding_purse(delegator1_bid_purse, &validator1, &delegator1, d1_stake);
+    update.assert_unbond_bid_kind(
+        delegator1_bid_purse,
+        &validator1,
+        &UnbondKind::DelegatedPublicKey(delegator1.clone()),
+        d1_stake,
+    );
 
     // check that the bid purse for the new delegator has been created with the correct amount
     update.assert_written_purse_is_unit(delegator2_bid_purse);
@@ -1642,7 +1661,12 @@ fn should_remove_the_delegator_with_unbonding() {
     update.assert_key_absent(&Key::Balance(delegator1_bid_purse.addr()));
 
     // check that the unbonding purse got created
-    update.assert_unbonding_purse(delegator1_bid_purse, &validator1, &delegator1, 13);
+    update.assert_unbond_bid_kind(
+        delegator1_bid_purse,
+        &validator1,
+        &UnbondKind::DelegatedPublicKey(delegator1.clone()),
+        13,
+    );
 
     // 6 keys should be written:
     // - seigniorage recipients
@@ -1955,12 +1979,12 @@ fn should_slash_a_validator_and_delegator_with_enqueued_unbonds() {
     update.assert_key_absent(&Key::Unbond(delegator1.to_account_hash()));
     update.assert_key_absent(&Key::Unbond(past_delegator1.to_account_hash()));
 
-    // 9 keys should be written:
+    // 8 keys should be written for validator1:
     // - seigniorage recipients
     // - total supply
     // - 3 balances, 2 bids,
-    // - 2 unbonds
-    assert_eq!(update.len(), 9);
+    // - 1 unbonds
+    assert_eq!(update.len(), 8);
 }
 
 #[test]
@@ -2157,12 +2181,12 @@ fn should_handle_unbonding_to_a_delegator_correctly() {
         OLD_BALANCE + OLD_STAKE + NEW_BALANCE + NEW_STAKE + DELEGATOR_BALANCE + DELEGATOR_STAKE,
     );
     let unbond_kind = UnbondKind::Validator(old_validator.clone());
-    let unbonding_purses = reader
+    let unbond = reader
         .get_unbonds()
         .get(&unbond_kind)
         .cloned()
         .expect("should have unbond purses");
-    let validator_purse = unbonding_purses
+    let validator_purse = unbond
         .eras()
         .first()
         .map(|purse| *purse.bonding_purse())
@@ -2525,11 +2549,12 @@ fn should_handle_legacy_unbonding_to_a_delegator_correctly() {
     update.assert_written_purse_is_unit(bid_write.bonding_purse().unwrap());
     update.assert_written_balance(bid_write.bonding_purse().unwrap(), V2_INITIAL_STAKE);
 
-    // 12 keys should be written:
+    // 13 keys should be written:
     // - seigniorage recipients
     // - total supply
     // - bid for old validator
-    // - unbonding purse for old validator
+    // - unbonding for old validator
+    // - unbond for delegator
     // - account for new validator
     // - main purse for account for new validator
     // - main purse balance for account for new validator
@@ -2538,5 +2563,5 @@ fn should_handle_legacy_unbonding_to_a_delegator_correctly() {
     // - bid for new validator
     // - bonding purse for new validator
     // - bonding purse balance for new validator
-    assert_eq!(update.len(), 12);
+    assert_eq!(update.len(), 13);
 }

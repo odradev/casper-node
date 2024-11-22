@@ -630,11 +630,11 @@ where
                             .iter_mut()
                             .max_by(|x, y| x.era_of_creation().cmp(&y.era_of_creation()))
                         {
-                            Some(era) => {
-                                let purse = *era.bonding_purse();
+                            Some(unbond_era) => {
+                                let purse = *unbond_era.bonding_purse();
                                 let new_amount =
-                                    era.amount().saturating_add(delegator_reward_trunc);
-                                era.with_amount(new_amount);
+                                    unbond_era.amount().saturating_add(delegator_reward_trunc);
+                                unbond_era.with_amount(new_amount);
                                 provider.write_unbond(unbond_bid_addr, Some(unbond.clone()))?;
                                 purse
                             }
@@ -702,10 +702,10 @@ where
                         .iter_mut()
                         .max_by(|x, y| x.era_of_creation().cmp(&y.era_of_creation()))
                     {
-                        Some(era) => {
-                            let purse = *era.bonding_purse();
-                            let new_amount = era.amount().saturating_add(amount);
-                            era.with_amount(new_amount);
+                        Some(unbond_era) => {
+                            let purse = *unbond_era.bonding_purse();
+                            let new_amount = unbond_era.amount().saturating_add(amount);
+                            unbond_era.with_amount(new_amount);
                             provider.write_unbond(unbond_addr, Some(unbond.clone()))?;
                             purse
                         }
@@ -1081,11 +1081,18 @@ where
 {
     let mut ret = vec![];
     let bid_addr = BidAddr::from(validator_public_key.clone());
-    let delegator_bid_keys = provider.get_keys_by_prefix(
+    let mut delegator_bid_keys = provider.get_keys_by_prefix(
         &bid_addr
             .delegated_account_prefix()
             .map_err(|_| Error::Serialization)?,
     )?;
+    delegator_bid_keys.extend(
+        provider.get_keys_by_prefix(
+            &bid_addr
+                .delegated_purse_prefix()
+                .map_err(|_| Error::Serialization)?,
+        )?,
+    );
     for delegator_bid_key in delegator_bid_keys {
         let delegator_bid = read_delegator_bid(provider, &delegator_bid_key)?;
         ret.push(*delegator_bid);
@@ -1119,11 +1126,18 @@ where
 {
     let mut ret = vec![];
     let bid_addr = BidAddr::from(validator_public_key.clone());
-    let reservation_bid_keys = provider.get_keys_by_prefix(
+    let mut reservation_bid_keys = provider.get_keys_by_prefix(
         &bid_addr
             .reserved_account_prefix()
             .map_err(|_| Error::Serialization)?,
     )?;
+    reservation_bid_keys.extend(
+        provider.get_keys_by_prefix(
+            &bid_addr
+                .reserved_purse_prefix()
+                .map_err(|_| Error::Serialization)?,
+        )?,
+    );
     for reservation_bid_key in reservation_bid_keys {
         let reservation_bid = read_reservation_bid(provider, &reservation_bid_key)?;
         ret.push(*reservation_bid);
@@ -1291,11 +1305,18 @@ where
 {
     let mut ret = vec![];
     let bid_addr = BidAddr::from(validator_public_key.clone());
-    let delegator_bid_keys = provider.get_keys_by_prefix(
+    let mut delegator_bid_keys = provider.get_keys_by_prefix(
         &bid_addr
             .delegated_account_prefix()
             .map_err(|_| Error::Serialization)?,
     )?;
+    delegator_bid_keys.extend(
+        provider.get_keys_by_prefix(
+            &bid_addr
+                .delegated_purse_prefix()
+                .map_err(|_| Error::Serialization)?,
+        )?,
+    );
 
     for delegator_bid_key in delegator_bid_keys {
         let delegator = read_delegator_bid(provider, &delegator_bid_key)?;
@@ -1315,11 +1336,18 @@ where
 {
     let mut ret = vec![];
     let bid_addr = BidAddr::from(validator_public_key.clone());
-    let reservation_bid_keys = provider.get_keys_by_prefix(
+    let mut reservation_bid_keys = provider.get_keys_by_prefix(
         &bid_addr
             .reserved_account_prefix()
             .map_err(|_| Error::Serialization)?,
     )?;
+    reservation_bid_keys.extend(
+        provider.get_keys_by_prefix(
+            &bid_addr
+                .reserved_purse_prefix()
+                .map_err(|_| Error::Serialization)?,
+        )?,
+    );
 
     for reservation_bid_key in reservation_bid_keys {
         let reservation = read_reservation_bid(provider, &reservation_bid_key)?;

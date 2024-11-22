@@ -12,8 +12,8 @@ use casper_types::{
     contracts::NamedKeys,
     system::{
         auction::{
-            Bid, BidAddr, BidKind, DelegatorBid, DelegatorKind, EraInfo, SeigniorageAllocation,
-            UnbondingPurse, ValidatorBid, WithdrawPurse,
+            Bid, BidAddr, BidKind, Delegator, DelegatorBid, DelegatorKind, EraInfo,
+            SeigniorageAllocation, UnbondingPurse, ValidatorBid, WithdrawPurse,
         },
         mint::BalanceHoldAddr,
     },
@@ -130,8 +130,8 @@ pub fn make_abi_test_fixtures() -> Result<TestFixtures, Error> {
         &validator_public_key,
         Some(&delegator_public_key.clone()),
     ));
-    let delegator = DelegatorBid::locked(
-        delegator_public_key.clone().into(),
+    let delegator = Delegator::locked(
+        delegator_public_key.clone(),
         U512::from(1_000_000_000u64),
         URef::new([11; 32], AccessRights::READ_ADD_WRITE),
         validator_public_key.clone(),
@@ -146,6 +146,14 @@ pub fn make_abi_test_fixtures() -> Result<TestFixtures, Error> {
         u64::MAX,
     )));
 
+    let _delegator_bid = DelegatorBid::locked(
+        delegator_public_key.clone().into(),
+        U512::from(1_000_000_000u64),
+        URef::new([11; 32], AccessRights::READ_ADD_WRITE),
+        validator_public_key.clone(),
+        u64::MAX,
+    );
+
     let unified_bid_key = Key::BidAddr(BidAddr::legacy(
         validator_public_key.to_account_hash().value(),
     ));
@@ -159,7 +167,7 @@ pub fn make_abi_test_fixtures() -> Result<TestFixtures, Error> {
         );
         unified_bid
             .delegators_mut()
-            .insert(delegator.delegator_kind().clone(), delegator.clone());
+            .insert(delegator.delegator_public_key().clone(), delegator.clone());
         unified_bid
     };
     let unified_bid_kind = BidKind::Unified(Box::new(unified_bid));
@@ -174,7 +182,7 @@ pub fn make_abi_test_fixtures() -> Result<TestFixtures, Error> {
             u64::MAX,
         );
         bid.delegators_mut()
-            .insert(delegator.delegator_kind().clone(), delegator);
+            .insert(delegator.delegator_public_key().clone(), delegator);
         bid
     };
 

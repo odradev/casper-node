@@ -2603,7 +2603,7 @@
           ]
         },
         "delegators": {
-          "description": "This validator's delegators, indexed by their kind.",
+          "description": "This validator's delegators, indexed by their public keys.",
           "allOf": [
             {
               "$ref": "#/definitions/Array_of_PublicKeyAndDelegator"
@@ -2660,7 +2660,7 @@
           "description": "The public key of the delegator.",
           "allOf": [
             {
-              "$ref": "#/definitions/DelegatorKind"
+              "$ref": "#/definitions/PublicKey"
             }
           ]
         },
@@ -2668,24 +2668,24 @@
           "description": "The delegator details.",
           "allOf": [
             {
-              "$ref": "#/definitions/DelegatorBid"
+              "$ref": "#/definitions/Delegator"
             }
           ]
         }
       }
     },
-    "DelegatorBid": {
+    "Delegator": {
       "description": "Represents a party delegating their stake to a validator (or \"delegatee\")",
       "type": "object",
       "required": [
         "bonding_purse",
-        "delegator_kind",
+        "delegator_public_key",
         "staked_amount",
         "validator_public_key"
       ],
       "properties": {
-        "delegator_kind": {
-          "$ref": "#/definitions/DelegatorKind"
+        "delegator_public_key": {
+          "$ref": "#/definitions/PublicKey"
         },
         "staked_amount": {
           "$ref": "#/definitions/U512"
@@ -3035,6 +3035,41 @@
           "type": "integer",
           "format": "uint32",
           "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "DelegatorBid": {
+      "description": "Represents a party delegating their stake to a validator (or \"delegatee\")",
+      "type": "object",
+      "required": [
+        "bonding_purse",
+        "delegator_kind",
+        "staked_amount",
+        "validator_public_key"
+      ],
+      "properties": {
+        "delegator_kind": {
+          "$ref": "#/definitions/DelegatorKind"
+        },
+        "staked_amount": {
+          "$ref": "#/definitions/U512"
+        },
+        "bonding_purse": {
+          "$ref": "#/definitions/URef"
+        },
+        "validator_public_key": {
+          "$ref": "#/definitions/PublicKey"
+        },
+        "vesting_schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/VestingSchedule"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false

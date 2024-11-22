@@ -113,11 +113,10 @@
       {
         "type": "StoredValue",
         "value": {
-          "CLValue": {
-            "cl_type": "String",
-            "bytes": "0d00000048656c6c6f2c20776f726c6421",
-            "parsed": "Hello, world!"
-          }
+          "CLValue": [
+            "String",
+            "0d00000048656c6c6f2c20776f726c6421"
+          ]
         }
       }
     ],
@@ -130,7 +129,9 @@
         "value": {
           "BidKind": {
             "Delegator": {
-              "delegator_public_key": "0202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f2",
+              "delegator_kind": {
+                "PublicKey": "0202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f2"
+              },
               "staked_amount": "1000000000",
               "bonding_purse": "uref-0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b-007",
               "validator_public_key": "01197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61",
@@ -143,7 +144,7 @@
         }
       }
     ],
-    "output": "0b020202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f20400ca9a3b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0701197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d6101ffffffffffffffff00"
+    "output": "0b02000202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f20400ca9a3b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0701197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d6101ffffffffffffffff00"
   },
   "DeployInfo": {
     "input": [
@@ -209,7 +210,9 @@
               },
               {
                 "Delegator": {
-                  "delegator_public_key": "0202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f2",
+                  "delegator_kind": {
+                    "PublicKey": "0202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f2"
+                  },
                   "validator_public_key": "01197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61",
                   "amount": "1000000000"
                 }
@@ -219,7 +222,7 @@
         }
       }
     ],
-    "output": "07020000000001197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d610400ca9a3b010202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f201197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d610400ca9a3b"
+    "output": "07020000000001197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d610400ca9a3b01000202bb58b5feca505c74edc000d8282fc556e51a1024fc8e7d7e56c6f887c5c8d5f201197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d610400ca9a3b"
   },
   "LegacyTransfer": {
     "input": [

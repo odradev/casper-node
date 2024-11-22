@@ -7,7 +7,9 @@ use casper_types::{account::AccountHash, AddressableEntity, CLValue, PublicKey, 
 use casper_types::{Key, StoredValue};
 
 #[cfg(test)]
-use casper_types::system::auction::{BidAddr, BidKind, DelegatorBid, DelegatorKind, ValidatorBid};
+use casper_types::system::auction::{
+    BidAddr, BidKind, DelegatorBid, DelegatorKind, UnbondKind, ValidatorBid,
+};
 
 #[cfg(test)]
 use super::state_reader::StateReader;
@@ -211,6 +213,7 @@ impl Update {
     }
 
     #[track_caller]
+    #[allow(unused)]
     pub(crate) fn assert_unbonding_purse(
         &self,
         bid_purse: URef,
@@ -271,6 +274,49 @@ impl Update {
             data, expected,
             "\nThe data we got:\n{data:#?}\nExpected values:\n{expected:#?}"
         );
+    }
+
+    #[track_caller]
+    pub(crate) fn assert_unbond_bid_kind(
+        &self,
+        bid_purse: URef,
+        validator_key: &PublicKey,
+        unbond_kind: &UnbondKind,
+        amount: u64,
+    ) {
+        println!(
+            "assert_unbond_bid_kind {:?} {:?}",
+            validator_key,
+            validator_key.to_account_hash()
+        );
+        println!("assert_unbond_bid_kind {:?}", unbond_kind);
+        let bid_addr = match unbond_kind {
+            UnbondKind::Validator(pk) | UnbondKind::DelegatedPublicKey(pk) => {
+                BidAddr::UnbondAccount {
+                    validator: validator_key.to_account_hash(),
+                    unbonder: pk.to_account_hash(),
+                }
+            }
+            UnbondKind::DelegatedPurse(addr) => BidAddr::UnbondPurse {
+                validator: validator_key.to_account_hash(),
+                unbonder: *addr,
+            },
+        };
+
+        println!("assert_unbond_bid_kind {:?}", Key::BidAddr(bid_addr));
+
+        let entries = &self.entries;
+        let unbonds = entries
+            .get(&Key::BidAddr(bid_addr))
+            .expect("should have record")
+            .as_unbond()
+            .expect("should be unbond");
+
+        assert!(unbonds
+            .eras()
+            .iter()
+            .any(|unbond_era| unbond_era.bonding_purse() == &bid_purse
+                && unbond_era.amount() == &U512::from(amount)))
     }
 
     #[track_caller]
