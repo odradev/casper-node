@@ -354,6 +354,7 @@ impl<T: StateReader> StateTracker<T> {
                     .expect("should have bonding purse")
                     != bonding_purse
                 {
+                    println!("foo");
                     self.set_purse_balance(existing_bid.bonding_purse().unwrap(), U512::zero());
                     self.set_purse_balance(bonding_purse, previously_bonded);
                     // the old bonding purse gets zeroed - the unbonds will get invalid, anyway
@@ -361,6 +362,7 @@ impl<T: StateReader> StateTracker<T> {
                         &existing_bid.bonding_purse().unwrap(),
                     );
                 }
+
                 previously_bonded
             }
         };
@@ -549,13 +551,11 @@ impl<T: StateReader> StateTracker<T> {
 
         for (unbond_kind, mut unbonds) in unbonds {
             for unbond in unbonds.iter_mut() {
-                println!("unbond: {:?}", unbond);
                 let old_len = unbond.eras().len();
                 unbond
                     .eras_mut()
                     .retain(|purse| purse.bonding_purse().addr() != affected_purse.addr());
                 if unbond.eras().len() != old_len {
-                    println!("writing: {:?}", unbond_kind);
                     self.write_unbond(unbond_kind.clone(), unbond.clone());
                 }
             }
