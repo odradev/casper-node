@@ -256,9 +256,8 @@ fn should_run_ee_1120_slash_delegators() {
 
     let bids_before: Vec<BidKind> = builder
         .get_bids()
-        .iter()
+        .into_iter()
         .filter(|bid| !bid.is_unbond())
-        .map(|bid| bid.clone())
         .collect();
     /*
         There should be 5 total bids at this point:
@@ -293,9 +292,8 @@ fn should_run_ee_1120_slash_delegators() {
     // Compare bids after slashing validator 2
     let bids_after: Vec<BidKind> = builder
         .get_bids()
-        .iter()
+        .into_iter()
         .filter(|bid| !bid.is_unbond())
-        .map(|bid| bid.clone())
         .collect();
     assert_ne!(bids_before, bids_after);
     /*

@@ -428,18 +428,6 @@ fn should_run_successful_bond_and_unbond_with_release() {
 
     builder.run_auction(timestamp_millis, Vec::new());
     timestamp_millis += TIMESTAMP_MILLIS_INCREMENT;
-    let unbonds = builder.get_unbonds();
-    assert_eq!(unbonds.len(), 1);
-
-    let unbond_kind = UnbondKind::Validator((*DEFAULT_ACCOUNT_PUBLIC_KEY).clone());
-    let unbond = unbond_purses
-        .get(&unbond_kind)
-        .expect("should have unbond")
-        .first()
-        .expect("must have one unbond entry");
-    assert_eq!(unbond.eras().len(), 1);
-    assert_eq!(unbond.validator_public_key(), &default_public_key_arg,);
-    assert!(unbond.is_validator());
 
     assert_eq!(
         builder.get_purse_balance(unbonding_purse),

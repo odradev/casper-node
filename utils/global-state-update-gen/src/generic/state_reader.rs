@@ -30,7 +30,7 @@ pub trait StateReader {
     #[deprecated(note = "superseded by get_unbonds")]
     fn get_unbonding_purses(&mut self) -> BTreeMap<AccountHash, Vec<UnbondingPurse>>;
 
-    fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Unbond>;
+    fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Vec<Unbond>>;
 }
 
 impl<'a, T> StateReader for &'a mut T
@@ -67,7 +67,7 @@ where
         T::get_unbonding_purses(self)
     }
 
-    fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Unbond> {
+    fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Vec<Unbond>> {
         T::get_unbonds(self)
     }
 }
@@ -139,7 +139,7 @@ impl StateReader for LmdbWasmTestBuilder {
         LmdbWasmTestBuilder::get_unbonding_purses(self)
     }
 
-    fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Unbond> {
+    fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Vec<Unbond>> {
         LmdbWasmTestBuilder::get_unbonds(self)
     }
 }

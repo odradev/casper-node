@@ -379,9 +379,8 @@ fn should_decrease_existing_bid() {
 
     let bids: Vec<_> = builder
         .get_bids()
-        .iter()
+        .into_iter()
         .filter(|bid| !bid.is_unbond())
-        .map(|bid| bid.clone())
         .collect();
 
     assert_eq!(bids.len(), 1);
@@ -464,7 +463,11 @@ fn should_run_delegate_and_undelegate() {
 
     let auction_hash = builder.get_auction_contract_hash();
 
-    let bids = builder.get_bids();
+    let bids: Vec<BidKind> = builder
+        .get_bids()
+        .into_iter()
+        .filter(|bid| !bid.is_unbond())
+        .collect();
     assert_eq!(bids.len(), 1);
     let active_bid = bids.validator_bid(&NON_FOUNDER_VALIDATOR_1_PK).unwrap();
     assert_eq!(
@@ -496,7 +499,11 @@ fn should_run_delegate_and_undelegate() {
 
     builder.exec(exec_request_1).commit().expect_success();
 
-    let bids = builder.get_bids();
+    let bids: Vec<_> = builder
+        .get_bids()
+        .into_iter()
+        .filter(|bid| !bid.is_unbond())
+        .collect();
     assert_eq!(bids.len(), 2);
     let delegators = bids
         .delegators_by_validator_public_key(&NON_FOUNDER_VALIDATOR_1_PK)
@@ -525,7 +532,11 @@ fn should_run_delegate_and_undelegate() {
 
     builder.exec(exec_request_2).commit().expect_success();
 
-    let bids = builder.get_bids();
+    let bids: Vec<_> = builder
+        .get_bids()
+        .into_iter()
+        .filter(|bid| !bid.is_unbond())
+        .collect();
     assert_eq!(bids.len(), 2);
     let delegators = bids
         .delegators_by_validator_public_key(&NON_FOUNDER_VALIDATOR_1_PK)
@@ -555,7 +566,11 @@ fn should_run_delegate_and_undelegate() {
     .build();
     builder.exec(exec_request_3).expect_success().commit();
 
-    let bids = builder.get_bids();
+    let bids: Vec<_> = builder
+        .get_bids()
+        .into_iter()
+        .filter(|bid| !bid.is_unbond())
+        .collect();
     assert_eq!(bids.len(), 2);
     let delegators = bids
         .delegators_by_validator_public_key(&NON_FOUNDER_VALIDATOR_1_PK)
@@ -576,7 +591,7 @@ fn should_run_delegate_and_undelegate() {
     let unbonding_purses = builder.get_unbonds();
     assert_eq!(unbonding_purses.len(), 1);
 
-    let unbond_kind = UnbondKind::Validator(BID_ACCOUNT_1_PK.clone());
+    let unbond_kind = UnbondKind::DelegatedPublicKey(BID_ACCOUNT_1_PK.clone());
     let unbond = unbonding_purses
         .get(&unbond_kind)
         .expect("should have unbonding purse for non founder validator");
@@ -782,7 +797,11 @@ fn should_forcibly_undelegate_after_setting_validator_limits() {
 
     // builder.advance_eras_by_default_auction_delay();
 
-    let bids = builder.get_bids();
+    let bids: Vec<_> = builder
+        .get_bids()
+        .into_iter()
+        .filter(|bid| !bid.is_unbond())
+        .collect();
     assert_eq!(bids.len(), 3);
 
     let auction_delay = builder.get_auction_delay();
@@ -827,12 +846,20 @@ fn should_forcibly_undelegate_after_setting_validator_limits() {
         .expect_success()
         .commit();
 
-    let bids = builder.get_bids();
+    let bids: Vec<_> = builder
+        .get_bids()
+        .into_iter()
+        .filter(|bid| !bid.is_unbond())
+        .collect();
     assert_eq!(bids.len(), 3);
 
     builder.forced_undelegate(None, DEFAULT_PROTOCOL_VERSION, DEFAULT_BLOCK_TIME);
 
-    let bids = builder.get_bids();
+    let bids: Vec<_> = builder
+        .get_bids()
+        .into_iter()
+        .filter(|bid| !bid.is_unbond())
+        .collect();
     assert_eq!(bids.len(), 2);
 
     assert!(builder.get_validator_weights(new_era + 1).is_none());
@@ -3061,6 +3088,7 @@ fn should_release_vfta_holder_stake() {
             *DELEGATOR_1_ADDR,
             CONTRACT_UNDELEGATE,
             runtime_args! {
+                ARG_VALIDATOR => ACCOUNT_1_PK.clone(),
                 ARG_DELEGATOR => DELEGATOR_1.clone(),
                 ARG_AMOUNT => U512::from(amount),
             },
@@ -3736,7 +3764,7 @@ fn should_delegate_and_redelegate() {
         .commit()
         .expect_success();
 
-    let unbond_kind = UnbondKind::Validator(BID_ACCOUNT_1_PK.clone());
+    let unbond_kind = UnbondKind::DelegatedPublicKey(BID_ACCOUNT_1_PK.clone());
     let after_redelegation = builder
         .get_unbonds()
         .get(&unbond_kind)
@@ -4503,7 +4531,7 @@ fn should_transfer_to_main_purse_in_case_of_redelegation_past_max_delegation_cap
         .commit()
         .expect_success();
 
-    let unbond_kind = UnbondKind::Validator(BID_ACCOUNT_1_PK.clone());
+    let unbond_kind = UnbondKind::DelegatedPublicKey(BID_ACCOUNT_1_PK.clone());
     let after_redelegation = builder
         .get_unbonds()
         .get(&unbond_kind)
@@ -5081,9 +5109,8 @@ fn should_change_validator_bid_public_key() {
 
     let bids: Vec<BidKind> = builder
         .get_bids()
-        .iter()
+        .into_iter()
         .filter(|bid| !bid.is_unbond())
-        .map(|bid| bid.clone())
         .collect();
 
     assert_eq!(bids.len(), 4);
@@ -5111,9 +5138,8 @@ fn should_change_validator_bid_public_key() {
 
     let bids: Vec<BidKind> = builder
         .get_bids()
-        .iter()
+        .into_iter()
         .filter(|bid| !bid.is_unbond())
-        .map(|bid| bid.clone())
         .collect();
     assert_eq!(bids.len(), 5);
     let new_validator_bid = bids
@@ -5186,9 +5212,8 @@ fn should_change_validator_bid_public_key() {
 
     let bids: Vec<BidKind> = builder
         .get_bids()
-        .iter()
+        .into_iter()
         .filter(|bid| !bid.is_unbond())
-        .map(|bid| bid.clone())
         .collect();
     assert_eq!(bids.len(), 5);
 
@@ -5424,7 +5449,11 @@ fn should_handle_excessively_long_bridge_record_chains() {
 
     let era_id = builder.get_era();
 
-    let bids = builder.get_bids();
+    let bids: Vec<_> = builder
+        .get_bids()
+        .into_iter()
+        .filter(|bid| !bid.is_unbond())
+        .collect();
     assert_eq!(bids.len(), 25);
     let new_validator_bid = bids.validator_bid(&current_bid_public_key).unwrap();
     assert_eq!(
@@ -5491,7 +5520,11 @@ fn should_handle_excessively_long_bridge_record_chains() {
 
     builder.exec(distribute_request).commit().expect_success();
 
-    let bids = builder.get_bids();
+    let bids: Vec<_> = builder
+        .get_bids()
+        .into_iter()
+        .filter(|bid| !bid.is_unbond())
+        .collect();
     assert_eq!(bids.len(), 25);
 
     let delegator = bids
@@ -5505,7 +5538,11 @@ fn should_handle_excessively_long_bridge_record_chains() {
     // advance eras until unbonds are processed
     builder.advance_eras_by(DEFAULT_UNBONDING_DELAY + 1);
 
-    let bids = builder.get_bids();
+    let bids: Vec<_> = builder
+        .get_bids()
+        .into_iter()
+        .filter(|bid| !bid.is_unbond())
+        .collect();
     assert_eq!(bids.len(), 25);
     let delegator = bids.delegator_by_kind(
         &current_public_key,

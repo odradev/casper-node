@@ -301,7 +301,7 @@ fn should_enforce_max_delegators_per_validator_with_reserved_slots() {
         CONTRACT_CANCEL_RESERVATIONS,
         runtime_args! {
             ARG_VALIDATOR => VALIDATOR_1.clone(),
-            ARG_DELEGATORS => vec![DELEGATOR_3.clone()],
+            ARG_DELEGATORS => vec![DelegatorKind::PublicKey(DELEGATOR_3.clone())],
         },
     )
     .build();
@@ -480,7 +480,7 @@ fn should_not_allow_validator_to_reduce_number_of_reserved_spots_if_they_are_occ
         CONTRACT_CANCEL_RESERVATIONS,
         runtime_args! {
             ARG_VALIDATOR => VALIDATOR_1.clone(),
-            ARG_DELEGATORS => vec![DELEGATOR_2.clone()],
+            ARG_DELEGATORS => vec![DelegatorKind::PublicKey(DELEGATOR_2.clone())],
         },
     )
     .build();
@@ -605,7 +605,7 @@ fn should_not_allow_validator_to_remove_active_reservation_if_there_are_no_free_
         CONTRACT_CANCEL_RESERVATIONS,
         runtime_args! {
             ARG_VALIDATOR => VALIDATOR_1.clone(),
-            ARG_DELEGATORS => vec![DELEGATOR_2.clone()],
+            ARG_DELEGATORS => vec![DelegatorKind::PublicKey(DELEGATOR_2.clone())],
         },
     )
     .build();
@@ -712,7 +712,7 @@ fn should_handle_reserved_slots() {
         CONTRACT_CANCEL_RESERVATIONS,
         runtime_args! {
             ARG_VALIDATOR => VALIDATOR_1.clone(),
-            ARG_DELEGATORS => vec![DELEGATOR_1.clone(), DELEGATOR_2.clone(), DELEGATOR_3.clone()],
+            ARG_DELEGATORS => vec![DelegatorKind::PublicKey(DELEGATOR_1.clone()), DelegatorKind::PublicKey(DELEGATOR_2.clone()), DelegatorKind::PublicKey(DELEGATOR_3.clone())],
         },
     )
     .build();
