@@ -105,7 +105,12 @@ impl From<&Bid> for SeigniorageRecipientV1 {
         let delegator_stake = bid
             .delegators()
             .iter()
-            .map(|(delegator_kind, delegator)| (delegator_kind.clone(), delegator.staked_amount()))
+            .map(|(delegator_public_key, delegator)| {
+                (
+                    DelegatorKind::PublicKey(delegator_public_key.clone()),
+                    delegator.staked_amount(),
+                )
+            })
             .collect();
         Self {
             stake: *bid.staked_amount(),
@@ -226,7 +231,12 @@ impl From<&Bid> for SeigniorageRecipientV2 {
         let delegator_stake = bid
             .delegators()
             .iter()
-            .map(|(delegator_kind, delegator)| (delegator_kind.clone(), delegator.staked_amount()))
+            .map(|(delegator_public_key, delegator)| {
+                (
+                    DelegatorKind::PublicKey(delegator_public_key.clone()),
+                    delegator.staked_amount(),
+                )
+            })
             .collect();
         Self {
             stake: *bid.staked_amount(),

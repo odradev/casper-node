@@ -14,7 +14,9 @@ use serde_map_to_array::{BTreeMapToArray, KeyValueLabels};
 
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes},
-    system::auction::{DelegationRate, DelegatorBid, DelegatorKind, Error, ValidatorBid},
+    system::auction::{
+        DelegationRate, Delegator, DelegatorBid, DelegatorKind, Error, ValidatorBid,
+    },
     CLType, CLTyped, PublicKey, URef, U512,
 };
 
@@ -36,9 +38,9 @@ pub struct Bid {
     delegation_rate: DelegationRate,
     /// Vesting schedule for a genesis validator. `None` if non-genesis validator.
     vesting_schedule: Option<VestingSchedule>,
-    /// This validator's delegators, indexed by their kind.
-    #[serde(with = "BTreeMapToArray::<DelegatorKind, DelegatorBid, DelegatorLabels>")]
-    delegators: BTreeMap<DelegatorKind, DelegatorBid>,
+    /// This validator's delegators, indexed by their public keys.
+    #[serde(with = "BTreeMapToArray::<PublicKey, Delegator, DelegatorLabels>")]
+    delegators: BTreeMap<PublicKey, Delegator>,
     /// `true` if validator has been "evicted".
     inactive: bool,
 }
@@ -49,13 +51,25 @@ impl Bid {
         validator_bid: ValidatorBid,
         delegators: BTreeMap<DelegatorKind, DelegatorBid>,
     ) -> Self {
+        let mut map = BTreeMap::new();
+        for (kind, bid) in delegators {
+            if let DelegatorKind::PublicKey(pk) = kind {
+                let delegator = Delegator::unlocked(
+                    pk.clone(),
+                    bid.staked_amount(),
+                    *bid.bonding_purse(),
+                    bid.validator_public_key().clone(),
+                );
+                map.insert(pk, delegator);
+            }
+        }
         Self {
             validator_public_key: validator_bid.validator_public_key().clone(),
             bonding_purse: *validator_bid.bonding_purse(),
             staked_amount: validator_bid.staked_amount(),
             delegation_rate: *validator_bid.delegation_rate(),
             vesting_schedule: validator_bid.vesting_schedule().cloned(),
-            delegators,
+            delegators: map,
             inactive: validator_bid.inactive(),
         }
     }
@@ -184,12 +198,12 @@ impl Bid {
     }
 
     /// Returns a reference to the delegators of the provided bid
-    pub fn delegators(&self) -> &BTreeMap<DelegatorKind, DelegatorBid> {
+    pub fn delegators(&self) -> &BTreeMap<PublicKey, Delegator> {
         &self.delegators
     }
 
     /// Returns a mutable reference to the delegators of the provided bid
-    pub fn delegators_mut(&mut self) -> &mut BTreeMap<DelegatorKind, DelegatorBid> {
+    pub fn delegators_mut(&mut self) -> &mut BTreeMap<PublicKey, Delegator> {
         &mut self.delegators
     }
 
@@ -432,7 +446,7 @@ mod tests {
 
     use crate::{
         bytesrepr,
-        system::auction::{bid::VestingSchedule, Bid, DelegationRate, DelegatorBid},
+        system::auction::{bid::VestingSchedule, Bid, DelegationRate, Delegator},
         AccessRights, PublicKey, SecretKey, URef, U512,
     };
 
@@ -507,16 +521,16 @@ mod tests {
         let delegator_2_bonding_purse = URef::new([62; 32], AccessRights::ADD);
         let delegator_2_staked_amount = U512::from(3000);
 
-        let delegator_1 = DelegatorBid::locked(
-            delegator_1_pk.clone().into(),
+        let delegator_1 = Delegator::locked(
+            delegator_1_pk.clone(),
             delegator_1_staked_amount,
             delegator_1_bonding_purse,
             validator_pk.clone(),
             delegator_1_release_timestamp,
         );
 
-        let delegator_2 = DelegatorBid::locked(
-            delegator_2_pk.clone().into(),
+        let delegator_2 = Delegator::locked(
+            delegator_2_pk.clone(),
             delegator_2_staked_amount,
             delegator_2_bonding_purse,
             validator_pk.clone(),
@@ -539,8 +553,8 @@ mod tests {
         {
             let delegators = bid.delegators_mut();
 
-            delegators.insert(delegator_1_pk.clone().into(), delegator_1);
-            delegators.insert(delegator_2_pk.clone().into(), delegator_2);
+            delegators.insert(delegator_1_pk.clone(), delegator_1);
+            delegators.insert(delegator_2_pk.clone(), delegator_2);
         }
 
         assert!(bid.process_with_vesting_schedule(
@@ -550,7 +564,7 @@ mod tests {
 
         let delegator_1_updated_1 = bid
             .delegators()
-            .get(&delegator_1_pk.clone().into())
+            .get(&delegator_1_pk.clone())
             .cloned()
             .unwrap();
         assert!(delegator_1_updated_1
@@ -561,7 +575,7 @@ mod tests {
 
         let delegator_2_updated_1 = bid
             .delegators()
-            .get(&delegator_2_pk.clone().into())
+            .get(&delegator_2_pk.clone())
             .cloned()
             .unwrap();
         assert!(delegator_2_updated_1
@@ -577,7 +591,7 @@ mod tests {
 
         let delegator_1_updated_2 = bid
             .delegators()
-            .get(&delegator_1_pk.clone().into())
+            .get(&delegator_1_pk.clone())
             .cloned()
             .unwrap();
         assert!(delegator_1_updated_2
@@ -590,7 +604,7 @@ mod tests {
 
         let delegator_2_updated_2 = bid
             .delegators()
-            .get(&delegator_2_pk.clone().into())
+            .get(&delegator_2_pk.clone())
             .cloned()
             .unwrap();
         assert!(delegator_2_updated_2

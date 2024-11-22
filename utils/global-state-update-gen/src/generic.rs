@@ -18,7 +18,7 @@ use casper_execution_engine::engine_state::engine_config::DEFAULT_PROTOCOL_VERSI
 
 use casper_types::{
     system::auction::{
-        Bid, BidKind, BidsExt, DelegatorBid, Reservation, SeigniorageRecipientV2,
+        Bid, BidKind, BidsExt, DelegatorBid, DelegatorKind, Reservation, SeigniorageRecipientV2,
         SeigniorageRecipientsSnapshotV2, Unbond, ValidatorBid, ValidatorCredit,
     },
     CLValue, EraId, PublicKey, StoredValue, U512,
@@ -471,7 +471,7 @@ fn create_or_update_bid<T: StateReader>(
                     let delegator_stake = bid
                         .delegators()
                         .iter()
-                        .map(|(k, d)| (k.clone(), d.staked_amount()))
+                        .map(|(k, d)| (DelegatorKind::PublicKey(k.clone()), d.staked_amount()))
                         .collect();
 
                     (

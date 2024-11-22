@@ -24,7 +24,7 @@ use crate::{
     contracts::{Contract, ContractPackage},
     package::Package,
     system::{
-        auction::{Bid, BidKind, EraInfo, UnbondingPurse, WithdrawPurse},
+        auction::{Bid, BidKind, EraInfo, Unbond, UnbondingPurse, WithdrawPurse},
         prepayment::PrepaidKind,
     },
     AddressableEntity, ByteCode, CLValue, DeployInfo, EntryPointValue, TransferV1,
@@ -236,6 +236,15 @@ impl StoredValue {
     pub fn as_unbonding(&self) -> Option<&Vec<UnbondingPurse>> {
         match self {
             StoredValue::Unbonding(unbonding_purses) => Some(unbonding_purses),
+            _ => None,
+        }
+    }
+
+    /// Returns a reference to the wrapped list of `UnbondingPurse`s if this is an `Unbonding`
+    /// variant.
+    pub fn as_unbond(&self) -> Option<&Unbond> {
+        match self {
+            StoredValue::BidKind(BidKind::Unbond(unbond)) => Some(unbond),
             _ => None,
         }
     }

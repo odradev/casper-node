@@ -626,7 +626,6 @@ pub fn package_arb() -> impl Strategy<Value = Package> {
     )
 }
 
-#[allow(unused)]
 pub(crate) fn delegator_arb() -> impl Strategy<Value = Delegator> {
     (
         public_key_arb_no_system(),
@@ -695,7 +694,7 @@ pub(crate) fn unified_bid_arb(
         u512_arb(),
         delegation_rate_arb(),
         bool::ANY,
-        collection::vec(delegator_bid_arb(), delegations_len),
+        collection::vec(delegator_arb(), delegations_len),
     )
         .prop_map(
             |(
@@ -725,7 +724,7 @@ pub(crate) fn unified_bid_arb(
                 let delegators = bid.delegators_mut();
                 new_delegators.into_iter().for_each(|delegator| {
                     assert!(delegators
-                        .insert(delegator.delegator_kind().clone(), delegator)
+                        .insert(delegator.delegator_public_key().clone(), delegator)
                         .is_none());
                 });
                 BidKind::Unified(Box::new(bid))

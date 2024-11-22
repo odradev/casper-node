@@ -10,8 +10,8 @@ use casper_types::{
     account::AccountHash,
     addressable_entity::{ActionThresholds, AssociatedKeys, Weight},
     system::auction::{
-        BidKind, BidsExt, DelegatorKind, SeigniorageRecipientsSnapshotV2, Unbond, UnbondEra,
-        UnbondKind, WithdrawPurse, WithdrawPurses,
+        BidAddr, BidKind, BidsExt, DelegatorKind, SeigniorageRecipientsSnapshotV2, Unbond,
+        UnbondEra, UnbondKind, UnbondingPurse, WithdrawPurse, WithdrawPurses,
     },
     AccessRights, AddressableEntity, AddressableEntityHash, ByteCodeHash, CLValue, EntityKind,
     EntityVersions, Groups, Key, Package, PackageHash, PackageStatus, ProtocolVersion, PublicKey,
@@ -28,6 +28,7 @@ pub struct StateTracker<T> {
     total_supply_key: Key,
     accounts_cache: BTreeMap<AccountHash, AddressableEntity>,
     withdraws_cache: BTreeMap<AccountHash, Vec<WithdrawPurse>>,
+    unbonding_purses_cache: BTreeMap<AccountHash, Vec<UnbondingPurse>>,
     unbonds_cache: BTreeMap<UnbondKind, Unbond>,
     purses_cache: BTreeMap<URef, U512>,
     staking: Option<Vec<BidKind>>,
@@ -52,6 +53,7 @@ impl<T: StateReader> StateTracker<T> {
             total_supply: total_supply.into_t().expect("should be U512"),
             accounts_cache: BTreeMap::new(),
             withdraws_cache: BTreeMap::new(),
+            unbonding_purses_cache: BTreeMap::new(),
             unbonds_cache: BTreeMap::new(),
             purses_cache: BTreeMap::new(),
             staking: None,
@@ -291,12 +293,21 @@ impl<T: StateReader> StateTracker<T> {
                         Some(BidKind::Delegator(Box::new(existing_delegator)))
                     }
                     None => match existing_bids.unified_bid(delegator_bid.validator_public_key()) {
-                        Some(existing_bid) => existing_bid
-                            .delegators()
-                            .get(delegator_bid.delegator_kind())
-                            .map(|delegator_bid| {
-                                BidKind::Delegator(Box::new(delegator_bid.clone()))
-                            }),
+                        Some(existing_bid) => {
+                            if let BidKind::Delegator(delegator_bid) = bid_kind {
+                                for delegator in existing_bid.delegators().values() {
+                                    if let DelegatorKind::PublicKey(dpk) =
+                                        delegator_bid.delegator_kind()
+                                    {
+                                        if delegator.delegator_public_key() != dpk {
+                                            continue;
+                                        }
+                                        return Some(BidKind::Delegator(delegator_bid.clone()));
+                                    }
+                                }
+                            }
+                            None
+                        }
                         None => None,
                     },
                 }
@@ -392,9 +403,19 @@ impl<T: StateReader> StateTracker<T> {
         }
     }
 
+    #[allow(deprecated)]
     fn get_withdraws(&mut self) -> WithdrawPurses {
         let mut result = self.reader.get_withdraws();
         for (acc, purses) in &self.withdraws_cache {
+            result.insert(*acc, purses.clone());
+        }
+        result
+    }
+
+    #[allow(deprecated)]
+    fn get_unbonding_purses(&mut self) -> BTreeMap<AccountHash, Vec<UnbondingPurse>> {
+        let mut result = self.reader.get_unbonding_purses();
+        for (acc, purses) in &self.unbonding_purses_cache {
             result.insert(*acc, purses.clone());
         }
         result
@@ -408,12 +429,18 @@ impl<T: StateReader> StateTracker<T> {
         result
     }
 
-    fn write_withdraw(&mut self, account_hash: AccountHash, withdraws: Vec<WithdrawPurse>) {
+    fn write_withdraws(&mut self, account_hash: AccountHash, withdraws: Vec<WithdrawPurse>) {
         self.withdraws_cache.insert(account_hash, withdraws.clone());
         self.write_entry(
             Key::Withdraw(account_hash),
             StoredValue::Withdraw(withdraws),
         );
+    }
+
+    fn write_unbonding_purses(&mut self, account_hash: AccountHash, unbonds: Vec<UnbondingPurse>) {
+        self.unbonding_purses_cache
+            .insert(account_hash, unbonds.clone());
+        self.write_entry(Key::Unbond(account_hash), StoredValue::Unbonding(unbonds));
     }
 
     fn write_unbond(&mut self, unbond_kind: UnbondKind, unbond: Unbond) {
@@ -442,6 +469,27 @@ impl<T: StateReader> StateTracker<T> {
             }
         }
 
+        if let BidKind::Unbond(unbond) = bid_kind {
+            match unbond.unbond_kind() {
+                UnbondKind::Validator(unbonder_public_key)
+                | UnbondKind::DelegatedPublicKey(unbonder_public_key) => {
+                    let unbonding_purses = self.get_unbonding_purses();
+                    let account_hash = validator_public_key.to_account_hash();
+                    if let Some(purses) = unbonding_purses.get(&account_hash) {
+                        if let Some(purse) = purses
+                            .iter()
+                            .find(|x| x.unbonder_public_key() == unbonder_public_key)
+                        {
+                            return *purse.amount();
+                        }
+                    }
+                }
+                UnbondKind::DelegatedPurse(_) => {
+                    // noop
+                }
+            }
+        }
+
         let withdrawals = self.get_withdraws();
         if let Some(withdraws) = withdrawals.get(&validator_public_key.to_account_hash()) {
             if let Some(withdraw) = withdraws
@@ -457,13 +505,21 @@ impl<T: StateReader> StateTracker<T> {
 
     pub fn remove_withdraws_and_unbonds_with_bonding_purse(&mut self, affected_purse: &URef) {
         let withdraws = self.get_withdraws();
+        let unbonding_purses = self.get_unbonding_purses();
         let unbonds = self.get_unbonds();
-
         for (acc, mut purses) in withdraws {
             let old_len = purses.len();
             purses.retain(|purse| purse.bonding_purse().addr() != affected_purse.addr());
             if purses.len() != old_len {
-                self.write_withdraw(acc, purses);
+                self.write_withdraws(acc, purses);
+            }
+        }
+
+        for (acc, mut purses) in unbonding_purses {
+            let old_len = purses.len();
+            purses.retain(|purse| purse.bonding_purse().addr() != affected_purse.addr());
+            if purses.len() != old_len {
+                self.write_unbonding_purses(acc, purses);
             }
         }
 
@@ -485,36 +541,52 @@ impl<T: StateReader> StateTracker<T> {
         unbond_kind: &UnbondKind,
         amount: U512,
     ) {
+        let era_id = &self.read_snapshot().1.keys().next().copied().unwrap();
+        let unbond_era = UnbondEra::new(bonding_purse, *era_id, amount, None);
+        let mut unbond = match self.unbonds_cache.entry(unbond_kind.clone()) {
+            Entry::Occupied(ref entry) => entry.get().clone(),
+            Entry::Vacant(entry) => {
+                // Fill the cache with the information from the reader when the cache is empty:
+                let rec = match self.reader.get_unbonds().get(unbond_kind).cloned() {
+                    Some(rec) => rec,
+                    None => Unbond::new(
+                        validator_key.clone(),
+                        unbond_kind.clone(),
+                        vec![unbond_era.clone()],
+                    ),
+                };
+
+                entry.insert(rec.clone());
+                rec
+            }
+        };
+
         if amount == U512::zero() {
             return;
         }
 
-        let unbonding_era = self.read_snapshot().1.keys().next().copied().unwrap();
-        let era = UnbondEra::new(bonding_purse, unbonding_era, amount, None);
-        // Take the first era from the snapshot as the unbonding era.
-        let new_unbond = Unbond::new(validator_key.clone(), unbond_kind.clone(), vec![era]);
+        if !unbond.eras().contains(&unbond_era) {
+            unbond.eras_mut().push(unbond_era);
+        }
 
-        match self.unbonds_cache.entry(unbond_kind.clone()) {
-            Entry::Occupied(entry) => entry.into_mut(),
-            Entry::Vacant(entry) => {
-                // Fill the cache with the information from the reader when the cache is empty:
-                // let unbond = self
-                //     .reader
-                //     .get_unbonds()
-                //     .get(&unbond_kind)
-                //     .cloned()
-                //     .unwrap_or_default();
-
-                entry.insert(new_unbond)
+        let bid_addr = match unbond_kind {
+            UnbondKind::Validator(pk) | UnbondKind::DelegatedPublicKey(pk) => {
+                BidAddr::UnbondAccount {
+                    validator: validator_key.to_account_hash(),
+                    unbonder: pk.to_account_hash(),
+                }
             }
+            UnbondKind::DelegatedPurse(addr) => BidAddr::UnbondPurse {
+                validator: validator_key.to_account_hash(),
+                unbonder: *addr,
+            },
         };
 
         // This doesn't actually transfer or create any funds - the funds will be transferred from
         // the bonding purse to the unbonder's main purse later by the auction contract.
-        //
-        // self.write_entry(
-        //     Key::BidAddr(BidAddr::Validator(validator_key.to_account_hash())),
-        //     StoredValue::BidKind(BidKind::Unbond(Box::new(new_unbond))),
-        // );
+        self.write_entry(
+            Key::BidAddr(bid_addr),
+            StoredValue::BidKind(BidKind::Unbond(Box::new(unbond.clone()))),
+        );
     }
 }
