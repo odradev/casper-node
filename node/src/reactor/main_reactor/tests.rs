@@ -855,7 +855,7 @@ impl TestFixture {
                     }
                 }
                 Some(bid) => {
-                    if !should_exist {
+                    if !should_exist && !bid.is_unbond() {
                         info!("unexpected bid record existence: {:?}", bid);
                         panic!("expected to not have bid");
                     }

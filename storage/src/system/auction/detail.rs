@@ -453,6 +453,9 @@ pub fn process_unbond_requests<P: Auction + ?Sized>(
         let (retained, expired) = unbond.expired(current_era_id, unbonding_delay);
         if let Some(unbonded) = expired {
             for unbond_era in unbonded {
+                if unbond_kind.is_validator() {
+                    continue;
+                }
                 let redelegation_result = handle_redelegation(
                     provider,
                     unbond_kind,

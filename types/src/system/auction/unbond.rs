@@ -255,7 +255,7 @@ impl Unbond {
             }
         }
         let ret = Unbond::new(self.validator_public_key, self.unbond_kind, retained);
-        if expired.is_empty() {
+        if !expired.is_empty() {
             (ret, Some(expired))
         } else {
             (ret, None)
