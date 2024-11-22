@@ -21,7 +21,7 @@ pub use asymmetric_key::{
     SECP256K1_TAG, SYSTEM_ACCOUNT, SYSTEM_TAG,
 };
 pub use error::Error;
-#[cfg(any(feature = "std", test))]
+#[cfg(any(feature = "std", feature = "testing", test))]
 pub use error::ErrorExt;
 
 pub(crate) fn blake2b<T: AsRef<[u8]>>(data: T) -> [u8; BLAKE2B_DIGEST_LENGTH] {

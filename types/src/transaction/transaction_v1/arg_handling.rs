@@ -462,6 +462,8 @@ pub fn has_valid_cancel_reservations_args(
 
 #[cfg(test)]
 mod tests {
+    use core::ops::Range;
+
     use rand::Rng;
 
     use super::*;
@@ -1106,6 +1108,133 @@ mod tests {
         };
         assert_eq!(
             has_valid_change_bid_public_key_args(&TransactionArgs::Named(args)),
+            Err(expected_error)
+        );
+    }
+
+    #[test]
+    fn should_validate_add_reservations_args() {
+        let rng = &mut TestRng::new();
+
+        let reservations = rng.random_vec(1..100);
+
+        // Check random args.
+        let mut args = new_add_reservations_args(reservations).unwrap();
+        has_valid_add_reservations_args(&TransactionArgs::Named(args.clone())).unwrap();
+
+        // Check with extra arg.
+        args.insert("a", 1).unwrap();
+        has_valid_add_reservations_args(&TransactionArgs::Named(args)).unwrap();
+    }
+
+    #[test]
+    fn add_reservations_args_with_missing_required_should_be_invalid() {
+        // Missing "reservations".
+        let args = runtime_args! {};
+        let expected_error = InvalidTransactionV1::MissingArg {
+            arg_name: ADD_RESERVATIONS_ARG_RESERVATIONS.name.to_string(),
+        };
+        assert_eq!(
+            has_valid_add_reservations_args(&TransactionArgs::Named(args)),
+            Err(expected_error)
+        );
+    }
+
+    #[test]
+    fn add_reservations_args_with_wrong_type_should_be_invalid() {
+        let rng = &mut TestRng::new();
+
+        // Wrong "reservations" type.
+        let args = runtime_args! {
+            ADD_RESERVATIONS_ARG_RESERVATIONS.name => PublicKey::random(rng),
+        };
+        let expected_error = InvalidTransactionV1::UnexpectedArgType {
+            arg_name: ADD_RESERVATIONS_ARG_RESERVATIONS.name.to_string(),
+            expected: vec![CLType::List(Box::new(CLType::Any))],
+            got: CLType::PublicKey,
+        };
+        assert_eq!(
+            has_valid_add_reservations_args(&TransactionArgs::Named(args)),
+            Err(expected_error)
+        );
+    }
+
+    #[test]
+    fn should_validate_cancel_reservations_args() {
+        let rng = &mut TestRng::new();
+
+        let validator = PublicKey::random(rng);
+        let delegators = rng.random_vec(0..100);
+
+        // Check random args.
+        let mut args = new_cancel_reservations_args(validator, delegators).unwrap();
+        has_valid_cancel_reservations_args(&TransactionArgs::Named(args.clone())).unwrap();
+
+        // Check with extra arg.
+        args.insert("a", 1).unwrap();
+        has_valid_cancel_reservations_args(&TransactionArgs::Named(args)).unwrap();
+    }
+
+    #[test]
+    fn cancel_reservations_args_with_missing_required_should_be_invalid() {
+        let rng = &mut TestRng::new();
+
+        // Missing "validator".
+        let args = runtime_args! {
+            CANCEL_RESERVATIONS_ARG_DELEGATORS.name  => rng.random_vec::<Range<usize>, PublicKey>(0..100),
+        };
+        let expected_error = InvalidTransactionV1::MissingArg {
+            arg_name: CANCEL_RESERVATIONS_ARG_VALIDATOR.name.to_string(),
+        };
+        assert_eq!(
+            has_valid_cancel_reservations_args(&TransactionArgs::Named(args)),
+            Err(expected_error)
+        );
+
+        // Missing "delegators".
+        let args = runtime_args! {
+            CANCEL_RESERVATIONS_ARG_VALIDATOR.name => PublicKey::random(rng),
+        };
+        let expected_error = InvalidTransactionV1::MissingArg {
+            arg_name: CANCEL_RESERVATIONS_ARG_DELEGATORS.name.to_string(),
+        };
+        assert_eq!(
+            has_valid_cancel_reservations_args(&TransactionArgs::Named(args)),
+            Err(expected_error)
+        );
+    }
+
+    #[test]
+    fn cancel_reservations_args_with_wrong_type_should_be_invalid() {
+        let rng = &mut TestRng::new();
+
+        // Wrong "validator" type.
+        let args = runtime_args! {
+            CANCEL_RESERVATIONS_ARG_VALIDATOR.name => rng.random_vec::<Range<usize>, PublicKey>(0..100),
+            CANCEL_RESERVATIONS_ARG_DELEGATORS.name => rng.random_vec::<Range<usize>, PublicKey>(0..100),
+        };
+        let expected_error = InvalidTransactionV1::UnexpectedArgType {
+            arg_name: CANCEL_RESERVATIONS_ARG_VALIDATOR.name.to_string(),
+            expected: vec![CLType::PublicKey],
+            got: CLType::List(Box::new(CLType::PublicKey)),
+        };
+        assert_eq!(
+            has_valid_cancel_reservations_args(&TransactionArgs::Named(args)),
+            Err(expected_error)
+        );
+
+        // Wrong "delegators" type.
+        let args = runtime_args! {
+            CANCEL_RESERVATIONS_ARG_VALIDATOR.name => PublicKey::random(rng),
+            CANCEL_RESERVATIONS_ARG_DELEGATORS.name => rng.gen::<u8>(),
+        };
+        let expected_error = InvalidTransactionV1::UnexpectedArgType {
+            arg_name: CANCEL_RESERVATIONS_ARG_DELEGATORS.name.to_string(),
+            expected: vec![CLType::List(Box::new(CLType::PublicKey))],
+            got: CLType::U8,
+        };
+        assert_eq!(
+            has_valid_cancel_reservations_args(&TransactionArgs::Named(args)),
             Err(expected_error)
         );
     }

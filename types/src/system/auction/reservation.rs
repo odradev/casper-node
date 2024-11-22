@@ -1,5 +1,10 @@
 use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
+#[cfg(any(feature = "testing", test))]
+use rand::{
+    distributions::{Distribution, Standard},
+    Rng,
+};
 
 #[cfg(feature = "datasize")]
 use datasize::DataSize;
@@ -110,6 +115,17 @@ impl Display for Reservation {
             "Reservation {{ delegator {}, validator {} }}",
             self.delegator_public_key, self.validator_public_key
         )
+    }
+}
+
+#[cfg(any(feature = "testing", test))]
+impl Distribution<Reservation> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Reservation {
+        Reservation {
+            delegator_public_key: rng.gen(),
+            validator_public_key: rng.gen(),
+            delegation_rate: rng.gen(),
+        }
     }
 }
 

@@ -13,6 +13,8 @@ use core::{
     iter,
     marker::Copy,
 };
+#[cfg(any(feature = "testing", test))]
+use rand::distributions::{Distribution, Standard};
 #[cfg(any(feature = "std-fs-io", test))]
 use std::path::Path;
 
@@ -45,7 +47,7 @@ use serde_json::json;
 #[cfg(any(feature = "std", test))]
 use untrusted::Input;
 
-#[cfg(any(feature = "std", test))]
+#[cfg(any(feature = "std", feature = "testing", test))]
 use crate::crypto::ErrorExt;
 #[cfg(any(feature = "std-fs-io", test))]
 use crate::file_utils::{read_file, write_file, write_private_file};
@@ -221,7 +223,7 @@ impl SecretKey {
     }
 
     /// Generates a new ed25519 variant using the system's secure random number generator.
-    #[cfg(any(feature = "std", test))]
+    #[cfg(any(feature = "std", feature = "testing", test))]
     pub fn generate_ed25519() -> Result<Self, ErrorExt> {
         let mut bytes = [0u8; Self::ED25519_LENGTH];
         getrandom::getrandom(&mut bytes[..])?;
@@ -229,7 +231,7 @@ impl SecretKey {
     }
 
     /// Generates a new secp256k1 variant using the system's secure random number generator.
-    #[cfg(any(feature = "std", test))]
+    #[cfg(any(feature = "std", feature = "testing", test))]
     pub fn generate_secp256k1() -> Result<Self, ErrorExt> {
         let mut bytes = [0u8; Self::SECP256K1_LENGTH];
         getrandom::getrandom(&mut bytes[..])?;
@@ -700,6 +702,18 @@ impl From<&SecretKey> for PublicKey {
             SecretKey::Ed25519(secret_key) => PublicKey::Ed25519(secret_key.into()),
             SecretKey::Secp256k1(secret_key) => PublicKey::Secp256k1(secret_key.into()),
         }
+    }
+}
+
+#[cfg(any(feature = "testing", test))]
+impl Distribution<PublicKey> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> PublicKey {
+        let secret_key = if rng.gen() {
+            SecretKey::generate_ed25519().unwrap()
+        } else {
+            SecretKey::generate_secp256k1().unwrap()
+        };
+        PublicKey::from(&secret_key)
     }
 }
 
