@@ -1,8 +1,7 @@
 use std::mem;
 
 use casper_engine_test_support::{
- ExecuteRequestBuilder, LmdbWasmTestBuilder,
-    DEFAULT_ACCOUNT_ADDR, LOCAL_GENESIS_REQUEST,
+    ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_ACCOUNT_ADDR, LOCAL_GENESIS_REQUEST,
 };
 use casper_types::{
     addressable_entity::DEFAULT_ENTRY_POINT_NAME, Gas, RuntimeArgs,
@@ -107,7 +106,6 @@ fn cpu_burner_br_if(iterations: i64) -> Vec<u8> {
 
     module.emit_wasm()
 }
-
 
 #[allow(dead_code)]
 fn cpu_burner_br_table(iterations: i64) -> Vec<u8> {
