@@ -17,7 +17,7 @@ use serde::de::DeserializeOwned;
 #[cfg(test)]
 use serde::Serialize;
 use thiserror::Error;
-use tracing::warn;
+use tracing::{error, warn};
 
 use crate::block_store::types::{ApprovalsHashes, DeployMetadataV1};
 use casper_types::{
@@ -103,7 +103,7 @@ pub(super) trait TransactionExt {
 
     /// Helper function to load a value from a database using the `bytesrepr` `ToBytes`/`FromBytes`
     /// serialization.
-    fn get_value_bytesrepr<K: ToBytes, V: FromBytes>(
+    fn get_value_bytesrepr<K: ToBytes + std::fmt::Display, V: FromBytes + 'static>(
         &self,
         db: Database,
         key: &K,
@@ -175,7 +175,7 @@ where
     }
 
     #[inline]
-    fn get_value_bytesrepr<K: ToBytes, V: FromBytes>(
+    fn get_value_bytesrepr<K: ToBytes + std::fmt::Display, V: FromBytes + 'static>(
         &self,
         db: Database,
         key: &K,
@@ -183,7 +183,13 @@ where
         let serialized_key = serialize_bytesrepr(key)?;
         match self.get(db, &serialized_key) {
             // Deserialization failures are likely due to storage corruption.
-            Ok(raw) => deserialize_bytesrepr(raw).map(Some),
+            Ok(raw) => match deserialize_bytesrepr(raw) {
+                Ok(ret) => Ok(Some(ret)),
+                Err(err) => {
+                    error!(%key, %err, raw_len = raw.len(), "get_value_bytesrepr deserialization");
+                    Err(err)
+                }
+            },
             Err(lmdb::Error::NotFound) => Ok(None),
             Err(err) => Err(err.into()),
         }
@@ -368,10 +374,40 @@ pub(super) fn serialize_unbonding_purse<T: Serialize>(value: &T) -> Result<Vec<u
 
 /// Deserializes from a buffer.
 #[inline(always)]
-pub(super) fn deserialize_bytesrepr<T: FromBytes>(raw: &[u8]) -> Result<T, LmdbExtError> {
-    T::from_bytes(raw)
-        .map(|val| val.0)
-        .map_err(|err| LmdbExtError::DataCorrupted(Box::new(BytesreprError(err))))
+pub(super) fn deserialize_bytesrepr<T: FromBytes + 'static>(raw: &[u8]) -> Result<T, LmdbExtError> {
+    match T::from_bytes(raw).map(|val| val.0) {
+        Ok(ret) => Ok(ret),
+        Err(err) => {
+            // unfortunately, type_name is unstable
+            let type_name = {
+                if TypeId::of::<DeployMetadataV1>() == TypeId::of::<T>() {
+                    "DeployMetadataV1".to_string()
+                } else if TypeId::of::<BlockHeader>() == TypeId::of::<T>() {
+                    "BlockHeader".to_string()
+                } else if TypeId::of::<BlockBody>() == TypeId::of::<T>() {
+                    "BlockBody".to_string()
+                } else if TypeId::of::<BlockSignatures>() == TypeId::of::<T>() {
+                    "BlockSignatures".to_string()
+                } else if TypeId::of::<DeployHash>() == TypeId::of::<T>() {
+                    "DeployHash".to_string()
+                } else if TypeId::of::<Deploy>() == TypeId::of::<T>() {
+                    "Deploy".to_string()
+                } else if TypeId::of::<ApprovalsHashes>() == TypeId::of::<T>() {
+                    "ApprovalsHashes".to_string()
+                } else if TypeId::of::<BTreeSet<Approval>>() == TypeId::of::<T>() {
+                    "BTreeSet<Approval>".to_string()
+                } else if TypeId::of::<ExecutionResult>() == TypeId::of::<T>() {
+                    "ExecutionResult".to_string()
+                } else if TypeId::of::<Vec<Transfer>>() == TypeId::of::<T>() {
+                    "Transfers".to_string()
+                } else {
+                    format!("{:?}", TypeId::of::<T>())
+                }
+            };
+            error!("deserialize_bytesrepr failed to deserialize: {}", type_name);
+            Err(LmdbExtError::DataCorrupted(Box::new(BytesreprError(err))))
+        }
+    }
 }
 
 /// Serializes into a buffer.

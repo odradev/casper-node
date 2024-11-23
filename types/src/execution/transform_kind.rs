@@ -9,6 +9,7 @@ use rand::Rng;
 #[cfg(feature = "json-schema")]
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use tracing::error;
 
 use super::TransformError;
 use crate::{
@@ -238,6 +239,28 @@ impl TransformKindV2 {
 }
 
 impl ToBytes for TransformKindV2 {
+    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
+        let mut buffer = bytesrepr::allocate_buffer(self)?;
+        self.write_bytes(&mut buffer)?;
+        Ok(buffer)
+    }
+
+    fn serialized_length(&self) -> usize {
+        U8_SERIALIZED_LENGTH
+            + match self {
+                TransformKindV2::Identity => 0,
+                TransformKindV2::Write(stored_value) => stored_value.serialized_length(),
+                TransformKindV2::AddInt32(value) => value.serialized_length(),
+                TransformKindV2::AddUInt64(value) => value.serialized_length(),
+                TransformKindV2::AddUInt128(value) => value.serialized_length(),
+                TransformKindV2::AddUInt256(value) => value.serialized_length(),
+                TransformKindV2::AddUInt512(value) => value.serialized_length(),
+                TransformKindV2::AddKeys(named_keys) => named_keys.serialized_length(),
+                TransformKindV2::Failure(error) => error.serialized_length(),
+                TransformKindV2::Prune(value) => value.serialized_length(),
+            }
+    }
+
     fn write_bytes(&self, writer: &mut Vec<u8>) -> Result<(), bytesrepr::Error> {
         match self {
             TransformKindV2::Identity => (TransformTag::Identity as u8).write_bytes(writer),
@@ -279,33 +302,20 @@ impl ToBytes for TransformKindV2 {
             }
         }
     }
-
-    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        let mut buffer = bytesrepr::allocate_buffer(self)?;
-        self.write_bytes(&mut buffer)?;
-        Ok(buffer)
-    }
-
-    fn serialized_length(&self) -> usize {
-        U8_SERIALIZED_LENGTH
-            + match self {
-                TransformKindV2::Identity => 0,
-                TransformKindV2::Write(stored_value) => stored_value.serialized_length(),
-                TransformKindV2::AddInt32(value) => value.serialized_length(),
-                TransformKindV2::AddUInt64(value) => value.serialized_length(),
-                TransformKindV2::AddUInt128(value) => value.serialized_length(),
-                TransformKindV2::AddUInt256(value) => value.serialized_length(),
-                TransformKindV2::AddUInt512(value) => value.serialized_length(),
-                TransformKindV2::AddKeys(named_keys) => named_keys.serialized_length(),
-                TransformKindV2::Failure(error) => error.serialized_length(),
-                TransformKindV2::Prune(value) => value.serialized_length(),
-            }
-    }
 }
 
 impl FromBytes for TransformKindV2 {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
-        let (tag, remainder) = u8::from_bytes(bytes)?;
+        if bytes.is_empty() {
+            error!("FromBytes for TransformKindV2: bytes length should not be 0");
+        }
+        let (tag, remainder) = match u8::from_bytes(bytes) {
+            Ok((tag, rem)) => (tag, rem),
+            Err(err) => {
+                error!(%err, "FromBytes for TransformKindV2");
+                return Err(err);
+            }
+        };
         match tag {
             tag if tag == TransformTag::Identity as u8 => {
                 Ok((TransformKindV2::Identity, remainder))
@@ -346,7 +356,10 @@ impl FromBytes for TransformKindV2 {
                 let (key, remainder) = Key::from_bytes(remainder)?;
                 Ok((TransformKindV2::Prune(key), remainder))
             }
-            _ => Err(bytesrepr::Error::Formatting),
+            _ => {
+                error!(%tag, rem_len = remainder.len(), "FromBytes for TransformKindV2: unknown tag");
+                Err(bytesrepr::Error::Formatting)
+            }
         }
     }
 }

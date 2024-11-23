@@ -12,8 +12,8 @@ use casper_types::{
     contracts::NamedKeys,
     system::{
         auction::{
-            Bid, BidAddr, BidKind, Delegator, EraInfo, SeigniorageAllocation, UnbondingPurse,
-            ValidatorBid, WithdrawPurse,
+            Bid, BidAddr, BidKind, Delegator, DelegatorBid, DelegatorKind, EraInfo,
+            SeigniorageAllocation, UnbondingPurse, ValidatorBid, WithdrawPurse,
         },
         mint::BalanceHoldAddr,
     },
@@ -105,7 +105,7 @@ pub fn make_abi_test_fixtures() -> Result<TestFixtures, Error> {
             .seigniorage_allocations_mut()
             .push(SeigniorageAllocation::Delegator {
                 validator_public_key: PublicKey::from(&validator_secret_key),
-                delegator_public_key: PublicKey::from(&delegator_secret_key),
+                delegator_kind: PublicKey::from(&delegator_secret_key).into(),
                 amount: U512::from(1_000_000_000),
             });
         era_info
@@ -128,16 +128,31 @@ pub fn make_abi_test_fixtures() -> Result<TestFixtures, Error> {
     let delegator_public_key = PublicKey::from(&delegator_secret_key);
     let delegator_bid_key = Key::BidAddr(BidAddr::new_from_public_keys(
         &validator_public_key,
-        Some(&delegator_public_key),
+        Some(&delegator_public_key.clone()),
     ));
-    let delegator_bid = Delegator::locked(
-        delegator_public_key,
+    let delegator = Delegator::locked(
+        delegator_public_key.clone(),
         U512::from(1_000_000_000u64),
         URef::new([11; 32], AccessRights::READ_ADD_WRITE),
         validator_public_key.clone(),
         u64::MAX,
     );
-    let delegator_bid_kind = BidKind::Delegator(Box::new(delegator_bid.clone()));
+
+    let delegator_bid_kind = BidKind::Delegator(Box::new(DelegatorBid::locked(
+        DelegatorKind::PublicKey(delegator_public_key.clone()),
+        U512::from(1_000_000_000u64),
+        URef::new([11; 32], AccessRights::READ_ADD_WRITE),
+        validator_public_key.clone(),
+        u64::MAX,
+    )));
+
+    let _delegator_bid = DelegatorBid::locked(
+        delegator_public_key.clone().into(),
+        U512::from(1_000_000_000u64),
+        URef::new([11; 32], AccessRights::READ_ADD_WRITE),
+        validator_public_key.clone(),
+        u64::MAX,
+    );
 
     let unified_bid_key = Key::BidAddr(BidAddr::legacy(
         validator_public_key.to_account_hash().value(),
@@ -150,10 +165,9 @@ pub fn make_abi_test_fixtures() -> Result<TestFixtures, Error> {
             100,
             u64::MAX,
         );
-        unified_bid.delegators_mut().insert(
-            delegator_bid.delegator_public_key().clone(),
-            delegator_bid.clone(),
-        );
+        unified_bid
+            .delegators_mut()
+            .insert(delegator.delegator_public_key().clone(), delegator.clone());
         unified_bid
     };
     let unified_bid_kind = BidKind::Unified(Box::new(unified_bid));
@@ -168,7 +182,7 @@ pub fn make_abi_test_fixtures() -> Result<TestFixtures, Error> {
             u64::MAX,
         );
         bid.delegators_mut()
-            .insert(delegator_bid.delegator_public_key().clone(), delegator_bid);
+            .insert(delegator.delegator_public_key().clone(), delegator);
         bid
     };
 
