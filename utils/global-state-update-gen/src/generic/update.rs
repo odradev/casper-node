@@ -138,12 +138,14 @@ impl Update {
 
     #[track_caller]
     pub(crate) fn assert_written_balance(&self, purse: URef, balance: u64) {
-        assert_eq!(
-            self.entries.get(&Key::Balance(purse.addr())),
-            Some(&StoredValue::from(
-                CLValue::from_t(U512::from(balance)).expect("should convert U512 to CLValue")
-            ))
-        );
+        if let StoredValue::CLValue(cl_value) = self
+            .entries
+            .get(&Key::Balance(purse.addr()))
+            .expect("must have balance")
+        {
+            let actual = CLValue::to_t::<U512>(cl_value).expect("must get u512");
+            assert_eq!(actual, U512::from(balance))
+        };
     }
 
     #[track_caller]

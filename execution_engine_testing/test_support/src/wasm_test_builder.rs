@@ -1752,7 +1752,7 @@ where
     }
 
     /// Gets [`BTreeMap<UnbondKind, Unbond>`].
-    pub fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Unbond> {
+    pub fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Vec<Unbond>> {
         let state_root_hash = self.get_post_state_hash();
 
         let tracking_copy = self
@@ -1772,7 +1772,12 @@ where
         for key in unbond_keys.into_iter() {
             if let Ok(Some(StoredValue::BidKind(BidKind::Unbond(unbond)))) = reader.read(&key) {
                 let unbond_kind = unbond.unbond_kind();
-                ret.insert(unbond_kind.clone(), *unbond);
+                match ret.get_mut(unbond_kind) {
+                    None => {
+                        let _ = ret.insert(unbond_kind.clone(), vec![*unbond]);
+                    }
+                    Some(unbonds) => unbonds.push(*unbond),
+                };
             }
         }
 

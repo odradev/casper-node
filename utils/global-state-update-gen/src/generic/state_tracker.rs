@@ -29,7 +29,7 @@ pub struct StateTracker<T> {
     accounts_cache: BTreeMap<AccountHash, AddressableEntity>,
     withdraws_cache: BTreeMap<AccountHash, Vec<WithdrawPurse>>,
     unbonding_purses_cache: BTreeMap<AccountHash, Vec<UnbondingPurse>>,
-    unbonds_cache: BTreeMap<UnbondKind, Unbond>,
+    unbonds_cache: BTreeMap<UnbondKind, Vec<Unbond>>,
     purses_cache: BTreeMap<URef, U512>,
     staking: Option<Vec<BidKind>>,
     seigniorage_recipients: Option<(Key, SeigniorageRecipientsSnapshotV2)>,
@@ -331,6 +331,7 @@ impl<T: StateReader> StateTracker<T> {
 
     /// Sets the bid for the given account.
     pub fn set_bid(&mut self, bid_kind: BidKind, slash_instead_of_unbonding: bool) {
+        println!("set bid");
         // skip bridge records since they shouldn't need to be overwritten
         if let BidKind::Bridge(_) = bid_kind {
             return;
@@ -353,6 +354,7 @@ impl<T: StateReader> StateTracker<T> {
                     .expect("should have bonding purse")
                     != bonding_purse
                 {
+                    println!("foo");
                     self.set_purse_balance(existing_bid.bonding_purse().unwrap(), U512::zero());
                     self.set_purse_balance(bonding_purse, previously_bonded);
                     // the old bonding purse gets zeroed - the unbonds will get invalid, anyway
@@ -360,6 +362,7 @@ impl<T: StateReader> StateTracker<T> {
                         &existing_bid.bonding_purse().unwrap(),
                     );
                 }
+
                 previously_bonded
             }
         };
@@ -421,10 +424,17 @@ impl<T: StateReader> StateTracker<T> {
         result
     }
 
-    fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Unbond> {
+    fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Vec<Unbond>> {
         let mut result = self.reader.get_unbonds();
         for (kind, unbond) in &self.unbonds_cache {
-            result.insert(kind.clone(), unbond.clone());
+            match result.get_mut(kind) {
+                None => {
+                    result.insert(kind.clone(), unbond.clone());
+                }
+                Some(unbonds) => {
+                    unbonds.append(&mut unbond.clone());
+                }
+            }
         }
         result
     }
@@ -444,8 +454,15 @@ impl<T: StateReader> StateTracker<T> {
     }
 
     fn write_unbond(&mut self, unbond_kind: UnbondKind, unbond: Unbond) {
-        self.unbonds_cache
-            .insert(unbond_kind.clone(), unbond.clone());
+        match self.unbonds_cache.get_mut(&unbond_kind) {
+            Some(unbonds) => unbonds.push(unbond.clone()),
+            None => {
+                let _ = self
+                    .unbonds_cache
+                    .insert(unbond_kind.clone(), vec![unbond.clone()]);
+            }
+        }
+
         let bid_addr = unbond_kind.bid_addr(unbond.validator_public_key());
         self.write_entry(
             Key::BidAddr(bid_addr),
@@ -458,15 +475,24 @@ impl<T: StateReader> StateTracker<T> {
         let unbonds = self.get_unbonds();
         let validator_public_key = bid_kind.validator_public_key();
         if let Some(unbond) = unbonds.get(&UnbondKind::Validator(validator_public_key.clone())) {
-            if unbond.is_validator() {
-                if let Some(unbond_era) = unbond
-                    .eras()
-                    .iter()
-                    .max_by(|x, y| x.era_of_creation().cmp(&y.era_of_creation()))
-                {
-                    return *unbond_era.amount();
-                }
-            }
+            return unbond
+                .iter()
+                .map(|unbond| {
+                    if unbond.is_validator() {
+                        if let Some(unbond_era) = unbond
+                            .eras()
+                            .iter()
+                            .max_by(|x, y| x.era_of_creation().cmp(&y.era_of_creation()))
+                        {
+                            *unbond_era.amount()
+                        } else {
+                            U512::zero()
+                        }
+                    } else {
+                        U512::zero()
+                    }
+                })
+                .sum();
         }
 
         if let BidKind::Unbond(unbond) = bid_kind {
@@ -523,13 +549,15 @@ impl<T: StateReader> StateTracker<T> {
             }
         }
 
-        for (unbond_kind, mut unbond) in unbonds {
-            let old_len = unbond.eras().len();
-            unbond
-                .eras_mut()
-                .retain(|purse| purse.bonding_purse().addr() != affected_purse.addr());
-            if unbond.eras().len() != old_len {
-                self.write_unbond(unbond_kind, unbond);
+        for (unbond_kind, mut unbonds) in unbonds {
+            for unbond in unbonds.iter_mut() {
+                let old_len = unbond.eras().len();
+                unbond
+                    .eras_mut()
+                    .retain(|purse| purse.bonding_purse().addr() != affected_purse.addr());
+                if unbond.eras().len() != old_len {
+                    self.write_unbond(unbond_kind.clone(), unbond.clone());
+                }
             }
         }
     }
@@ -543,17 +571,17 @@ impl<T: StateReader> StateTracker<T> {
     ) {
         let era_id = &self.read_snapshot().1.keys().next().copied().unwrap();
         let unbond_era = UnbondEra::new(bonding_purse, *era_id, amount, None);
-        let mut unbond = match self.unbonds_cache.entry(unbond_kind.clone()) {
+        let unbonds = match self.unbonds_cache.entry(unbond_kind.clone()) {
             Entry::Occupied(ref entry) => entry.get().clone(),
             Entry::Vacant(entry) => {
                 // Fill the cache with the information from the reader when the cache is empty:
                 let rec = match self.reader.get_unbonds().get(unbond_kind).cloned() {
                     Some(rec) => rec,
-                    None => Unbond::new(
+                    None => vec![Unbond::new(
                         validator_key.clone(),
                         unbond_kind.clone(),
                         vec![unbond_era.clone()],
-                    ),
+                    )],
                 };
 
                 entry.insert(rec.clone());
@@ -565,28 +593,31 @@ impl<T: StateReader> StateTracker<T> {
             return;
         }
 
-        if !unbond.eras().contains(&unbond_era) {
-            unbond.eras_mut().push(unbond_era);
-        }
-
-        let bid_addr = match unbond_kind {
-            UnbondKind::Validator(pk) | UnbondKind::DelegatedPublicKey(pk) => {
-                BidAddr::UnbondAccount {
-                    validator: validator_key.to_account_hash(),
-                    unbonder: pk.to_account_hash(),
-                }
+        for mut unbond in unbonds {
+            if !unbond.eras().contains(&unbond_era.clone()) {
+                unbond.eras_mut().push(unbond_era.clone());
             }
-            UnbondKind::DelegatedPurse(addr) => BidAddr::UnbondPurse {
-                validator: validator_key.to_account_hash(),
-                unbonder: *addr,
-            },
-        };
 
-        // This doesn't actually transfer or create any funds - the funds will be transferred from
-        // the bonding purse to the unbonder's main purse later by the auction contract.
-        self.write_entry(
-            Key::BidAddr(bid_addr),
-            StoredValue::BidKind(BidKind::Unbond(Box::new(unbond.clone()))),
-        );
+            let bid_addr = match unbond_kind {
+                UnbondKind::Validator(pk) | UnbondKind::DelegatedPublicKey(pk) => {
+                    BidAddr::UnbondAccount {
+                        validator: validator_key.to_account_hash(),
+                        unbonder: pk.to_account_hash(),
+                    }
+                }
+                UnbondKind::DelegatedPurse(addr) => BidAddr::UnbondPurse {
+                    validator: validator_key.to_account_hash(),
+                    unbonder: *addr,
+                },
+            };
+
+            // This doesn't actually transfer or create any funds - the funds will be transferred
+            // from the bonding purse to the unbonder's main purse later by the auction
+            // contract.
+            self.write_entry(
+                Key::BidAddr(bid_addr),
+                StoredValue::BidKind(BidKind::Unbond(Box::new(unbond.clone()))),
+            );
+        }
     }
 }

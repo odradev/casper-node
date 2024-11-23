@@ -1186,11 +1186,17 @@ impl Default for EntryPoints {
 
 impl From<EntryPoint> for EntityEntryPoint {
     fn from(value: EntryPoint) -> Self {
+        EntityEntryPoint::from(&value)
+    }
+}
+
+impl From<&EntryPoint> for EntityEntryPoint {
+    fn from(value: &EntryPoint) -> Self {
         EntityEntryPoint::new(
-            value.name,
-            value.args,
-            value.ret,
-            value.access,
+            value.name.clone(),
+            value.args.clone(),
+            value.ret.clone(),
+            value.access.clone(),
             value.entry_point_type,
             EntryPointPayment::Caller,
         )

@@ -343,7 +343,7 @@ where
                                 self.create_purse(delegator_delegated_amount.value())?;
 
                             let delegator_kind: DelegatorKind =
-                                (*delegator_public_key).clone().into();
+                                DelegatorKind::PublicKey((*delegator_public_key).clone());
                             let delegator = DelegatorBid::locked(
                                 delegator_kind.clone(),
                                 delegator_delegated_amount.value(),
