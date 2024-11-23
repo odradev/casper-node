@@ -186,7 +186,8 @@ impl TryFrom<TransactionV1PayloadJson> for TransactionV1Payload {
     feature = "json-schema",
     derive(JsonSchema),
     schemars(
-        description = "Internal payload of the transaction. The actual data over which the signing is done."
+        description = "Internal payload of the transaction. The actual data over which the signing is done.",
+        rename = "TransactionV1Payload",
     )
 )]
 pub(super) struct TransactionV1PayloadJson {
