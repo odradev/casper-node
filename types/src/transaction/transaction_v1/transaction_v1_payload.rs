@@ -226,10 +226,12 @@ impl TryFrom<TransactionV1Payload> for TransactionV1PayloadJson {
 fn from_human_readable_fields(
     fields: &BTreeMap<String, Value>,
 ) -> Result<BTreeMap<u16, Bytes>, TransactionV1PayloadJsonError> {
-    if fields.len() != EXPECTED_FIELD_KEYS.len() {
-        return Err(TransactionV1PayloadJsonError::FailedToMap(
-            "Expected exactly 6 fields".to_string(),
-        ));
+    let number_of_expected_fields = EXPECTED_FIELD_KEYS.len();
+    if fields.len() != number_of_expected_fields {
+        return Err(TransactionV1PayloadJsonError::FailedToMap(format!(
+            "Expected exactly {} fields",
+            number_of_expected_fields
+        )));
     }
     let args_bytes = to_bytesrepr::<TransactionArgs>(fields, ARGS_MAP_HUMAN_READABLE_KEY)?;
     let target_bytes = to_bytesrepr::<TransactionTarget>(fields, TARGET_MAP_HUMAN_READABLE_KEY)?;

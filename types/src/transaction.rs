@@ -648,7 +648,10 @@ mod tests {
 #[cfg(test)]
 mod proptests {
     use super::*;
-    use crate::{bytesrepr, gens::transaction_arb};
+    use crate::{
+        bytesrepr,
+        gens::{legal_transaction_arb, transaction_arb},
+    };
     use proptest::prelude::*;
 
     proptest! {
@@ -658,7 +661,7 @@ mod proptests {
         }
 
         #[test]
-        fn json_roundtrip(transaction in transaction_arb()) {
+        fn json_roundtrip(transaction in legal_transaction_arb()) {
             let json_string = serde_json::to_string_pretty(&transaction).unwrap();
             let decoded = serde_json::from_str::<Transaction>(&json_string).unwrap();
             assert_eq!(transaction, decoded);
