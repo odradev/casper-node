@@ -19,7 +19,7 @@ use std::{
 
 use casper_wasm::elements::Module;
 use casper_wasmi::{MemoryRef, Trap, TrapCode};
-use tracing::error;
+use tracing::{debug, error};
 
 #[cfg(feature = "test-support")]
 use casper_wasmi::RuntimeValue;
@@ -1088,7 +1088,7 @@ where
                             ) {
                                 Ok(addr) => DelegatorKind::Purse(addr),
                                 Err(err) => {
-                                    error!(%err, "failed to get delegator purse argument");
+                                    debug!(%err, "failed to get delegator purse argument");
                                     return Err(err);
                                 }
                             }
@@ -1121,7 +1121,7 @@ where
                             ) {
                                 Ok(addr) => DelegatorKind::Purse(addr),
                                 Err(err) => {
-                                    error!(%err, "failed to get delegator purse argument");
+                                    debug!(%err, "failed to get delegator purse argument");
                                     return Err(err);
                                 }
                             }
@@ -1151,7 +1151,7 @@ where
                             ) {
                                 Ok(addr) => DelegatorKind::Purse(addr),
                                 Err(err) => {
-                                    error!(%err, "failed to get delegator purse argument");
+                                    debug!(%err, "failed to get delegator purse argument");
                                     return Err(err);
                                 }
                             }
