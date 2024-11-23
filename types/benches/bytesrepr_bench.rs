@@ -9,7 +9,10 @@ use casper_types::{
     account::AccountHash,
     addressable_entity::{ActionThresholds, AddressableEntity, AssociatedKeys, EntityKind},
     bytesrepr::{self, Bytes, FromBytes, ToBytes},
-    system::auction::{Bid, Delegator, EraInfo, SeigniorageAllocation},
+    system::auction::{
+        Bid, BidKind, Delegator, DelegatorBid, DelegatorKind, EraInfo, SeigniorageAllocation,
+        ValidatorBid,
+    },
     AccessRights, AddressableEntityHash, ByteCodeHash, CLTyped, CLValue, DeployHash, DeployInfo,
     EntityVersionKey, EntityVersions, Gas, Group, Groups, InitiatorAddr, Key, Package, PackageHash,
     PackageStatus, ProtocolVersion, PublicKey, SecretKey, TransactionHash, TransactionRuntime,
@@ -556,6 +559,23 @@ fn sample_delegators(delegators_len: u32) -> Vec<Delegator> {
         .collect()
 }
 
+fn sample_delegator_bids(delegators_len: u32) -> Vec<DelegatorBid> {
+    (0..delegators_len)
+        .map(|i| {
+            let delegator_pk = u32_to_pk(i);
+            let staked_amount = U512::from_dec_str("123123123123123").unwrap();
+            let bonding_purse = URef::default();
+            let validator_pk = u32_to_pk(i);
+            DelegatorBid::unlocked(
+                delegator_pk.into(),
+                staked_amount,
+                bonding_purse,
+                validator_pk,
+            )
+        })
+        .collect()
+}
+
 fn sample_bid(delegators_len: u32) -> Bid {
     let validator_public_key = PublicKey::System;
     let bonding_purse = URef::default();
@@ -581,6 +601,33 @@ fn sample_bid(delegators_len: u32) -> Bid {
 fn serialize_bid(delegators_len: u32, b: &mut Bencher) {
     let bid = sample_bid(delegators_len);
     b.iter(|| Bid::to_bytes(black_box(&bid)));
+}
+fn serialize_delegation_bid(delegators_len: u32, b: &mut Bencher) {
+    let bids = sample_delegator_bids(delegators_len);
+    for bid in bids {
+        b.iter(|| BidKind::to_bytes(black_box(&BidKind::Delegator(Box::new(bid.clone())))));
+    }
+}
+
+fn sample_validator_bid() -> BidKind {
+    let validator_public_key = PublicKey::System;
+    let bonding_purse = URef::default();
+    let staked_amount = U512::from_dec_str("123123123123123").unwrap();
+    let delegation_rate = 10u8;
+    BidKind::Validator(Box::new(ValidatorBid::unlocked(
+        validator_public_key,
+        bonding_purse,
+        staked_amount,
+        delegation_rate,
+        0,
+        0,
+        0,
+    )))
+}
+
+fn serialize_validator_bid(b: &mut Bencher) {
+    let bid = sample_validator_bid();
+    b.iter(|| BidKind::to_bytes(black_box(&bid)));
 }
 
 fn deserialize_bid(delegators_len: u32, b: &mut Bencher) {
@@ -645,7 +692,7 @@ fn sample_era_info(delegators_len: u32) -> EraInfo {
     let mut base = EraInfo::new();
     let delegations = (0..delegators_len).map(|i| {
         let pk = u32_to_pk(i);
-        SeigniorageAllocation::delegator(pk.clone(), pk, U512::MAX)
+        SeigniorageAllocation::delegator(DelegatorKind::PublicKey(pk.clone()), pk, U512::MAX)
     });
     base.seigniorage_allocations_mut().extend(delegations);
     base
@@ -794,6 +841,13 @@ fn bytesrepr_bench(c: &mut Criterion) {
         "bytesrepr::deserialize_contract_package",
         deserialize_contract_package,
     );
+    c.bench_function(
+        "bytesrepr::serialize_validator_bid",
+        serialize_validator_bid,
+    );
+    c.bench_function("bytesrepr::serialize_delegation_bid", |b| {
+        serialize_delegation_bid(10, b)
+    });
     c.bench_function("bytesrepr::serialize_bid_small", |b| serialize_bid(10, b));
     c.bench_function("bytesrepr::serialize_bid_medium", |b| serialize_bid(100, b));
     c.bench_function("bytesrepr::serialize_bid_big", |b| serialize_bid(1000, b));

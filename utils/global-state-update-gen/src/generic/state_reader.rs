@@ -3,11 +3,15 @@ use casper_types::{
     account::AccountHash,
     contracts::ContractHash,
     system::{
-        auction::{BidKind, UnbondingPurses, WithdrawPurses, SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY},
+        auction::{
+            BidKind, Unbond, UnbondKind, UnbondingPurse, WithdrawPurses,
+            SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY,
+        },
         mint::TOTAL_SUPPLY_KEY,
     },
     AddressableEntity, Key, StoredValue,
 };
+use std::collections::BTreeMap;
 
 pub trait StateReader {
     fn query(&mut self, key: Key) -> Option<StoredValue>;
@@ -20,9 +24,13 @@ pub trait StateReader {
 
     fn get_bids(&mut self) -> Vec<BidKind>;
 
+    #[deprecated(note = "superseded by get_unbonding_purses")]
     fn get_withdraws(&mut self) -> WithdrawPurses;
 
-    fn get_unbonds(&mut self) -> UnbondingPurses;
+    #[deprecated(note = "superseded by get_unbonds")]
+    fn get_unbonding_purses(&mut self) -> BTreeMap<AccountHash, Vec<UnbondingPurse>>;
+
+    fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Vec<Unbond>>;
 }
 
 impl<'a, T> StateReader for &'a mut T
@@ -49,11 +57,17 @@ where
         T::get_bids(self)
     }
 
+    #[allow(deprecated)]
     fn get_withdraws(&mut self) -> WithdrawPurses {
         T::get_withdraws(self)
     }
 
-    fn get_unbonds(&mut self) -> UnbondingPurses {
+    #[allow(deprecated)]
+    fn get_unbonding_purses(&mut self) -> BTreeMap<AccountHash, Vec<UnbondingPurse>> {
+        T::get_unbonding_purses(self)
+    }
+
+    fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Vec<Unbond>> {
         T::get_unbonds(self)
     }
 }
@@ -121,7 +135,11 @@ impl StateReader for LmdbWasmTestBuilder {
         LmdbWasmTestBuilder::get_withdraw_purses(self)
     }
 
-    fn get_unbonds(&mut self) -> UnbondingPurses {
+    fn get_unbonding_purses(&mut self) -> BTreeMap<AccountHash, Vec<UnbondingPurse>> {
+        LmdbWasmTestBuilder::get_unbonding_purses(self)
+    }
+
+    fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Vec<Unbond>> {
         LmdbWasmTestBuilder::get_unbonds(self)
     }
 }

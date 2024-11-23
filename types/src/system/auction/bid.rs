@@ -14,7 +14,9 @@ use serde_map_to_array::{BTreeMapToArray, KeyValueLabels};
 
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes},
-    system::auction::{DelegationRate, Delegator, Error, ValidatorBid},
+    system::auction::{
+        DelegationRate, Delegator, DelegatorBid, DelegatorKind, Error, ValidatorBid,
+    },
     CLType, CLTyped, PublicKey, URef, U512,
 };
 
@@ -47,15 +49,27 @@ impl Bid {
     #[allow(missing_docs)]
     pub fn from_non_unified(
         validator_bid: ValidatorBid,
-        delegators: BTreeMap<PublicKey, Delegator>,
+        delegators: BTreeMap<DelegatorKind, DelegatorBid>,
     ) -> Self {
+        let mut map = BTreeMap::new();
+        for (kind, bid) in delegators {
+            if let DelegatorKind::PublicKey(pk) = kind {
+                let delegator = Delegator::unlocked(
+                    pk.clone(),
+                    bid.staked_amount(),
+                    *bid.bonding_purse(),
+                    bid.validator_public_key().clone(),
+                );
+                map.insert(pk, delegator);
+            }
+        }
         Self {
             validator_public_key: validator_bid.validator_public_key().clone(),
             bonding_purse: *validator_bid.bonding_purse(),
             staked_amount: validator_bid.staked_amount(),
             delegation_rate: *validator_bid.delegation_rate(),
             vesting_schedule: validator_bid.vesting_schedule().cloned(),
-            delegators,
+            delegators: map,
             inactive: validator_bid.inactive(),
         }
     }
@@ -548,14 +562,22 @@ mod tests {
             TEST_VESTING_SCHEDULE_LENGTH_MILLIS
         ));
 
-        let delegator_1_updated_1 = bid.delegators().get(&delegator_1_pk).cloned().unwrap();
+        let delegator_1_updated_1 = bid
+            .delegators()
+            .get(&delegator_1_pk.clone())
+            .cloned()
+            .unwrap();
         assert!(delegator_1_updated_1
             .vesting_schedule()
             .unwrap()
             .locked_amounts()
             .is_some());
 
-        let delegator_2_updated_1 = bid.delegators().get(&delegator_2_pk).cloned().unwrap();
+        let delegator_2_updated_1 = bid
+            .delegators()
+            .get(&delegator_2_pk.clone())
+            .cloned()
+            .unwrap();
         assert!(delegator_2_updated_1
             .vesting_schedule()
             .unwrap()
@@ -567,7 +589,11 @@ mod tests {
             TEST_VESTING_SCHEDULE_LENGTH_MILLIS
         ));
 
-        let delegator_1_updated_2 = bid.delegators().get(&delegator_1_pk).cloned().unwrap();
+        let delegator_1_updated_2 = bid
+            .delegators()
+            .get(&delegator_1_pk.clone())
+            .cloned()
+            .unwrap();
         assert!(delegator_1_updated_2
             .vesting_schedule()
             .unwrap()
@@ -576,7 +602,11 @@ mod tests {
         // Delegator 1 is already initialized and did not change after 2nd Bid::process
         assert_eq!(delegator_1_updated_1, delegator_1_updated_2);
 
-        let delegator_2_updated_2 = bid.delegators().get(&delegator_2_pk).cloned().unwrap();
+        let delegator_2_updated_2 = bid
+            .delegators()
+            .get(&delegator_2_pk.clone())
+            .cloned()
+            .unwrap();
         assert!(delegator_2_updated_2
             .vesting_schedule()
             .unwrap()

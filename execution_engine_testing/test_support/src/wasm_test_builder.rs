@@ -58,9 +58,9 @@ use casper_types::{
     runtime_args,
     system::{
         auction::{
-            BidKind, EraValidators, UnbondingPurses, ValidatorWeights, WithdrawPurses,
-            ARG_ERA_END_TIMESTAMP_MILLIS, ARG_EVICTED_VALIDATORS, AUCTION_DELAY_KEY, ERA_ID_KEY,
-            METHOD_RUN_AUCTION, UNBONDING_DELAY_KEY,
+            BidKind, EraValidators, Unbond, UnbondKind, UnbondingPurse, ValidatorWeights,
+            WithdrawPurses, ARG_ERA_END_TIMESTAMP_MILLIS, ARG_EVICTED_VALIDATORS,
+            AUCTION_DELAY_KEY, ERA_ID_KEY, METHOD_RUN_AUCTION, UNBONDING_DELAY_KEY,
         },
         mint::{MINT_GAS_HOLD_HANDLING_KEY, MINT_GAS_HOLD_INTERVAL_KEY},
         AUCTION, HANDLE_PAYMENT, MINT, STANDARD_PAYMENT,
@@ -1751,8 +1751,41 @@ where
             .expect("should have named keys")
     }
 
-    /// Gets [`UnbondingPurses`].
-    pub fn get_unbonds(&mut self) -> UnbondingPurses {
+    /// Gets [`BTreeMap<UnbondKind, Unbond>`].
+    pub fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Vec<Unbond>> {
+        let state_root_hash = self.get_post_state_hash();
+
+        let tracking_copy = self
+            .data_access_layer
+            .tracking_copy(state_root_hash)
+            .unwrap()
+            .unwrap();
+
+        let reader = tracking_copy.reader();
+
+        let unbond_keys = reader
+            .keys_with_prefix(&[KeyTag::BidAddr as u8])
+            .unwrap_or_default();
+
+        let mut ret = BTreeMap::new();
+
+        for key in unbond_keys.into_iter() {
+            if let Ok(Some(StoredValue::BidKind(BidKind::Unbond(unbond)))) = reader.read(&key) {
+                let unbond_kind = unbond.unbond_kind();
+                match ret.get_mut(unbond_kind) {
+                    None => {
+                        let _ = ret.insert(unbond_kind.clone(), vec![*unbond]);
+                    }
+                    Some(unbonds) => unbonds.push(*unbond),
+                };
+            }
+        }
+
+        ret
+    }
+
+    /// Gets [`BTreeMap<AccountHash, Vec<UnbondingPurse>>`].
+    pub fn get_unbonding_purses(&mut self) -> BTreeMap<AccountHash, Vec<UnbondingPurse>> {
         let state_root_hash = self.get_post_state_hash();
 
         let tracking_copy = self

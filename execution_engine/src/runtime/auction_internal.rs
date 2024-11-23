@@ -3,22 +3,25 @@ use tracing::error;
 
 use casper_storage::{
     global_state::{error::Error as GlobalStateError, state::StateReader},
-    system::auction::{
-        providers::{AccountProvider, MintProvider, RuntimeProvider, StorageProvider},
-        Auction,
+    system::{
+        auction::{
+            providers::{AccountProvider, MintProvider, RuntimeProvider, StorageProvider},
+            Auction,
+        },
+        mint::Mint,
     },
 };
 use casper_types::{
     account::AccountHash,
     bytesrepr::{FromBytes, ToBytes},
     system::{
-        auction::{BidAddr, BidKind, EraInfo, Error, UnbondingPurse},
+        auction::{BidAddr, BidKind, EraInfo, Error, Unbond, UnbondEra, UnbondKind},
         mint,
     },
-    CLTyped, CLValue, Key, KeyTag, PublicKey, RuntimeArgs, StoredValue, URef, U512,
+    AccessRights, CLTyped, CLValue, Key, KeyTag, PublicKey, RuntimeArgs, StoredValue, URef, U512,
 };
 
-use super::{cryptography, Runtime};
+use super::Runtime;
 use crate::execution::ExecError;
 
 impl From<ExecError> for Option<Error> {
@@ -96,14 +99,14 @@ where
             })
     }
 
-    fn read_unbonds(&mut self, account_hash: &AccountHash) -> Result<Vec<UnbondingPurse>, Error> {
-        match self.context.read_gs(&Key::Unbond(*account_hash)) {
-            Ok(Some(StoredValue::Unbonding(unbonding_purses))) => Ok(unbonding_purses),
+    fn read_unbond(&mut self, bid_addr: BidAddr) -> Result<Option<Unbond>, Error> {
+        match self.context.read_gs(&Key::BidAddr(bid_addr)) {
+            Ok(Some(StoredValue::BidKind(BidKind::Unbond(unbonds)))) => Ok(Some(*unbonds)),
             Ok(Some(_)) => {
                 error!("StorageProvider::read_unbonds: unexpected StoredValue variant");
                 Err(Error::Storage)
             }
-            Ok(None) => Ok(Vec::new()),
+            Ok(None) => Ok(None),
             Err(ExecError::BytesRepr(_)) => Err(Error::Serialization),
             // NOTE: This extra condition is needed to correctly propagate GasLimit to the user. See
             // also [`Runtime::reverter`] and [`to_auction_error`]
@@ -115,22 +118,23 @@ where
         }
     }
 
-    fn write_unbonds(
-        &mut self,
-        account_hash: AccountHash,
-        unbonding_purses: Vec<UnbondingPurse>,
-    ) -> Result<(), Error> {
-        let unbond_key = Key::Unbond(account_hash);
-        if unbonding_purses.is_empty() {
-            self.context.prune_gs_unsafe(unbond_key);
-            Ok(())
-        } else {
-            self.context
-                .metered_write_gs_unsafe(unbond_key, StoredValue::Unbonding(unbonding_purses))
+    fn write_unbond(&mut self, bid_addr: BidAddr, unbond: Option<Unbond>) -> Result<(), Error> {
+        let unbond_key = Key::BidAddr(bid_addr);
+        match unbond {
+            Some(unbond) => self
+                .context
+                .metered_write_gs_unsafe(
+                    unbond_key,
+                    StoredValue::BidKind(BidKind::Unbond(Box::new(unbond))),
+                )
                 .map_err(|exec_error| {
-                    error!("StorageProvider::write_unbonds: {:?}", exec_error);
+                    error!("StorageProvider::write_unbond: {:?}", exec_error);
                     <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
-                })
+                }),
+            None => {
+                self.context.prune_gs_unsafe(unbond_key);
+                Ok(())
+            }
         }
     }
 
@@ -156,6 +160,10 @@ where
         Runtime::is_allowed_session_caller(self, account_hash)
     }
 
+    fn is_valid_uref(&self, uref: URef) -> bool {
+        self.context.validate_uref(&uref).is_ok()
+    }
+
     fn named_keys_get(&self, name: &str) -> Option<Key> {
         self.context.named_keys_get(name).cloned()
     }
@@ -177,69 +185,110 @@ where
     }
 
     fn delegator_count(&mut self, bid_addr: &BidAddr) -> Result<usize, Error> {
-        let prefix = bid_addr.delegators_prefix()?;
-        let keys = self
-            .context
-            .get_keys_with_prefix(&prefix)
-            .map_err(|exec_error| {
-                error!("RuntimeProvider::delegator_count {:?}", exec_error);
-                <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
-            })?;
-        Ok(keys.len())
+        let delegated_accounts = {
+            let prefix = bid_addr.delegated_account_prefix()?;
+            let keys = self
+                .context
+                .get_keys_with_prefix(&prefix)
+                .map_err(|exec_error| {
+                    error!("RuntimeProvider::delegator_count accounts {:?}", exec_error);
+                    <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
+                })?;
+            keys.len()
+        };
+        let delegated_purses = {
+            let prefix = bid_addr.delegated_purse_prefix()?;
+            let keys = self
+                .context
+                .get_keys_with_prefix(&prefix)
+                .map_err(|exec_error| {
+                    error!("RuntimeProvider::delegator_count purses {:?}", exec_error);
+                    <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
+                })?;
+            keys.len()
+        };
+        Ok(delegated_accounts.saturating_add(delegated_purses))
     }
 
     fn reservation_count(&mut self, bid_addr: &BidAddr) -> Result<usize, Error> {
-        let reservation_prefix = bid_addr.reservation_prefix()?;
-        let reservation_keys = self
-            .context
-            .get_keys_with_prefix(&reservation_prefix)
-            .map_err(|exec_error| {
-                error!("RuntimeProvider::reservation_count {:?}", exec_error);
-                <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
-            })?;
-        Ok(reservation_keys.len())
+        let reserved_accounts = {
+            let reservation_prefix = bid_addr.reserved_account_prefix()?;
+            let reservation_keys = self
+                .context
+                .get_keys_with_prefix(&reservation_prefix)
+                .map_err(|exec_error| {
+                    error!("RuntimeProvider::reservation_count {:?}", exec_error);
+                    <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
+                })?;
+            reservation_keys.len()
+        };
+        let reserved_purses = {
+            let reservation_prefix = bid_addr.reserved_purse_prefix()?;
+            let reservation_keys = self
+                .context
+                .get_keys_with_prefix(&reservation_prefix)
+                .map_err(|exec_error| {
+                    error!("RuntimeProvider::reservation_count {:?}", exec_error);
+                    <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
+                })?;
+            reservation_keys.len()
+        };
+        Ok(reserved_accounts.saturating_add(reserved_purses))
     }
 
     fn used_reservation_count(&mut self, bid_addr: &BidAddr) -> Result<usize, Error> {
-        let delegator_prefix = bid_addr.delegators_prefix()?;
-        let delegator_keys = self
-            .context
-            .get_keys_with_prefix(&delegator_prefix)
-            .map_err(|exec_error| {
-                error!("RuntimeProvider::used_reservation_count {:?}", exec_error);
-                <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
-            })?;
-        let delegator_account_hashes: Vec<AccountHash> = delegator_keys
-            .into_iter()
-            .filter_map(|key| {
-                if let Key::BidAddr(BidAddr::Delegator { delegator, .. }) = key {
-                    Some(delegator)
-                } else {
-                    None
-                }
-            })
-            .collect();
+        let reservation_account_prefix = bid_addr.reserved_account_prefix()?;
+        let reservation_purse_prefix = bid_addr.reserved_purse_prefix()?;
 
-        let reservation_prefix = bid_addr.reservation_prefix()?;
-        let reservation_keys = self
-            .context
-            .get_keys_with_prefix(&reservation_prefix)
-            .map_err(|exec_error| {
-                error!("RuntimeProvider::reservation_count {:?}", exec_error);
-                <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
-            })?;
+        let reservation_keys = {
+            let mut ret = self
+                .context
+                .get_keys_with_prefix(&reservation_account_prefix)
+                .map_err(|exec_error| {
+                    error!("RuntimeProvider::reservation_count {:?}", exec_error);
+                    <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
+                })?;
+            let purses = self
+                .context
+                .get_keys_with_prefix(&reservation_purse_prefix)
+                .map_err(|exec_error| {
+                    error!("RuntimeProvider::reservation_count {:?}", exec_error);
+                    <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
+                })?;
+            ret.extend(purses);
+            ret
+        };
 
-        let used_reservations_count = reservation_keys
-            .iter()
-            .filter(|reservation| {
-                if let Key::BidAddr(BidAddr::Reservation { delegator, .. }) = reservation {
-                    delegator_account_hashes.contains(delegator)
-                } else {
-                    false
+        let mut used = 0;
+        for reservation_key in reservation_keys {
+            if let Key::BidAddr(BidAddr::ReservedDelegationAccount {
+                validator,
+                delegator,
+            }) = reservation_key
+            {
+                let key_to_check = Key::BidAddr(BidAddr::DelegatedAccount {
+                    validator,
+                    delegator,
+                });
+                if let Ok(Some(_)) = self.context.read_gs(&key_to_check) {
+                    used += 1;
                 }
-            })
-            .count();
-        Ok(used_reservations_count)
+            }
+            if let Key::BidAddr(BidAddr::ReservedDelegationPurse {
+                validator,
+                delegator,
+            }) = reservation_key
+            {
+                let key_to_check = Key::BidAddr(BidAddr::DelegatedPurse {
+                    validator,
+                    delegator,
+                });
+                if let Ok(Some(_)) = self.context.read_gs(&key_to_check) {
+                    used += 1;
+                }
+            }
+        }
+        Ok(used)
     }
 
     fn vesting_schedule_period_millis(&self) -> u64 {
@@ -261,65 +310,77 @@ impl<'a, R> MintProvider for Runtime<'a, R>
 where
     R: StateReader<Key, StoredValue, Error = GlobalStateError>,
 {
-    fn unbond(&mut self, unbonding_purse: &UnbondingPurse) -> Result<(), Error> {
-        let account_hash = AccountHash::from_public_key(
-            unbonding_purse.unbonder_public_key(),
-            cryptography::blake2b,
-        );
+    fn unbond(&mut self, unbond_kind: &UnbondKind, unbond_era: &UnbondEra) -> Result<(), Error> {
+        let is_delegator = unbond_kind.is_delegator();
+        let (purse, maybe_account_hash) = match unbond_kind {
+            UnbondKind::Validator(pk) | UnbondKind::DelegatedPublicKey(pk) => {
+                let account_hash = pk.to_account_hash();
+                let maybe_value = self
+                    .context
+                    .read_gs_unsafe(&Key::Account(account_hash))
+                    .map_err(|exec_error| {
+                        error!("MintProvider::unbond: {:?}", exec_error);
+                        <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
+                    })?;
 
-        let maybe_value = self
-            .context
-            .read_gs_unsafe(&Key::Account(account_hash))
-            .map_err(|exec_error| {
-                error!("MintProvider::unbond: {:?}", exec_error);
-                <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
-            })?;
-
-        let contract_key: Key = match maybe_value {
-            Some(StoredValue::Account(account)) => {
-                self.mint_transfer_direct(
-                    Some(account_hash),
-                    *unbonding_purse.bonding_purse(),
-                    account.main_purse(),
-                    *unbonding_purse.amount(),
-                    None,
-                )
-                .map_err(|_| Error::Transfer)?
-                .map_err(|_| Error::Transfer)?;
-                return Ok(());
+                match maybe_value {
+                    Some(StoredValue::Account(account)) => {
+                        (account.main_purse(), Some(account_hash))
+                    }
+                    Some(StoredValue::CLValue(cl_value)) => {
+                        let entity_key: Key = cl_value.into_t().map_err(|_| Error::CLValue)?;
+                        match self.context.read_gs_unsafe(&entity_key) {
+                            Ok(Some(StoredValue::AddressableEntity(entity))) => {
+                                (entity.main_purse(), Some(account_hash))
+                            }
+                            Ok(Some(StoredValue::CLValue(_))) => {
+                                return Err(Error::CLValue);
+                            }
+                            Ok(Some(_)) => {
+                                return if is_delegator {
+                                    Err(Error::DelegatorNotFound)
+                                } else {
+                                    Err(Error::ValidatorNotFound)
+                                }
+                            }
+                            Ok(None) => {
+                                return Err(Error::InvalidPublicKey);
+                            }
+                            Err(exec_error) => {
+                                error!("MintProvider::unbond: {:?}", exec_error);
+                                return Err(
+                                    <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
+                                );
+                            }
+                        }
+                    }
+                    Some(_) => return Err(Error::UnexpectedStoredValueVariant),
+                    None => return Err(Error::InvalidPublicKey),
+                }
             }
-            Some(StoredValue::CLValue(cl_value)) => {
-                let contract_key: Key = cl_value.into_t().map_err(|_| Error::CLValue)?;
-                contract_key
+            UnbondKind::DelegatedPurse(addr) => {
+                let purse = URef::new(*addr, AccessRights::READ_ADD_WRITE);
+                match self.balance(purse) {
+                    Ok(Some(_)) => (purse, None),
+                    Ok(None) => return Err(Error::MissingPurse),
+                    Err(err) => {
+                        error!("MintProvider::unbond delegated purse: {:?}", err);
+                        return Err(Error::MintError);
+                    }
+                }
             }
-            Some(_cl_value) => return Err(Error::CLValue),
-            None => return Err(Error::InvalidPublicKey),
         };
 
-        let maybe_value = self
-            .context
-            .read_gs_unsafe(&contract_key)
-            .map_err(|exec_error| {
-                error!("MintProvider::unbond: {:?}", exec_error);
-                <Option<Error>>::from(exec_error).unwrap_or(Error::Storage)
-            })?;
-
-        match maybe_value {
-            Some(StoredValue::AddressableEntity(contract)) => {
-                self.mint_transfer_direct(
-                    Some(account_hash),
-                    *unbonding_purse.bonding_purse(),
-                    contract.main_purse(),
-                    *unbonding_purse.amount(),
-                    None,
-                )
-                .map_err(|_| Error::Transfer)?
-                .map_err(|_| Error::Transfer)?;
-                Ok(())
-            }
-            Some(_cl_value) => Err(Error::CLValue),
-            None => Err(Error::InvalidPublicKey),
-        }
+        self.mint_transfer_direct(
+            maybe_account_hash,
+            *unbond_era.bonding_purse(),
+            purse,
+            *unbond_era.amount(),
+            None,
+        )
+        .map_err(|_| Error::Transfer)?
+        .map_err(|_| Error::Transfer)?;
+        Ok(())
     }
 
     /// Allows optimized auction and mint interaction.
