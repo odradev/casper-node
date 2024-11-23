@@ -3,7 +3,7 @@ use alloc::{collections::BTreeMap, vec::Vec};
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes},
     system::auction::{Bid, DelegationRate, DelegatorKind},
-    CLType, CLTyped, U512,
+    CLType, CLTyped, PublicKey, U512,
 };
 
 /// The seigniorage recipient details.
@@ -15,7 +15,7 @@ pub struct SeigniorageRecipientV1 {
     /// Delegation rate of a seigniorage recipient.
     delegation_rate: DelegationRate,
     /// Delegators and their bids.
-    delegator_stake: BTreeMap<DelegatorKind, U512>,
+    delegator_stake: BTreeMap<PublicKey, U512>,
 }
 
 impl SeigniorageRecipientV1 {
@@ -23,7 +23,7 @@ impl SeigniorageRecipientV1 {
     pub fn new(
         stake: U512,
         delegation_rate: DelegationRate,
-        delegator_stake: BTreeMap<DelegatorKind, U512>,
+        delegator_stake: BTreeMap<PublicKey, U512>,
     ) -> Self {
         Self {
             stake,
@@ -43,7 +43,7 @@ impl SeigniorageRecipientV1 {
     }
 
     /// Returns delegators of the provided recipient and their stake
-    pub fn delegator_stake(&self) -> &BTreeMap<DelegatorKind, U512> {
+    pub fn delegator_stake(&self) -> &BTreeMap<PublicKey, U512> {
         &self.delegator_stake
     }
 
@@ -106,10 +106,7 @@ impl From<&Bid> for SeigniorageRecipientV1 {
             .delegators()
             .iter()
             .map(|(delegator_public_key, delegator)| {
-                (
-                    DelegatorKind::PublicKey(delegator_public_key.clone()),
-                    delegator.staked_amount(),
-                )
+                (delegator_public_key.clone(), delegator.staked_amount())
             })
             .collect();
         Self {
@@ -251,7 +248,7 @@ impl From<SeigniorageRecipientV1> for SeigniorageRecipientV2 {
     fn from(snapshot: SeigniorageRecipientV1) -> Self {
         let mut delegator_stake = BTreeMap::new();
         for (kind, amount) in snapshot.delegator_stake {
-            delegator_stake.insert(kind, amount);
+            delegator_stake.insert(DelegatorKind::PublicKey(kind), amount);
         }
 
         Self {
@@ -381,18 +378,9 @@ mod tests {
             stake: U512::max_value(),
             delegation_rate: DelegationRate::MAX,
             delegator_stake: BTreeMap::from_iter(vec![
-                (
-                    DelegatorKind::PublicKey(delegator_1_key.clone()),
-                    U512::max_value(),
-                ),
-                (
-                    DelegatorKind::PublicKey(delegator_2_key.clone()),
-                    U512::max_value(),
-                ),
-                (
-                    DelegatorKind::PublicKey(delegator_3_key.clone()),
-                    U512::zero(),
-                ),
+                (delegator_1_key.clone(), U512::max_value()),
+                (delegator_2_key.clone(), U512::max_value()),
+                (delegator_3_key.clone(), U512::zero()),
             ]),
         };
 

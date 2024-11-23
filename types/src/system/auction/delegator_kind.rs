@@ -44,6 +44,11 @@ impl DelegatorKind {
             DelegatorKind::Purse(_) => DelegatorKindTag::Purse,
         }
     }
+
+    /// Returns true if the kind is a purse.
+    pub fn is_purse(&self) -> bool {
+        matches!(self, DelegatorKind::Purse(_))
+    }
 }
 
 impl ToBytes for DelegatorKind {
