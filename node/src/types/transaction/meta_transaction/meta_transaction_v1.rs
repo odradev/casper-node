@@ -649,7 +649,7 @@ impl MetaTransactionV1 {
                 module_bytes: _,
                 transferred_value: _,
                 seed,
-            } => seed.clone(),
+            } => *seed,
         }
     }
 

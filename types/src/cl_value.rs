@@ -1,5 +1,4 @@
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 use core::fmt::{self, Display, Formatter};
 
 use crate::{
@@ -10,8 +9,7 @@ use crate::{
 use datasize::DataSize;
 #[cfg(feature = "json-schema")]
 use schemars::{gen::SchemaGenerator, schema::Schema, JsonSchema};
-use serde::de::Error as SerdeError;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{de::Error as SerdeError, Deserialize, Deserializer, Serialize, Serializer};
 #[cfg(feature = "json-schema")]
 use serde_json::Value;
 
