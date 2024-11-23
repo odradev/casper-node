@@ -61,7 +61,7 @@ use casper_types::{
     EntityKind, EntityVersion, EntityVersionKey, EntityVersions, Gas, GrantedAccess, Group, Groups,
     HashAddr, HostFunction, HostFunctionCost, InitiatorAddr, Key, NamedArg, Package, PackageHash,
     PackageStatus, Phase, PublicKey, RuntimeArgs, RuntimeFootprint, StoredValue,
-    TransactionRuntime, Transfer, TransferResult, TransferV2, TransferredTo, URef, URefAddr,
+    TransactionRuntime, Transfer, TransferResult, TransferV2, TransferredTo, URef,
     DICTIONARY_ITEM_KEY_MAX_LENGTH, U512,
 };
 
@@ -1082,11 +1082,16 @@ where
                     match Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR) {
                         Ok(pk) => DelegatorKind::PublicKey(pk),
                         Err(_) => {
-                            let purse: URefAddr = Self::get_named_argument(
+                            match Self::get_named_argument(
                                 runtime_args,
                                 auction::ARG_DELEGATOR_PURSE,
-                            )?;
-                            DelegatorKind::Purse(purse)
+                            ) {
+                                Ok(addr) => DelegatorKind::Purse(addr),
+                                Err(err) => {
+                                    error!(%err, "failed to get delegator purse argument");
+                                    return Err(err);
+                                }
+                            }
                         }
                     }
                 };
@@ -1110,11 +1115,16 @@ where
                     match Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR) {
                         Ok(pk) => DelegatorKind::PublicKey(pk),
                         Err(_) => {
-                            let purse: URefAddr = Self::get_named_argument(
+                            match Self::get_named_argument(
                                 runtime_args,
                                 auction::ARG_DELEGATOR_PURSE,
-                            )?;
-                            DelegatorKind::Purse(purse)
+                            ) {
+                                Ok(addr) => DelegatorKind::Purse(addr),
+                                Err(err) => {
+                                    error!(%err, "failed to get delegator purse argument");
+                                    return Err(err);
+                                }
+                            }
                         }
                     }
                 };
@@ -1135,11 +1145,16 @@ where
                     match Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR) {
                         Ok(pk) => DelegatorKind::PublicKey(pk),
                         Err(_) => {
-                            let purse: URefAddr = Self::get_named_argument(
+                            match Self::get_named_argument(
                                 runtime_args,
                                 auction::ARG_DELEGATOR_PURSE,
-                            )?;
-                            DelegatorKind::Purse(purse)
+                            ) {
+                                Ok(addr) => DelegatorKind::Purse(addr),
+                                Err(err) => {
+                                    error!(%err, "failed to get delegator purse argument");
+                                    return Err(err);
+                                }
+                            }
                         }
                     }
                 };
