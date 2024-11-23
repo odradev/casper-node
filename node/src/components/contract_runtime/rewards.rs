@@ -14,10 +14,11 @@ use futures::stream::{self, StreamExt as _, TryStreamExt as _};
 
 use itertools::Itertools;
 use num_rational::Ratio;
-use num_traits::{CheckedAdd, CheckedMul};
+use num_traits::{CheckedAdd, CheckedMul, ToPrimitive};
 use tracing::trace;
 
 use crate::{
+    contract_runtime::metrics::Metrics,
     effect::{
         requests::{ContractRuntimeRequest, StorageRequest},
         EffectBuilder,
@@ -254,10 +255,10 @@ impl RewardsInfo {
                     TotalSupplyResult::Success { total_supply } => total_supply,
                 };
 
-                let seignorate_rate_request =
+                let seigniorage_rate_request =
                     RoundSeigniorageRateRequest::new(state_root_hash, protocol_version);
-                let seignorate_rate =
-                    match data_access_layer.round_seigniorage_rate(seignorate_rate_request) {
+                let seigniorage_rate =
+                    match data_access_layer.round_seigniorage_rate(seigniorage_rate_request) {
                         RoundSeigniorageRateResult::RootNotFound
                         | RoundSeigniorageRateResult::MintNotFound
                         | RoundSeigniorageRateResult::ValueNotFound(_)
@@ -267,7 +268,7 @@ impl RewardsInfo {
                         RoundSeigniorageRateResult::Success { rate } => rate,
                     };
 
-                let reward_per_round = seignorate_rate * total_supply;
+                let reward_per_round = seigniorage_rate * total_supply;
                 let total_weights = weights.values().copied().sum();
 
                 Ok::<_, RewardsError>((
@@ -380,6 +381,7 @@ pub(crate) async fn fetch_data_and_calculate_rewards_for_era<REv: ReactorEventT>
     effect_builder: EffectBuilder<REv>,
     data_access_layer: Arc<DataAccessLayer<LmdbGlobalState>>,
     chainspec: &Chainspec,
+    metrics: &Arc<Metrics>,
     executable_block: ExecutableBlock,
 ) -> Result<BTreeMap<PublicKey, Vec<U512>>, RewardsError> {
     let current_era_id = executable_block.era_id;
@@ -410,7 +412,45 @@ pub(crate) async fn fetch_data_and_calculate_rewards_for_era<REv: ReactorEventT>
         )
         .await?;
 
-        rewards_for_era(rewards_info, current_era_id, &chainspec.core_config)
+        let cited_blocks_count_current_era = rewards_info.blocks_from_era(current_era_id).count();
+
+        let reward_per_round_current_era = rewards_info
+            .eras_info
+            .get(&current_era_id)
+            .expect("expected EraInfo")
+            .reward_per_round;
+
+        let rewards = rewards_for_era(rewards_info, current_era_id, &chainspec.core_config);
+
+        // Calculate and push reward metric(s)
+        match &rewards {
+            Ok(rewards_map) => {
+                let expected_total_seigniorage = reward_per_round_current_era
+                    .to_integer()
+                    .saturating_mul(U512::from(cited_blocks_count_current_era as u64));
+                let actual_total_seigniorage =
+                    rewards_map
+                        .iter()
+                        .fold(U512::zero(), |acc, (_, rewards_vec)| {
+                            let current_era_reward = rewards_vec
+                                .first()
+                                .expect("expected current era reward amount");
+                            acc.saturating_add(*current_era_reward)
+                        });
+                let seigniorage_target_fraction = Ratio::new(
+                    actual_total_seigniorage.low_u128(),
+                    expected_total_seigniorage.low_u128(),
+                );
+                let gauge_value = match Ratio::to_f64(&seigniorage_target_fraction) {
+                    Some(v) => v,
+                    None => f64::NAN,
+                };
+                metrics.seigniorage_target_fraction.set(gauge_value)
+            }
+            Err(_) => (),
+        }
+
+        rewards
     }
 }
 
