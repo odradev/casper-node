@@ -1577,11 +1577,10 @@
           },
           "uniqueItems": true
         }
-      },
-      "additionalProperties": false
+      }
     },
     "TransactionV1Payload": {
-      "description": "A unit of work sent by a client to the network, which when executed can cause global state to be altered.",
+      "description": "Internal payload of the transaction. The actual data over which the signing is done.",
       "type": "object",
       "required": [
         "chain_name",
@@ -1609,9 +1608,7 @@
         },
         "fields": {
           "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/Bytes"
-          }
+          "additionalProperties": true
         }
       },
       "additionalProperties": false

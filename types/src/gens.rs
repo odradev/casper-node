@@ -965,6 +965,14 @@ pub fn transaction_scheduling_arb() -> impl Strategy<Value = TransactionScheduli
     ]
 }
 
+pub fn json_compliant_transaction_scheduling_arb() -> impl Strategy<Value = TransactionScheduling> {
+    prop_oneof![
+        Just(TransactionScheduling::Standard),
+        era_id_arb().prop_map(TransactionScheduling::FutureEra),
+        timestamp_arb().prop_map(TransactionScheduling::FutureTimestamp),
+    ]
+}
+
 pub fn transaction_invocation_target_arb() -> impl Strategy<Value = TransactionInvocationTarget> {
     prop_oneof![
         addressable_entity_hash_arb().prop_map(TransactionInvocationTarget::new_invocable_entity),
@@ -1171,7 +1179,7 @@ pub fn initiator_addr_arb() -> impl Strategy<Value = InitiatorAddr> {
 
 pub fn timestamp_arb() -> impl Strategy<Value = Timestamp> {
     //The weird u64 value is the max milliseconds that are bofeore year 10000. 5 digit years are
-    // not rfc3339 compliant and will cause an error
+    // not rfc3339 compliant and will cause an error when trying to serialize to json.
     prop_oneof![Just(0_u64), Just(1_u64), Just(253_402_300_799_999_u64)].prop_map(Timestamp::from)
 }
 
@@ -1183,7 +1191,7 @@ pub fn legal_v1_transaction_arb() -> impl Strategy<Value = TransactionV1> {
         pricing_mode_arb(),
         secret_key_arb_no_system(),
         transaction_args_arb(),
-        transaction_scheduling_arb(),
+        json_compliant_transaction_scheduling_arb(),
         legal_target_entry_point_calls_arb(),
     )
         .prop_map(
