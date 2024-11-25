@@ -13,11 +13,11 @@ use casper_types::{
     contracts::{ContractHash, NamedKeys},
     system::{
         auction::{
-            BidAddr, BidKind, SeigniorageRecipientsSnapshotV1, SeigniorageRecipientsSnapshotV2,
-            SeigniorageRecipientsV2, ValidatorBid, AUCTION_DELAY_KEY,
-            DEFAULT_SEIGNIORAGE_RECIPIENTS_SNAPSHOT_VERSION, LOCKED_FUNDS_PERIOD_KEY,
-            SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY, SEIGNIORAGE_RECIPIENTS_SNAPSHOT_VERSION_KEY,
-            UNBONDING_DELAY_KEY, VALIDATOR_SLOTS_KEY,
+            BidAddr, BidKind, DelegatorBid, DelegatorKind, SeigniorageRecipientsSnapshotV1,
+            SeigniorageRecipientsSnapshotV2, SeigniorageRecipientsV2, ValidatorBid,
+            AUCTION_DELAY_KEY, DEFAULT_SEIGNIORAGE_RECIPIENTS_SNAPSHOT_VERSION,
+            LOCKED_FUNDS_PERIOD_KEY, SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY,
+            SEIGNIORAGE_RECIPIENTS_SNAPSHOT_VERSION_KEY, UNBONDING_DELAY_KEY, VALIDATOR_SLOTS_KEY,
         },
         handle_payment::ACCUMULATION_PURSE_KEY,
         mint::{
@@ -568,7 +568,7 @@ where
             .check_next_version(&self.config.new_protocol_version())
             .is_major_version();
 
-        let contract_entry_points: EntryPoints = (contract.entry_points().clone()).into();
+        let contract_entry_points: EntryPoints = contract.entry_points().clone().into();
         let entry_points_unchanged = contract_entry_points == entry_points;
         if entry_points_unchanged && !is_major_bump {
             // We don't need to do anything if entry points are unchanged, or there's no major
@@ -1180,9 +1180,9 @@ where
 
                 let delegators = existing_bid.delegators().clone();
                 for (_, delegator) in delegators {
-                    let delegator_bid_addr = BidAddr::new_from_public_keys(
+                    let delegator_bid_addr = BidAddr::new_delegator_kind(
                         validator_public_key,
-                        Some(delegator.delegator_public_key()),
+                        &DelegatorKind::PublicKey(delegator.delegator_public_key().clone()),
                     );
                     // the previous code was removing a delegator bid from the embedded
                     // collection within their validator's bid when the delegator fully
@@ -1191,7 +1191,9 @@ where
                     if !delegator.staked_amount().is_zero() {
                         tc.write(
                             delegator_bid_addr.into(),
-                            StoredValue::BidKind(BidKind::Delegator(Box::new(delegator))),
+                            StoredValue::BidKind(BidKind::Delegator(Box::new(DelegatorBid::from(
+                                delegator,
+                            )))),
                         );
                     }
                 }

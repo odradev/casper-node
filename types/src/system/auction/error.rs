@@ -23,7 +23,7 @@ pub enum Error {
     /// assert_eq!(0, Error::MissingKey as u8);
     /// ```
     MissingKey = 0,
-    /// Given named key contains invalid variant.
+    /// Invalid key variant.
     /// ```
     /// # use casper_types::system::auction::Error;
     /// assert_eq!(1, Error::InvalidKeyVariant as u8);
@@ -389,6 +389,18 @@ pub enum Error {
     /// assert_eq!(59, Error::ReservationSlotsCountTooSmall as u8);
     /// ```
     ReservationSlotsCountTooSmall = 59,
+    /// Unexpected unbond variant.
+    /// ```
+    /// # use casper_types::system::auction::Error;
+    /// assert_eq!(60, Error::UnexpectedUnbondVariant as u8);
+    /// ```
+    UnexpectedUnbondVariant = 60,
+    /// Unexpected stored value variant.
+    /// ```
+    /// # use casper_types::system::auction::Error;
+    /// assert_eq!(61, Error::UnexpectedStoredValueVariant as u8);
+    /// ```
+    UnexpectedStoredValueVariant = 61,
 }
 
 impl Display for Error {
@@ -454,6 +466,8 @@ impl Display for Error {
             Error::ExceededReservationSlotsLimit => formatter.write_str("Validator exceeded allowed number of reserved delegator slots"),
             Error::ExceededReservationsLimit => formatter.write_str("All reserved slots for validator are already occupied"),
             Error::ReservationSlotsCountTooSmall => formatter.write_str("Reserved slots count is less than number of existing reservations"),
+            Error::UnexpectedUnbondVariant => formatter.write_str("Unexpected unbond variant"),
+            Error::UnexpectedStoredValueVariant => formatter.write_str("Unexpected stored value variant"),
         }
     }
 }
@@ -552,6 +566,10 @@ impl TryFrom<u8> for Error {
             }
             d if d == Error::ReservationSlotsCountTooSmall as u8 => {
                 Ok(Error::ReservationSlotsCountTooSmall)
+            }
+            d if d == Error::UnexpectedUnbondVariant as u8 => Ok(Error::UnexpectedUnbondVariant),
+            d if d == Error::UnexpectedStoredValueVariant as u8 => {
+                Ok(Error::UnexpectedStoredValueVariant)
             }
             _ => Err(TryFromU8ForError(())),
         }

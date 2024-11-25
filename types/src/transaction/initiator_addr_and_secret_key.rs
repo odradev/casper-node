@@ -13,9 +13,11 @@ pub(crate) enum InitiatorAddrAndSecretKey<'a> {
     },
     /// The initiator address only (no secret key).  The deploy or transaction will be created
     /// unsigned.
+    #[allow(unused)]
     InitiatorAddr(InitiatorAddr),
     /// The initiator address will be derived from the provided secret key, and the deploy or
     /// transaction will be signed by the same secret key.
+    #[allow(unused)]
     SecretKey(&'a SecretKey),
 }
 

@@ -7,6 +7,10 @@ mod transaction_v1_builder;
 mod transaction_v1_hash;
 pub mod transaction_v1_payload;
 
+#[cfg(any(feature = "std", feature = "testing", test))]
+use super::InitiatorAddrAndSecretKey;
+#[cfg(any(all(feature = "std", feature = "testing"), test))]
+use super::{TransactionEntryPoint, TransactionTarget};
 use crate::{
     bytesrepr::{self, Error, FromBytes, ToBytes},
     crypto,
@@ -18,24 +22,23 @@ use crate::{
 #[cfg(any(feature = "std", test, feature = "testing"))]
 use alloc::collections::BTreeMap;
 use alloc::{collections::BTreeSet, vec::Vec};
+#[cfg(feature = "datasize")]
+use datasize::DataSize;
 use errors_v1::FieldDeserializationError;
 #[cfg(any(all(feature = "std", feature = "testing"), test))]
 use fields_container::{ENTRY_POINT_MAP_KEY, TARGET_MAP_KEY};
-use tracing::debug;
-pub use transaction_v1_payload::TransactionV1Payload;
-
-#[cfg(any(feature = "std", feature = "testing", test))]
-use super::InitiatorAddrAndSecretKey;
-#[cfg(any(all(feature = "std", feature = "testing"), test))]
-use super::{TransactionEntryPoint, TransactionTarget};
-#[cfg(feature = "datasize")]
-use datasize::DataSize;
 #[cfg(any(feature = "once_cell", test))]
 use once_cell::sync::OnceCell;
 #[cfg(feature = "json-schema")]
 use schemars::JsonSchema;
 #[cfg(any(feature = "std", test))]
 use serde::{Deserialize, Serialize};
+#[cfg(any(feature = "std", test))]
+use thiserror::Error;
+use tracing::debug;
+pub use transaction_v1_payload::TransactionV1Payload;
+#[cfg(any(feature = "std", test))]
+use transaction_v1_payload::TransactionV1PayloadJson;
 
 use super::{
     serialization::{CalltableSerializationEnvelope, CalltableSerializationEnvelopeBuilder},
@@ -68,19 +71,12 @@ const APPROVALS_FIELD_INDEX: u16 = 2;
 /// A unit of work sent by a client to the network, which when executed can cause global state to
 /// be altered.
 #[derive(Clone, Eq, Debug)]
-#[cfg_attr(
-    any(feature = "std", test),
-    derive(Serialize, Deserialize),
-    serde(deny_unknown_fields)
-)]
+#[cfg_attr(any(feature = "std", test), derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "datasize", derive(DataSize))]
 #[cfg_attr(
     feature = "json-schema",
     derive(JsonSchema),
-    schemars(
-        description = "A unit of work sent by a client to the network, which when executed can \
-        cause global state to be altered."
-    )
+    schemars(with = "TransactionV1Json")
 )]
 pub struct TransactionV1 {
     hash: TransactionV1Hash,
@@ -93,6 +89,67 @@ pub struct TransactionV1 {
     )]
     #[cfg(any(feature = "once_cell", test))]
     is_verified: OnceCell<Result<(), InvalidTransactionV1>>,
+}
+
+#[cfg(any(feature = "std", test))]
+impl TryFrom<TransactionV1Json> for TransactionV1 {
+    type Error = TransactionV1JsonError;
+    fn try_from(transaction_v1_json: TransactionV1Json) -> Result<Self, Self::Error> {
+        Ok(TransactionV1 {
+            hash: transaction_v1_json.hash,
+            payload: transaction_v1_json.payload.try_into().map_err(|error| {
+                TransactionV1JsonError::FailedToMap(format!(
+                    "Failed to map TransactionJson::V1 to Transaction::V1, err: {}",
+                    error
+                ))
+            })?,
+            approvals: transaction_v1_json.approvals,
+            #[cfg(any(feature = "once_cell", test))]
+            is_verified: OnceCell::new(),
+        })
+    }
+}
+
+/// A helper struct to represent the transaction as json.
+#[cfg(any(feature = "std", test))]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "json-schema",
+    derive(JsonSchema),
+    schemars(
+        description = "A unit of work sent by a client to the network, which when executed can \
+        cause global state to be altered.",
+        rename = "TransactionV1",
+    )
+)]
+pub(super) struct TransactionV1Json {
+    hash: TransactionV1Hash,
+    payload: TransactionV1PayloadJson,
+    approvals: BTreeSet<Approval>,
+}
+
+#[cfg(any(feature = "std", test))]
+#[derive(Error, Debug)]
+pub(super) enum TransactionV1JsonError {
+    #[error("{0}")]
+    FailedToMap(String),
+}
+
+#[cfg(any(feature = "std", test))]
+impl TryFrom<TransactionV1> for TransactionV1Json {
+    type Error = TransactionV1JsonError;
+    fn try_from(transaction: TransactionV1) -> Result<Self, Self::Error> {
+        Ok(TransactionV1Json {
+            hash: transaction.hash,
+            payload: transaction.payload.try_into().map_err(|error| {
+                TransactionV1JsonError::FailedToMap(format!(
+                    "Failed to map Transaction::V1 to TransactionJson::V1, err: {}",
+                    error
+                ))
+            })?,
+            approvals: transaction.approvals,
+        })
+    }
 }
 
 impl TransactionV1 {

@@ -17,6 +17,7 @@ pub mod bids;
 mod block_global;
 /// Block rewards provider.
 pub mod block_rewards;
+mod contract;
 mod entry_points;
 /// Era validators provider.
 pub mod era_validators;
@@ -64,7 +65,10 @@ pub use balance_hold::{
 pub use bids::{BidsRequest, BidsResult};
 pub use block_global::{BlockGlobalKind, BlockGlobalRequest, BlockGlobalResult};
 pub use block_rewards::{BlockRewardsError, BlockRewardsRequest, BlockRewardsResult};
-pub use entry_points::{EntryPointsRequest, EntryPointsResult};
+pub use contract::{ContractRequest, ContractResult};
+pub use entry_points::{
+    EntryPointExistsRequest, EntryPointExistsResult, EntryPointRequest, EntryPointResult,
+};
 pub use era_validators::{EraValidatorsRequest, EraValidatorsResult};
 pub use execution_results_checksum::{
     ExecutionResultsChecksumRequest, ExecutionResultsChecksumResult,

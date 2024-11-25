@@ -9,6 +9,7 @@ use rand::Rng;
 #[cfg(feature = "json-schema")]
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use tracing::error;
 
 use super::{ExecutionResultV1, ExecutionResultV2};
 #[cfg(any(feature = "testing", test))]
@@ -109,7 +110,16 @@ impl ToBytes for ExecutionResult {
 
 impl FromBytes for ExecutionResult {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
-        let (tag, remainder) = u8::from_bytes(bytes)?;
+        if bytes.is_empty() {
+            error!("FromBytes for ExecutionResult: bytes length should not be 0");
+        }
+        let (tag, remainder) = match u8::from_bytes(bytes) {
+            Ok((tag, rem)) => (tag, rem),
+            Err(err) => {
+                error!(%err, "FromBytes for ExecutionResult");
+                return Err(err);
+            }
+        };
         match tag {
             V1_TAG => {
                 let (result, remainder) = ExecutionResultV1::from_bytes(remainder)?;
@@ -119,7 +129,10 @@ impl FromBytes for ExecutionResult {
                 let (result, remainder) = ExecutionResultV2::from_bytes(remainder)?;
                 Ok((ExecutionResult::V2(result), remainder))
             }
-            _ => Err(bytesrepr::Error::Formatting),
+            _ => {
+                error!(%tag, rem_len = remainder.len(), "FromBytes for ExecutionResult: unknown tag");
+                Err(bytesrepr::Error::Formatting)
+            }
         }
     }
 }

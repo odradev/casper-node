@@ -133,9 +133,9 @@ use casper_types::{
     execution::{Effects as ExecutionEffects, ExecutionResult},
     Approval, AvailableBlockRange, Block, BlockHash, BlockHeader, BlockSignatures,
     BlockSynchronizerStatus, BlockV2, ChainspecRawBytes, DeployHash, Digest, EntityAddr, EraId,
-    ExecutionInfo, FinalitySignature, FinalitySignatureId, FinalitySignatureV2, Key, NextUpgrade,
-    Package, ProtocolUpgradeConfig, PublicKey, TimeDiff, Timestamp, Transaction, TransactionHash,
-    TransactionId, Transfer, U512,
+    ExecutionInfo, FinalitySignature, FinalitySignatureId, FinalitySignatureV2, HashAddr, Key,
+    NextUpgrade, Package, ProtocolUpgradeConfig, PublicKey, TimeDiff, Timestamp, Transaction,
+    TransactionHash, TransactionId, Transfer, U512,
 };
 
 use crate::{
@@ -169,7 +169,7 @@ use announcements::{
     PeerBehaviorAnnouncement, QueueDumpFormat, TransactionAcceptorAnnouncement,
     TransactionBufferAnnouncement, UnexecutedBlockAnnouncement, UpgradeWatcherAnnouncement,
 };
-use casper_storage::data_access_layer::EntryPointsResult;
+use casper_storage::data_access_layer::EntryPointExistsResult;
 use diagnostics_port::DumpConsensusStateRequest;
 use requests::{
     AcceptTransactionRequest, BeginGossipRequest, BlockAccumulatorRequest,
@@ -1979,18 +1979,20 @@ impl<REv> EffectBuilder<REv> {
     }
 
     /// Retrieves an `EntryPointValue` from under the given key in global state if present.
-    pub(crate) async fn get_entry_point_value(
+    pub(crate) async fn does_entry_point_exist(
         self,
         state_root_hash: Digest,
-        key: Key,
-    ) -> EntryPointsResult
+        contract_hash: HashAddr,
+        entry_point_name: String,
+    ) -> EntryPointExistsResult
     where
         REv: From<ContractRuntimeRequest>,
     {
         self.make_request(
-            |responder| ContractRuntimeRequest::GetEntryPoint {
+            |responder| ContractRuntimeRequest::GetEntryPointExists {
                 state_root_hash,
-                key,
+                contract_hash,
+                entry_point_name,
                 responder,
             },
             QueueKind::ContractRuntime,

@@ -11,6 +11,7 @@ use std::{
 };
 
 use datasize::DataSize;
+use hex_fmt::HexFmt;
 use serde::Serialize;
 use smallvec::SmallVec;
 use static_assertions::const_assert;
@@ -23,7 +24,7 @@ use casper_storage::{
     data_access_layer::{
         prefixed_values::{PrefixedValuesRequest, PrefixedValuesResult},
         tagged_values::{TaggedValuesRequest, TaggedValuesResult},
-        AddressableEntityResult, BalanceRequest, BalanceResult, EntryPointsResult,
+        AddressableEntityResult, BalanceRequest, BalanceResult, EntryPointExistsResult,
         EraValidatorsRequest, EraValidatorsResult, ExecutionResultsChecksumResult, PutTrieRequest,
         PutTrieResult, QueryRequest, QueryResult, SeigniorageRecipientsRequest,
         SeigniorageRecipientsResult, TrieRequest, TrieResult,
@@ -33,8 +34,8 @@ use casper_storage::{
 use casper_types::{
     execution::ExecutionResult, Approval, AvailableBlockRange, Block, BlockHash, BlockHeader,
     BlockSignatures, BlockSynchronizerStatus, BlockV2, ChainspecRawBytes, DeployHash, Digest,
-    DisplayIter, EntityAddr, EraId, ExecutionInfo, FinalitySignature, FinalitySignatureId, Key,
-    NextUpgrade, ProtocolUpgradeConfig, PublicKey, TimeDiff, Timestamp, Transaction,
+    DisplayIter, EntityAddr, EraId, ExecutionInfo, FinalitySignature, FinalitySignatureId,
+    HashAddr, NextUpgrade, ProtocolUpgradeConfig, PublicKey, TimeDiff, Timestamp, Transaction,
     TransactionHash, TransactionId, Transfer,
 };
 
@@ -831,12 +832,13 @@ pub(crate) enum ContractRuntimeRequest {
         entity_addr: EntityAddr,
         responder: Responder<AddressableEntityResult>,
     },
-    /// Returns a singular entry point based under the given state root hash and entry
+    /// Returns information if an entry point exists under the given state root hash and entry
     /// point key.
-    GetEntryPoint {
+    GetEntryPointExists {
         state_root_hash: Digest,
-        key: Key,
-        responder: Responder<EntryPointsResult>,
+        contract_hash: HashAddr,
+        entry_point_name: String,
+        responder: Responder<EntryPointExistsResult>,
     },
     /// Get a trie or chunk by its ID.
     GetTrie {
@@ -958,15 +960,17 @@ impl Display for ContractRuntimeRequest {
             ContractRuntimeRequest::GetEraGasPrice { era_id, .. } => {
                 write!(formatter, "Get gas price for era {}", era_id)
             }
-            ContractRuntimeRequest::GetEntryPoint {
+            ContractRuntimeRequest::GetEntryPointExists {
                 state_root_hash,
-                key,
+                contract_hash,
+                entry_point_name,
                 ..
             } => {
+                let formatted_contract_hash = HexFmt(contract_hash);
                 write!(
                     formatter,
-                    "get entry point {} under {}",
-                    key, state_root_hash
+                    "get entry point {}-{} under {}",
+                    formatted_contract_hash, entry_point_name, state_root_hash
                 )
             }
             ContractRuntimeRequest::DoProtocolUpgrade {

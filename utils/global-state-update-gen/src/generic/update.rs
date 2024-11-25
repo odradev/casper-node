@@ -7,7 +7,9 @@ use casper_types::{account::AccountHash, AddressableEntity, CLValue, PublicKey, 
 use casper_types::{Key, StoredValue};
 
 #[cfg(test)]
-use casper_types::system::auction::{BidAddr, BidKind, Delegator, ValidatorBid};
+use casper_types::system::auction::{
+    BidAddr, BidKind, DelegatorBid, DelegatorKind, UnbondKind, ValidatorBid,
+};
 
 #[cfg(test)]
 use super::state_reader::StateReader;
@@ -103,7 +105,7 @@ impl Update {
     }
 
     #[track_caller]
-    pub(crate) fn delegators(&self, validator_bid: &ValidatorBid) -> Vec<Delegator> {
+    pub(crate) fn delegators(&self, validator_bid: &ValidatorBid) -> Vec<DelegatorBid> {
         let mut ret = vec![];
 
         for (_, v) in self.entries.clone() {
@@ -122,11 +124,11 @@ impl Update {
     pub(crate) fn delegator(
         &self,
         validator_bid: &ValidatorBid,
-        delegator_public_key: &PublicKey,
-    ) -> Option<Delegator> {
+        delegator_kind: &DelegatorKind,
+    ) -> Option<DelegatorBid> {
         let delegators = self.delegators(validator_bid);
         for delegator in delegators {
-            if delegator.delegator_public_key() != delegator_public_key {
+            if delegator.delegator_kind() != delegator_kind {
                 continue;
             }
             return Some(delegator);
@@ -136,12 +138,14 @@ impl Update {
 
     #[track_caller]
     pub(crate) fn assert_written_balance(&self, purse: URef, balance: u64) {
-        assert_eq!(
-            self.entries.get(&Key::Balance(purse.addr())),
-            Some(&StoredValue::from(
-                CLValue::from_t(U512::from(balance)).expect("should convert U512 to CLValue")
-            ))
-        );
+        if let StoredValue::CLValue(cl_value) = self
+            .entries
+            .get(&Key::Balance(purse.addr()))
+            .expect("must have balance")
+        {
+            let actual = CLValue::to_t::<U512>(cl_value).expect("must get u512");
+            assert_eq!(actual, U512::from(balance))
+        };
     }
 
     #[track_caller]
@@ -211,6 +215,7 @@ impl Update {
     }
 
     #[track_caller]
+    #[allow(unused)]
     pub(crate) fn assert_unbonding_purse(
         &self,
         bid_purse: URef,
@@ -271,6 +276,49 @@ impl Update {
             data, expected,
             "\nThe data we got:\n{data:#?}\nExpected values:\n{expected:#?}"
         );
+    }
+
+    #[track_caller]
+    pub(crate) fn assert_unbond_bid_kind(
+        &self,
+        bid_purse: URef,
+        validator_key: &PublicKey,
+        unbond_kind: &UnbondKind,
+        amount: u64,
+    ) {
+        println!(
+            "assert_unbond_bid_kind {:?} {:?}",
+            validator_key,
+            validator_key.to_account_hash()
+        );
+        println!("assert_unbond_bid_kind {:?}", unbond_kind);
+        let bid_addr = match unbond_kind {
+            UnbondKind::Validator(pk) | UnbondKind::DelegatedPublicKey(pk) => {
+                BidAddr::UnbondAccount {
+                    validator: validator_key.to_account_hash(),
+                    unbonder: pk.to_account_hash(),
+                }
+            }
+            UnbondKind::DelegatedPurse(addr) => BidAddr::UnbondPurse {
+                validator: validator_key.to_account_hash(),
+                unbonder: *addr,
+            },
+        };
+
+        println!("assert_unbond_bid_kind {:?}", Key::BidAddr(bid_addr));
+
+        let entries = &self.entries;
+        let unbonds = entries
+            .get(&Key::BidAddr(bid_addr))
+            .expect("should have record")
+            .as_unbond()
+            .expect("should be unbond");
+
+        assert!(unbonds
+            .eras()
+            .iter()
+            .any(|unbond_era| unbond_era.bonding_purse() == &bid_purse
+                && unbond_era.amount() == &U512::from(amount)))
     }
 
     #[track_caller]

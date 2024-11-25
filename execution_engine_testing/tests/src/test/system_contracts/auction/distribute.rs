@@ -20,9 +20,9 @@ use casper_types::{
     account::AccountHash,
     runtime_args,
     system::auction::{
-        self, BidsExt as _, DelegationRate, Delegator, SeigniorageAllocation,
-        SeigniorageRecipientsSnapshotV2, ARG_AMOUNT, ARG_DELEGATION_RATE, ARG_DELEGATOR,
-        ARG_PUBLIC_KEY, ARG_REWARDS_MAP, ARG_VALIDATOR, DELEGATION_RATE_DENOMINATOR,
+        self, BidsExt, DelegationRate, DelegatorBid, DelegatorKind, SeigniorageAllocation,
+        SeigniorageRecipientsSnapshotV2, UnbondKind, ARG_AMOUNT, ARG_DELEGATION_RATE,
+        ARG_DELEGATOR, ARG_PUBLIC_KEY, ARG_REWARDS_MAP, ARG_VALIDATOR, DELEGATION_RATE_DENOMINATOR,
         METHOD_DISTRIBUTE, SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY,
     },
     EntityAddr, EraId, ProtocolVersion, PublicKey, SecretKey, Timestamp,
@@ -79,9 +79,9 @@ fn get_delegator_bid(
     builder: &mut LmdbWasmTestBuilder,
     validator: PublicKey,
     delegator: PublicKey,
-) -> Option<Delegator> {
+) -> Option<DelegatorBid> {
     let bids = builder.get_bids();
-    bids.delegator_by_public_keys(&validator, &delegator)
+    bids.delegator_by_kind(&validator, &DelegatorKind::PublicKey(delegator.clone()))
 }
 
 fn withdraw_bid(
@@ -383,13 +383,13 @@ fn should_distribute_delegation_rate_zero() {
 
     assert!(matches!(
         era_info.select(DELEGATOR_1.clone()).next(),
-        Some(SeigniorageAllocation::Delegator { delegator_public_key, amount, .. })
+        Some(SeigniorageAllocation::Delegator { delegator_kind: DelegatorKind::PublicKey(delegator_public_key) , amount, .. })
         if *delegator_public_key == *DELEGATOR_1 && *amount == delegator_1_expected_payout
     ));
 
     assert!(matches!(
         era_info.select(DELEGATOR_2.clone()).next(),
-        Some(SeigniorageAllocation::Delegator { delegator_public_key, amount, .. })
+        Some(SeigniorageAllocation::Delegator { delegator_kind: DelegatorKind::PublicKey(delegator_public_key), amount, .. })
         if *delegator_public_key == *DELEGATOR_2 && *amount == delegator_2_expected_payout
     ));
 }
@@ -691,13 +691,13 @@ fn should_withdraw_bids_after_distribute() {
 
     assert!(matches!(
         era_info.select(DELEGATOR_1.clone()).next(),
-        Some(SeigniorageAllocation::Delegator { delegator_public_key, amount, .. })
+        Some(SeigniorageAllocation::Delegator { delegator_kind: DelegatorKind::PublicKey(delegator_public_key), amount, .. })
         if *delegator_public_key == *DELEGATOR_1 && *amount == delegator_1_expected_payout
     ));
 
     assert!(matches!(
         era_info.select(DELEGATOR_2.clone()).next(),
-        Some(SeigniorageAllocation::Delegator { delegator_public_key, amount, .. })
+        Some(SeigniorageAllocation::Delegator { delegator_kind: DelegatorKind::PublicKey(delegator_public_key), amount, .. })
         if *delegator_public_key == *DELEGATOR_2 && *amount == delegator_1_expected_payout
     ));
 }
@@ -939,13 +939,13 @@ fn should_distribute_rewards_after_restaking_delegated_funds() {
 
         assert!(matches!(
             updated_era_info.select(DELEGATOR_1.clone()).next(),
-            Some(SeigniorageAllocation::Delegator { delegator_public_key, amount, .. })
+            Some(SeigniorageAllocation::Delegator { delegator_kind: DelegatorKind::PublicKey(delegator_public_key), amount, .. })
             if *delegator_public_key == *DELEGATOR_1 && *amount == delegator_1_expected_payout
         ));
 
         assert!(matches!(
             updated_era_info.select(DELEGATOR_2.clone()).next(),
-            Some(SeigniorageAllocation::Delegator { delegator_public_key, amount, .. })
+            Some(SeigniorageAllocation::Delegator { delegator_kind: DelegatorKind::PublicKey(delegator_public_key), amount, .. })
             if *delegator_public_key == *DELEGATOR_2 && *amount == delegator_2_expected_payout
         ));
 
@@ -965,7 +965,7 @@ fn should_distribute_rewards_after_restaking_delegated_funds() {
             (*DELEGATOR_1_ADDR).into(),
             AuctionMethod::Undelegate {
                 validator: VALIDATOR_1.clone(),
-                delegator: DELEGATOR_1.clone(),
+                delegator: DelegatorKind::PublicKey(DELEGATOR_1.clone()),
                 amount: undelegate_amount,
             },
         );
@@ -974,19 +974,19 @@ fn should_distribute_rewards_after_restaking_delegated_funds() {
         delegator_1_stake =
             get_delegator_staked_amount(&mut builder, VALIDATOR_1.clone(), DELEGATOR_1.clone());
 
-        let updelegate_amount = U512::from(1_000_000);
-        let updelegate_result = builder.bidding(
+        let undelegate_amount = U512::from(1_000_000);
+        let undelegate_result = builder.bidding(
             None,
             protocol_version,
             (*DELEGATOR_2_ADDR).into(),
             AuctionMethod::Delegate {
                 max_delegators_per_validator: u32::MAX,
                 validator: VALIDATOR_1.clone(),
-                delegator: DELEGATOR_2.clone(),
-                amount: updelegate_amount,
+                delegator: DelegatorKind::PublicKey(DELEGATOR_2.clone()),
+                amount: undelegate_amount,
             },
         );
-        assert!(updelegate_result.is_success(), "{:?}", updelegate_result);
+        assert!(undelegate_result.is_success(), "{:?}", undelegate_result);
         builder.commit_transforms(builder.get_post_state_hash(), undelegate_result.effects());
         delegator_2_stake =
             get_delegator_staked_amount(&mut builder, VALIDATOR_1.clone(), DELEGATOR_2.clone());
@@ -998,9 +998,10 @@ fn should_distribute_rewards_after_restaking_delegated_funds() {
                     public_key: VALIDATOR_1.clone(),
                     amount,
                     delegation_rate: 0,
-                    minimum_delegation_amount: updelegate_amount.as_u64(),
-                    maximum_delegation_amount: updelegate_amount.as_u64(),
+                    minimum_delegation_amount: undelegate_amount.as_u64(),
+                    maximum_delegation_amount: undelegate_amount.as_u64(),
                     minimum_bid_amount: DEFAULT_MINIMUM_BID_AMOUNT,
+                    reserved_slots: 0,
                 }
             } else {
                 AuctionMethod::WithdrawBid {
@@ -1246,13 +1247,13 @@ fn should_distribute_delegation_rate_half() {
 
     assert!(matches!(
         era_info.select(DELEGATOR_1.clone()).next(),
-        Some(SeigniorageAllocation::Delegator { delegator_public_key, amount, .. })
+        Some(SeigniorageAllocation::Delegator { delegator_kind: DelegatorKind::PublicKey(delegator_public_key), amount, .. })
         if *delegator_public_key == *DELEGATOR_1 && *amount == delegator_1_expected_payout
     ));
 
     assert!(matches!(
         era_info.select(DELEGATOR_2.clone()).next(),
-        Some(SeigniorageAllocation::Delegator { delegator_public_key, amount, .. })
+        Some(SeigniorageAllocation::Delegator { delegator_kind: DelegatorKind::PublicKey(delegator_public_key), amount, .. })
         if *delegator_public_key == *DELEGATOR_2 && *amount == delegator_2_expected_payout
     ));
 }
@@ -1431,13 +1432,13 @@ fn should_distribute_delegation_rate_full() {
 
     assert!(matches!(
         era_info.select(DELEGATOR_1.clone()).next(),
-        Some(SeigniorageAllocation::Delegator { delegator_public_key, amount, .. })
+        Some(SeigniorageAllocation::Delegator { delegator_kind: DelegatorKind::PublicKey(delegator_public_key), amount, .. })
         if *delegator_public_key == *DELEGATOR_1 && *amount == expected_delegator_1_balance
     ));
 
     assert!(matches!(
         era_info.select(DELEGATOR_2.clone()).next(),
-        Some(SeigniorageAllocation::Delegator { delegator_public_key, amount, .. })
+        Some(SeigniorageAllocation::Delegator { delegator_kind: DelegatorKind::PublicKey(delegator_public_key), amount, .. })
         if *delegator_public_key == *DELEGATOR_2 && *amount == expected_delegator_1_balance
     ));
 }
@@ -1661,13 +1662,13 @@ fn should_distribute_uneven_delegation_rate_zero() {
 
     assert!(matches!(
         era_info.select(DELEGATOR_1.clone()).next(),
-        Some(SeigniorageAllocation::Delegator { delegator_public_key, amount, .. })
+        Some(SeigniorageAllocation::Delegator { delegator_kind: DelegatorKind::PublicKey(delegator_public_key), amount, .. })
         if *delegator_public_key == *DELEGATOR_1 && *amount == delegator_1_expected_payout
     ));
 
     assert!(matches!(
         era_info.select(DELEGATOR_2.clone()).next(),
-        Some(SeigniorageAllocation::Delegator { delegator_public_key, amount, .. })
+        Some(SeigniorageAllocation::Delegator { delegator_kind: DelegatorKind::PublicKey(delegator_public_key), amount, .. })
         if *delegator_public_key == *DELEGATOR_2 && *amount == delegator_2_expected_payout
     ));
 }
@@ -1918,13 +1919,13 @@ fn should_distribute_with_multiple_validators_and_delegators() {
 
     assert!(matches!(
         era_info.select(DELEGATOR_1.clone()).next(),
-        Some(SeigniorageAllocation::Delegator { delegator_public_key, amount, .. })
+        Some(SeigniorageAllocation::Delegator { delegator_kind: DelegatorKind::PublicKey(delegator_public_key), amount, .. })
         if *delegator_public_key == *DELEGATOR_1 && *amount == delegator_1_actual_payout
     ));
 
     assert!(matches!(
         era_info.select(DELEGATOR_2.clone()).next(),
-        Some(SeigniorageAllocation::Delegator { delegator_public_key, amount, .. })
+        Some(SeigniorageAllocation::Delegator { delegator_kind: DelegatorKind::PublicKey(delegator_public_key), amount, .. })
         if *delegator_public_key == *DELEGATOR_2 && *amount == delegator_2_actual_payout
     ));
 
@@ -1970,7 +1971,7 @@ fn should_distribute_with_multiple_validators_and_delegators() {
 
     assert!(matches!(
         era_info.select(DELEGATOR_3.clone()).next(),
-        Some(SeigniorageAllocation::Delegator { delegator_public_key, amount, .. })
+        Some(SeigniorageAllocation::Delegator { delegator_kind: DelegatorKind::PublicKey(delegator_public_key), amount, .. })
         if *delegator_public_key == *DELEGATOR_3 && *amount == delegator_3_actual_payout
     ));
 
@@ -3142,16 +3143,14 @@ fn should_not_restake_after_full_unbond() {
     assert!(delegator.is_none());
 
     let withdraws = builder.get_unbonds();
-    let unbonding_purses = withdraws
-        .get(&DELEGATOR_1_ADDR)
+    let unbond_kind = UnbondKind::DelegatedPublicKey(DELEGATOR_1.clone());
+    let unbond = withdraws
+        .get(&unbond_kind)
         .expect("should have validator entry");
-    let delegator_unbond_amount = unbonding_purses
-        .iter()
-        .find(|up| *up.unbonder_public_key() == DELEGATOR_1.clone())
-        .expect("should be unbonding purse");
+    let delegator_unbond_amount = unbond[0].eras().first().expect("should be era").amount();
 
     assert_eq!(
-        *delegator_unbond_amount.amount(),
+        *delegator_unbond_amount,
         U512::from(DELEGATOR_1_STAKE),
         "unbond purse amount should match staked amount"
     );
@@ -3274,9 +3273,10 @@ fn delegator_full_unbond_during_first_reward_era() {
         .get(&VALIDATOR_1)
         .expect("should be validator seigniorage for era");
 
+    let delegator_kind = DelegatorKind::PublicKey(DELEGATOR_1.clone());
     let delegator_seigniorage = validator_seigniorage
         .delegator_stake()
-        .get(&DELEGATOR_1)
+        .get(&delegator_kind)
         .expect("should be delegator seigniorage");
     assert_eq!(*delegator_seigniorage, U512::from(DELEGATOR_1_STAKE));
 
@@ -3291,17 +3291,15 @@ fn delegator_full_unbond_during_first_reward_era() {
     let delegator = get_delegator_bid(&mut builder, VALIDATOR_1.clone(), DELEGATOR_1.clone());
     assert!(delegator.is_none());
 
+    let unbond_kind = UnbondKind::DelegatedPublicKey(DELEGATOR_1.clone());
     let withdraws = builder.get_unbonds();
-    let unbonding_purses = withdraws
-        .get(&DELEGATOR_1_ADDR)
+    let unbond = withdraws
+        .get(&unbond_kind)
         .expect("should have validator entry");
-    let delegator_unbond_amount = unbonding_purses
-        .iter()
-        .find(|up| *up.unbonder_public_key() == DELEGATOR_1.clone())
-        .expect("should be unbonding purse");
+    let delegator_unbond_amount = unbond[0].eras().first().expect("should have era").amount();
 
     assert_eq!(
-        *delegator_unbond_amount.amount(),
+        *delegator_unbond_amount,
         U512::from(DELEGATOR_1_STAKE),
         "unbond purse amount should match staked amount"
     );

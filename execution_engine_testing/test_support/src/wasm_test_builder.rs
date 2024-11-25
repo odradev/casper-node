@@ -17,8 +17,7 @@ use num_traits::{CheckedMul, Zero};
 use tempfile::TempDir;
 
 use casper_execution_engine::engine_state::{
-    engine_config::DEFAULT_ENABLE_ENTITY, Error, ExecutionEngineV1, WasmV1Request, WasmV1Result,
-    DEFAULT_MAX_QUERY_DEPTH,
+    Error, ExecutionEngineV1, WasmV1Request, WasmV1Result, DEFAULT_MAX_QUERY_DEPTH,
 };
 use casper_storage::{
     data_access_layer::{
@@ -59,9 +58,9 @@ use casper_types::{
     runtime_args,
     system::{
         auction::{
-            BidKind, EraValidators, UnbondingPurses, ValidatorWeights, WithdrawPurses,
-            ARG_ERA_END_TIMESTAMP_MILLIS, ARG_EVICTED_VALIDATORS, AUCTION_DELAY_KEY, ERA_ID_KEY,
-            METHOD_RUN_AUCTION, UNBONDING_DELAY_KEY,
+            BidKind, EraValidators, Unbond, UnbondKind, UnbondingPurse, ValidatorWeights,
+            WithdrawPurses, ARG_ERA_END_TIMESTAMP_MILLIS, ARG_EVICTED_VALIDATORS,
+            AUCTION_DELAY_KEY, ERA_ID_KEY, METHOD_RUN_AUCTION, UNBONDING_DELAY_KEY,
         },
         mint::{MINT_GAS_HOLD_HANDLING_KEY, MINT_GAS_HOLD_INTERVAL_KEY},
         AUCTION, HANDLE_PAYMENT, MINT, STANDARD_PAYMENT,
@@ -312,12 +311,12 @@ impl LmdbWasmTestBuilder {
         );
 
         let max_query_depth = DEFAULT_MAX_QUERY_DEPTH;
-        let enable_addressable_entity = DEFAULT_ENABLE_ENTITY;
+        let enable_addressable_entity = chainspec.core_config.enable_addressable_entity;
         let global_state = LmdbGlobalState::empty(
             environment,
             trie_store,
             max_query_depth,
-            DEFAULT_ENABLE_ENTITY,
+            enable_addressable_entity,
         )
         .expect("should create LmdbGlobalState");
 
@@ -375,6 +374,7 @@ impl LmdbWasmTestBuilder {
 
         let max_query_depth = DEFAULT_MAX_QUERY_DEPTH;
 
+        let enable_addressable_entity = chainspec.core_config.enable_addressable_entity;
         let global_state = match mode {
             GlobalStateMode::Create(database_flags) => {
                 let trie_store = LmdbTrieStore::new(&environment, None, database_flags)
@@ -383,7 +383,7 @@ impl LmdbWasmTestBuilder {
                     Arc::new(environment),
                     Arc::new(trie_store),
                     max_query_depth,
-                    DEFAULT_ENABLE_ENTITY,
+                    enable_addressable_entity,
                 )
                 .expect("should create LmdbGlobalState")
             }
@@ -395,7 +395,7 @@ impl LmdbWasmTestBuilder {
                     Arc::new(trie_store),
                     post_state_hash,
                     max_query_depth,
-                    DEFAULT_ENABLE_ENTITY,
+                    enable_addressable_entity,
                 )
             }
         };
@@ -404,7 +404,7 @@ impl LmdbWasmTestBuilder {
             block_store: BlockStore::new(),
             state: global_state,
             max_query_depth,
-            enable_addressable_entity: DEFAULT_ENABLE_ENTITY,
+            enable_addressable_entity,
         });
         let mut engine_config = chainspec.engine_config();
         engine_config.set_protocol_version(protocol_version);
@@ -833,6 +833,7 @@ where
             U512::from(*config.core_config.validator_credit_cap.numer()),
             U512::from(*config.core_config.validator_credit_cap.denom()),
         );
+        let enable_addressable_entity = config.core_config.enable_addressable_entity;
         let native_runtime_config = casper_storage::system::runtime_native::Config::new(
             TransferConfig::Unadministered,
             fee_handling,
@@ -845,7 +846,7 @@ where
             balance_hold_interval,
             include_credits,
             credit_cap,
-            DEFAULT_ENABLE_ENTITY,
+            enable_addressable_entity,
             config.system_costs_config.mint_costs().transfer,
         );
 
@@ -935,6 +936,7 @@ where
         upgrade_config.with_pre_state_hash(pre_state_hash);
 
         let req = ProtocolUpgradeRequest::new(upgrade_config.clone());
+
         let result = self.data_access_layer.protocol_upgrade(req);
 
         if let ProtocolUpgradeResult::Success {
@@ -1012,7 +1014,7 @@ where
             self.chainspec.core_config.gas_hold_interval.millis(),
             include_credits,
             credit_cap,
-            DEFAULT_ENABLE_ENTITY,
+            self.chainspec.core_config.enable_addressable_entity,
             self.chainspec.system_costs_config.mint_costs().transfer,
         )
     }
@@ -1749,8 +1751,41 @@ where
             .expect("should have named keys")
     }
 
-    /// Gets [`UnbondingPurses`].
-    pub fn get_unbonds(&mut self) -> UnbondingPurses {
+    /// Gets [`BTreeMap<UnbondKind, Unbond>`].
+    pub fn get_unbonds(&mut self) -> BTreeMap<UnbondKind, Vec<Unbond>> {
+        let state_root_hash = self.get_post_state_hash();
+
+        let tracking_copy = self
+            .data_access_layer
+            .tracking_copy(state_root_hash)
+            .unwrap()
+            .unwrap();
+
+        let reader = tracking_copy.reader();
+
+        let unbond_keys = reader
+            .keys_with_prefix(&[KeyTag::BidAddr as u8])
+            .unwrap_or_default();
+
+        let mut ret = BTreeMap::new();
+
+        for key in unbond_keys.into_iter() {
+            if let Ok(Some(StoredValue::BidKind(BidKind::Unbond(unbond)))) = reader.read(&key) {
+                let unbond_kind = unbond.unbond_kind();
+                match ret.get_mut(unbond_kind) {
+                    None => {
+                        let _ = ret.insert(unbond_kind.clone(), vec![*unbond]);
+                    }
+                    Some(unbonds) => unbonds.push(*unbond),
+                };
+            }
+        }
+
+        ret
+    }
+
+    /// Gets [`BTreeMap<AccountHash, Vec<UnbondingPurse>>`].
+    pub fn get_unbonding_purses(&mut self) -> BTreeMap<AccountHash, Vec<UnbondingPurse>> {
         let state_root_hash = self.get_post_state_hash();
 
         let tracking_copy = self
@@ -1907,7 +1942,7 @@ where
             state_root_hash,
             ProtocolVersion::V2_0_0,
             SystemEntityRegistrySelector::auction(),
-            DEFAULT_ENABLE_ENTITY,
+            self.chainspec.core_config.enable_addressable_entity,
         );
         self.system_entity_key(request)
             .into_entity_hash()
@@ -1921,7 +1956,7 @@ where
             state_root_hash,
             ProtocolVersion::V2_0_0,
             SystemEntityRegistrySelector::mint(),
-            DEFAULT_ENABLE_ENTITY,
+            self.chainspec.core_config.enable_addressable_entity,
         );
         self.system_entity_key(request)
             .into_entity_hash()
@@ -1939,7 +1974,7 @@ where
             state_root_hash,
             protocol_version,
             SystemEntityRegistrySelector::handle_payment(),
-            DEFAULT_ENABLE_ENTITY,
+            self.chainspec.core_config.enable_addressable_entity,
         );
         self.system_entity_key(request)
             .into_entity_hash()

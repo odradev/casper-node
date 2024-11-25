@@ -134,6 +134,14 @@ fn new_runtime_context<'a>(
     };
 
     tracking_copy.write(Key::SystemEntityRegistry, default_system_registry);
+    tracking_copy.write(
+        Key::Account(account_hash),
+        StoredValue::CLValue(CLValue::from_t(entity_address).expect("must get cl_value")),
+    );
+    tracking_copy.write(
+        entity_address,
+        StoredValue::AddressableEntity(addressable_entity.clone()),
+    );
 
     // write block time to gs
     let now = Timestamp::now();
@@ -892,7 +900,7 @@ fn remove_uref_works() {
     let uref_name = "Foo".to_owned();
     let uref_key = create_uref_as_key(&mut address_generator, AccessRights::READ);
     let account_hash = AccountHash::new([0u8; 32]);
-    let entity_hash = AddressableEntityHash::new([1u8; 32]);
+    let entity_hash = AddressableEntityHash::new([0u8; 32]);
     let mut named_keys = NamedKeys::new();
     named_keys.insert(uref_name.clone(), uref_key);
     let (_, entity_key, addressable_entity) = new_addressable_entity(account_hash, entity_hash);

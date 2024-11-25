@@ -31,7 +31,7 @@ use rand::{
 #[cfg(feature = "json-schema")]
 use schemars::JsonSchema;
 use serde::{de::Error as SerdeError, Deserialize, Deserializer, Serialize, Serializer};
-use tracing::warn;
+use tracing::{error, warn};
 
 use crate::{
     account::{AccountHash, ACCOUNT_HASH_LENGTH},
@@ -323,7 +323,7 @@ pub enum Key {
     /// A `Key` under which bid information is stored.
     BidAddr(BidAddr),
     /// A `Key` under which package information is stored.
-    Package(PackageAddr), // TODO: SmartContract
+    Package(PackageAddr),
     /// A `Key` under which an addressable entity is stored.
     AddressableEntity(EntityAddr),
     /// A `Key` under which a byte code record is stored.
@@ -752,12 +752,12 @@ impl Key {
                     BidAddr::legacy(validator_bytes)
                 } else if tag == BidAddrTag::Validator {
                     BidAddr::new_validator_addr(validator_bytes)
-                } else if tag == BidAddrTag::Delegator {
+                } else if tag == BidAddrTag::DelegatedAccount {
                     let delegator_bytes = <[u8; ACCOUNT_HASH_LENGTH]>::try_from(
                         bytes[BidAddr::VALIDATOR_BID_ADDR_LENGTH..].as_ref(),
                     )
                     .map_err(|err| FromStrError::BidAddr(err.to_string()))?;
-                    BidAddr::new_delegator_addr((validator_bytes, delegator_bytes))
+                    BidAddr::new_delegator_account_addr((validator_bytes, delegator_bytes))
                 } else if tag == BidAddrTag::Credit {
                     let era_id = bytesrepr::deserialize_from_slice(
                         &bytes[BidAddr::VALIDATOR_BID_ADDR_LENGTH..],
@@ -899,13 +899,14 @@ impl Key {
             Err(error) => return Err(FromStrError::EntryPoint(error.to_string())),
         }
 
-        if let Some(contract_entity_hash) = input.strip_prefix(STATE_PREFIX) {
-            let package_addr_bytes = checksummed_hex::decode(contract_entity_hash)
-                .map_err(|error| FromStrError::State(error.to_string()))?;
-
-            let entity_hash_addr: HashAddr = PackageAddr::try_from(package_addr_bytes.as_ref())
-                .map_err(|error| FromStrError::Package(error.to_string()))?;
-            return Ok(Key::State(EntityAddr::SmartContract(entity_hash_addr)));
+        if let Some(entity_addr_formatted) = input.strip_prefix(STATE_PREFIX) {
+            match EntityAddr::from_formatted_str(entity_addr_formatted) {
+                Ok(entity_addr) => return Ok(Key::State(entity_addr)),
+                Err(addressable_entity::FromStrError::InvalidPrefix) => {}
+                Err(error) => {
+                    return Err(FromStrError::State(error.to_string()));
+                }
+            }
         }
 
         // if let Some(contract_entity_hash) = input.strip_prefix(STATE_PREFIX) {
@@ -1592,7 +1593,16 @@ impl ToBytes for Key {
 
 impl FromBytes for Key {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (tag, remainder) = KeyTag::from_bytes(bytes)?;
+        if bytes.is_empty() {
+            error!("FromBytes for Key: bytes length should not be 0");
+        }
+        let (tag, remainder) = match KeyTag::from_bytes(bytes) {
+            Ok((tag, rem)) => (tag, rem),
+            Err(err) => {
+                error!(%err, "FromBytes for Key");
+                return Err(err);
+            }
+        };
         match tag {
             KeyTag::Account => {
                 let (account_hash, rem) = AccountHash::from_bytes(remainder)?;
@@ -1955,7 +1965,8 @@ mod tests {
     const BID_KEY: Key = Key::Bid(AccountHash::new([42; 32]));
     const UNIFIED_BID_KEY: Key = Key::BidAddr(BidAddr::legacy([42; 32]));
     const VALIDATOR_BID_KEY: Key = Key::BidAddr(BidAddr::new_validator_addr([2; 32]));
-    const DELEGATOR_BID_KEY: Key = Key::BidAddr(BidAddr::new_delegator_addr(([2; 32], [9; 32])));
+    const DELEGATOR_BID_KEY: Key =
+        Key::BidAddr(BidAddr::new_delegator_account_addr(([2; 32], [9; 32])));
     const WITHDRAW_KEY: Key = Key::Withdraw(AccountHash::new([42; 32]));
     const DICTIONARY_KEY: Key = Key::Dictionary([42; 32]);
     const SYSTEM_ENTITY_REGISTRY_KEY: Key = Key::SystemEntityRegistry;
@@ -2383,9 +2394,9 @@ mod tests {
 
     #[test]
     fn should_parse_delegator_bid_key_from_string() {
-        let delegator_bid_addr = BidAddr::new_delegator_addr(([1; 32], [9; 32]));
+        let delegator_bid_addr = BidAddr::new_delegator_account_addr(([1; 32], [9; 32]));
         let delegator_bid_key = Key::BidAddr(delegator_bid_addr);
-        assert_eq!(delegator_bid_addr.tag(), BidAddrTag::Delegator);
+        assert_eq!(delegator_bid_addr.tag(), BidAddrTag::DelegatedAccount);
 
         let original_string = delegator_bid_key.to_formatted_string();
 
@@ -2617,13 +2628,6 @@ mod tests {
 
     #[test]
     fn serialization_roundtrip_json() {
-        let round_trip = |key: &Key| {
-            let encoded = serde_json::to_value(key).unwrap();
-            let decoded = serde_json::from_value(encoded.clone())
-                .unwrap_or_else(|_| panic!("{} {}", key, encoded));
-            assert_eq!(key, &decoded);
-        };
-
         for key in KEYS {
             round_trip(key);
         }
@@ -2641,7 +2645,9 @@ mod tests {
         round_trip(&Key::Bid(AccountHash::new(zeros)));
         round_trip(&Key::BidAddr(BidAddr::legacy(zeros)));
         round_trip(&Key::BidAddr(BidAddr::new_validator_addr(zeros)));
-        round_trip(&Key::BidAddr(BidAddr::new_delegator_addr((zeros, nines))));
+        round_trip(&Key::BidAddr(BidAddr::new_delegator_account_addr((
+            zeros, nines,
+        ))));
         round_trip(&Key::Withdraw(AccountHash::new(zeros)));
         round_trip(&Key::Dictionary(zeros));
         round_trip(&Key::Unbond(AccountHash::new(zeros)));
@@ -2667,6 +2673,19 @@ mod tests {
         round_trip(&Key::BlockGlobal(BlockGlobalAddr::MessageCount));
         round_trip(&Key::BalanceHold(BalanceHoldAddr::default()));
         round_trip(&Key::State(EntityAddr::new_system(zeros)));
+    }
+
+    #[test]
+    fn state_json_deserialization() {
+        let mut test_rng = TestRng::new();
+        let state_key = Key::State(EntityAddr::new_account(test_rng.gen()));
+        round_trip(&state_key);
+
+        let state_key = Key::State(EntityAddr::new_system(test_rng.gen()));
+        round_trip(&state_key);
+
+        let state_key = Key::State(EntityAddr::new_smart_contract(test_rng.gen()));
+        round_trip(&state_key);
     }
 
     #[test]
@@ -2698,5 +2717,12 @@ mod tests {
         bytesrepr::test_serialization_roundtrip(&MESSAGE_TOPIC_KEY);
         bytesrepr::test_serialization_roundtrip(&MESSAGE_KEY);
         bytesrepr::test_serialization_roundtrip(&NAMED_KEY);
+    }
+
+    fn round_trip(key: &Key) {
+        let encoded = serde_json::to_value(key).unwrap();
+        let decoded = serde_json::from_value(encoded.clone())
+            .unwrap_or_else(|_| panic!("{} {}", key, encoded));
+        assert_eq!(key, &decoded);
     }
 }
