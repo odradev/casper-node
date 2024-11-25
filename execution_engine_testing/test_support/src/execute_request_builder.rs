@@ -50,6 +50,8 @@ pub struct ExecuteRequestBuilder {
     authorization_keys: BTreeSet<AccountHash>,
 }
 
+const DEFAULT_GAS_LIMIT: u64 = 5_000_u64 * 10u64.pow(9);
+
 impl ExecuteRequestBuilder {
     /// The default value used for `WasmV1Request::state_hash`.
     pub const DEFAULT_STATE_HASH: Digest = Digest::from_raw([1; 32]);
@@ -68,12 +70,9 @@ impl ExecuteRequestBuilder {
             0,
         );
         let authorization_keys = session_input_data.signers();
-        let session = WasmV1Request::new_session(
-            block_info,
-            Gas::new(5_000_000_000_000_u64),
-            session_input_data,
-        )
-        .unwrap();
+        let session =
+            WasmV1Request::new_session(block_info, Gas::new(DEFAULT_GAS_LIMIT), session_input_data)
+                .unwrap();
 
         let payment: Option<ExecutableItem>;
         let payment_gas_limit: Gas;
@@ -93,7 +92,7 @@ impl ExecuteRequestBuilder {
             );
             let request = WasmV1Request::new_custom_payment(
                 block_info,
-                Gas::new(5_000_000_000_000_u64),
+                Gas::new(DEFAULT_GAS_LIMIT),
                 session_input_data,
             )
             .unwrap();
@@ -132,7 +131,7 @@ impl ExecuteRequestBuilder {
             0,
         );
         let session = deploy_item
-            .new_session_from_deploy_item(block_info, Gas::new(5_000_000_000_000_u64))
+            .new_session_from_deploy_item(block_info, Gas::new(DEFAULT_GAS_LIMIT))
             .unwrap();
 
         let payment: Option<ExecutableItem>;
@@ -152,7 +151,7 @@ impl ExecuteRequestBuilder {
                 0,
             );
             let request = deploy_item
-                .new_custom_payment_from_deploy_item(block_info, Gas::new(5_000_000_000_000_u64))
+                .new_custom_payment_from_deploy_item(block_info, Gas::new(DEFAULT_GAS_LIMIT))
                 .unwrap();
             payment = Some(request.executable_item);
             payment_gas_limit = request.gas_limit;
