@@ -11,7 +11,7 @@ use crate::{
     CLType, CLTyped, EraId, PublicKey, URef, URefAddr, U512,
 };
 
-use super::{BidAddr, DelegatorKind, WithdrawPurse};
+use super::{BidAddr, DelegatorKind, UnbondingPurse, WithdrawPurse};
 
 /// UnbondKindTag variants.
 #[allow(clippy::large_enum_variant)]
@@ -319,6 +319,27 @@ impl Default for Unbond {
             validator_public_key: PublicKey::System,
             eras: vec![],
         }
+    }
+}
+
+impl From<UnbondingPurse> for Unbond {
+    fn from(unbonding_purse: UnbondingPurse) -> Self {
+        let unbond_kind =
+            if unbonding_purse.validator_public_key() == unbonding_purse.unbonder_public_key() {
+                UnbondKind::Validator(unbonding_purse.validator_public_key().clone())
+            } else {
+                UnbondKind::DelegatedPublicKey(unbonding_purse.unbonder_public_key().clone())
+            };
+        Unbond::new(
+            unbonding_purse.validator_public_key().clone(),
+            unbond_kind,
+            vec![UnbondEra::new(
+                *unbonding_purse.bonding_purse(),
+                unbonding_purse.era_of_creation(),
+                *unbonding_purse.amount(),
+                None,
+            )],
+        )
     }
 }
 

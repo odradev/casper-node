@@ -14,7 +14,7 @@ use casper_types::{
     system::{
         auction::{
             BidAddr, BidKind, DelegatorBid, DelegatorKind, SeigniorageRecipientsSnapshotV1,
-            SeigniorageRecipientsSnapshotV2, SeigniorageRecipientsV2, ValidatorBid,
+            SeigniorageRecipientsSnapshotV2, SeigniorageRecipientsV2, Unbond, ValidatorBid,
             AUCTION_DELAY_KEY, DEFAULT_SEIGNIORAGE_RECIPIENTS_SNAPSHOT_VERSION,
             LOCKED_FUNDS_PERIOD_KEY, SEIGNIORAGE_RECIPIENTS_SNAPSHOT_KEY,
             SEIGNIORAGE_RECIPIENTS_SNAPSHOT_VERSION_KEY, UNBONDING_DELAY_KEY, VALIDATOR_SLOTS_KEY,
@@ -197,6 +197,7 @@ where
         self.handle_new_locked_funds_period_millis(system_entity_addresses.auction())?;
         self.handle_new_unbonding_delay(system_entity_addresses.auction())?;
         self.handle_new_round_seigniorage_rate(system_entity_addresses.mint())?;
+        self.handle_unbonds_migration()?;
         self.handle_bids_migration(
             self.config.minimum_delegation_amount(),
             self.config.maximum_delegation_amount(),
@@ -1129,6 +1130,38 @@ where
             }
         }
         info!("ending one time contracts migration");
+        Ok(())
+    }
+
+    /// Handle unbonds migration.
+    pub fn handle_unbonds_migration(&mut self) -> Result<(), ProtocolUpgradeError> {
+        debug!("handle unbonds migration");
+        let tc = &mut self.tracking_copy;
+        let existing_keys = match tc.get_keys(&KeyTag::Unbond) {
+            Ok(keys) => keys,
+            Err(err) => return Err(ProtocolUpgradeError::TrackingCopy(err)),
+        };
+        for key in existing_keys {
+            if let Some(StoredValue::Unbonding(unbonding_purses)) =
+                tc.get(&key).map_err(Into::<ProtocolUpgradeError>::into)?
+            {
+                // prune away the original record, we don't need it anymore
+                tc.prune(key);
+
+                // re-write records under Key::BidAddr , StoredValue::BidKind
+                for unbonding_purse in unbonding_purses {
+                    let validator = unbonding_purse.validator_public_key();
+                    let unbonder = unbonding_purse.unbonder_public_key();
+                    let new_key = Key::BidAddr(BidAddr::UnbondAccount {
+                        validator: validator.to_account_hash(),
+                        unbonder: unbonder.to_account_hash(),
+                    });
+                    let unbond = BidKind::Unbond(Box::new(Unbond::from(unbonding_purse)));
+                    tc.write(new_key, StoredValue::BidKind(unbond));
+                }
+            }
+        }
+
         Ok(())
     }
 

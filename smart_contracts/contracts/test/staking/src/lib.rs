@@ -70,9 +70,9 @@ pub fn run() {
 
     let action: String = runtime::get_named_arg(ARG_ACTION);
 
-    if action == "UNSTAKE".to_string() {
+    if action == *"UNSTAKE".to_string() {
         unstake();
-    } else if action == "STAKE".to_string() {
+    } else if action == *"STAKE".to_string() {
         stake();
     } else {
         revert(ApiError::User(StakingError::UnexpectedAction as u16));
