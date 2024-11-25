@@ -2,6 +2,7 @@
 mod config;
 mod error;
 mod event;
+mod keep_alive_monitor;
 mod metrics;
 mod rate_limiter;
 #[cfg(test)]
@@ -42,6 +43,7 @@ use casper_types::{
     ContractWasmHash, Digest, EntityAddr, GlobalStateIdentifier, Key, Package, PackageAddr, Peers,
     ProtocolVersion, Rewards, SignedBlock, StoredValue, TimeDiff, Transaction, URef,
 };
+use keep_alive_monitor::KeepAliveMonitor;
 use thiserror::Error as ThisError;
 
 use datasize::DataSize;
@@ -53,6 +55,7 @@ use rate_limiter::{LimiterResponse, RateLimiter, RateLimiterError};
 use tokio::{
     join,
     net::{TcpListener, TcpStream},
+    select,
     sync::{Mutex, Notify, OwnedSemaphorePermit, Semaphore},
 };
 use tokio_util::codec::Framed;
@@ -217,6 +220,11 @@ where
             )
             .await
         }
+        BinaryRequest::KeepAliveRequest => BinaryResponse::from_raw_bytes(
+            ResponseType::KeepAliveInformation,
+            vec![],
+            protocol_version,
+        ),
     }
 }
 
@@ -1450,6 +1458,7 @@ async fn handle_client_loop<REv>(
     max_message_size_bytes: u32,
     rate_limiter: Arc<Mutex<RateLimiter>>,
     version: ProtocolVersion,
+    monitor: KeepAliveMonitor,
 ) -> Result<(), Error>
 where
     REv: From<Event>
@@ -1465,25 +1474,36 @@ where
         + Send,
 {
     let mut framed = Framed::new(stream, BinaryMessageCodec::new(max_message_size_bytes));
+    monitor.start().await;
+    let cancellation_token = monitor.get_cancellation_token();
 
     loop {
-        let Some(result) = framed.next().await else {
-            debug!("remote party closed the connection");
-            return Ok(());
-        };
-        let result = result?;
-        let payload = result.payload();
-        if payload.is_empty() {
-            return Err(Error::NoPayload);
-        };
+        select! {
+            maybe_bytes = framed.next() => {
+                let Some(result) = maybe_bytes else {
+                    debug!("remote party closed the connection");
+                    return Ok(());
+                };
+                monitor.tick().await;
+                let result = result?;
+                let payload = result.payload();
+                if payload.is_empty() {
+                    return Err(Error::NoPayload);
+                };
 
-        let (response, id) =
-            handle_payload(effect_builder, payload, version, Arc::clone(&rate_limiter)).await;
-        framed
-            .send(BinaryMessage::new(
-                BinaryResponseAndRequest::new(response, payload, id).to_bytes()?,
-            ))
-            .await?
+                let (response, id) =
+                    handle_payload(effect_builder, payload, version, Arc::clone(&rate_limiter)).await;
+                framed
+                    .send(BinaryMessage::new(
+                        BinaryResponseAndRequest::new(response, payload, id).to_bytes()?,
+                    ))
+                    .await?
+            }
+            _ = cancellation_token.cancelled() => {
+                debug!("Binary port connection stale - closing.");
+                return Ok(());
+            }
+        }
     }
 }
 
@@ -1596,12 +1616,19 @@ async fn handle_client<REv>(
         + From<ChainspecRawBytesRequest>
         + Send,
 {
+    let keep_alive_monitor = KeepAliveMonitor::new(
+        config.keepalive_check_interval,
+        config.keepalive_no_activity_timeout,
+        TimeDiff::from_millis(20),
+        5,
+    );
     if let Err(err) = handle_client_loop(
         stream,
         effect_builder,
         config.max_message_size_bytes,
         rate_limiter,
         protocol_version,
+        keep_alive_monitor,
     )
     .await
     {
@@ -1647,7 +1674,7 @@ async fn run_server<REv>(
     local_addr.set(bind_address).unwrap();
 
     loop {
-        tokio::select! {
+        select! {
             _ = shutdown_trigger.notified() => {
                 break;
             }

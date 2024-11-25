@@ -23,8 +23,8 @@ use tokio::time;
 use casper_execution_engine::engine_state::MAX_PAYMENT_AMOUNT;
 use casper_storage::{
     data_access_layer::{
-        AddressableEntityResult, BalanceIdentifier, BalanceResult, EntryPointsResult, ProofsResult,
-        QueryResult,
+        AddressableEntityResult, BalanceIdentifier, BalanceResult, EntryPointExistsResult,
+        ProofsResult, QueryResult,
     },
     tracking_copy::TrackingCopyError,
 };
@@ -35,11 +35,10 @@ use casper_types::{
     contracts::NamedKeys,
     global_state::TrieMerkleProof,
     testing::TestRng,
-    Block, BlockV2, CLValue, Chainspec, ChainspecRawBytes, Contract, Deploy, EntryPointValue,
-    EraId, HashAddr, InvalidDeploy, InvalidTransaction, InvalidTransactionV1, Package, PricingMode,
-    ProtocolVersion, PublicKey, SecretKey, StoredValue, TestBlockBuilder, TimeDiff, Timestamp,
-    Transaction, TransactionConfig, TransactionRuntime, TransactionV1, TransactionV1Builder, URef,
-    U512,
+    Block, BlockV2, CLValue, Chainspec, ChainspecRawBytes, Contract, Deploy, EraId, HashAddr,
+    InvalidDeploy, InvalidTransaction, InvalidTransactionV1, Package, PricingMode, ProtocolVersion,
+    PublicKey, SecretKey, StoredValue, TestBlockBuilder, TimeDiff, Timestamp, Transaction,
+    TransactionConfig, TransactionRuntime, TransactionV1, TransactionV1Builder, URef, U512,
 };
 
 use super::*;
@@ -985,7 +984,7 @@ impl reactor::Reactor for Reactor {
                     };
                     responder.respond(result).ignore()
                 }
-                ContractRuntimeRequest::GetEntryPoint {
+                ContractRuntimeRequest::GetEntryPointExists {
                     state_root_hash: _,
                     responder,
                     ..
@@ -995,13 +994,13 @@ impl reactor::Reactor for Reactor {
                         .contract_scenario()
                         .expect("must get contract scenario");
                     let result = match contract_scenario {
-                        ContractScenario::Valid => EntryPointsResult::Success {
-                            entry_point: EntryPointValue::V1CasperVm(EntryPoint::default()),
-                        },
+                        ContractScenario::Valid => EntryPointExistsResult::Success,
                         ContractScenario::MissingContractAtHash
                         | ContractScenario::MissingContractAtName
                         | ContractScenario::MissingEntryPoint => {
-                            EntryPointsResult::ValueNotFound("entry point not found".to_string())
+                            EntryPointExistsResult::ValueNotFound(
+                                "entry point not found".to_string(),
+                            )
                         }
                     };
                     responder.respond(result).ignore()

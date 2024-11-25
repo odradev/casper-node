@@ -3,8 +3,8 @@ use std::fmt::{self, Display, Formatter};
 use serde::Serialize;
 
 use casper_types::{
-    AddressableEntity, AddressableEntityHash, BlockHeader, EntityVersion, EntryPoint, Package,
-    PackageHash, Timestamp, Transaction, U512,
+    AddressableEntity, AddressableEntityHash, BlockHeader, EntityVersion, Package, PackageHash,
+    Timestamp, Transaction, U512,
 };
 
 use super::{Error, Source};
@@ -102,7 +102,7 @@ pub(crate) enum Event {
         is_payment: bool,
         entry_point_name: String,
         addressable_entity: AddressableEntity,
-        maybe_entry_point: Option<EntryPoint>,
+        entry_point_exists: bool,
     },
 }
 

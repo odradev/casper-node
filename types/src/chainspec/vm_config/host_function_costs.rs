@@ -104,6 +104,12 @@ const DEFAULT_GENERIC_HASH_COST: u32 = 1_200_000;
 
 const DEFAULT_GENERIC_HASH_INPUT_COST: u32 = 120_000;
 
+const DEFAULT_RECOVER_SECP256K1_COST: u32 = 1_300_000;
+const DEFAULT_RECOVER_SECP256K1_SIZE_WEIGHT: u32 = 120_000;
+
+const DEFAULT_VERIFY_SIGNATURE_COST: u32 = 1_300_000;
+const DEFAULT_VERIFY_SIGNATURE_SIZE_WEIGHT: u32 = 120_000;
+
 /// Representation of a host function cost.
 ///
 /// The total gas cost is equal to `cost` + sum of each argument weight multiplied by the byte size
@@ -350,6 +356,10 @@ pub struct HostFunctionCosts {
     pub get_block_info: HostFunction<[Cost; 2]>,
     /// Cost of calling the `generic_hash` host function.
     pub generic_hash: HostFunction<[Cost; 5]>,
+    /// Cost of calling the 'recover_secp256k1' host function.
+    pub recover_secp256k1: HostFunction<[Cost; 6]>,
+    /// Cost of calling the 'recover_secp256k1' host function.
+    pub verify_signature: HostFunction<[Cost; 6]>,
 }
 
 impl Zero for HostFunctionCosts {
@@ -406,6 +416,8 @@ impl Zero for HostFunctionCosts {
             cost_increase_per_message: Zero::zero(),
             get_block_info: HostFunction::zero(),
             generic_hash: HostFunction::zero(),
+            recover_secp256k1: HostFunction::zero(),
+            verify_signature: HostFunction::zero(),
         }
     }
 
@@ -462,6 +474,8 @@ impl Zero for HostFunctionCosts {
             emit_message,
             get_block_info,
             generic_hash,
+            recover_secp256k1,
+            verify_signature,
         } = self;
         read_value.is_zero()
             && dictionary_get.is_zero()
@@ -514,6 +528,8 @@ impl Zero for HostFunctionCosts {
             && get_block_info.is_zero()
             && add_contract_version_with_message_topics.is_zero()
             && generic_hash.is_zero()
+            && recover_secp256k1.is_zero()
+            && verify_signature.is_zero()
     }
 }
 
@@ -742,6 +758,28 @@ impl Default for HostFunctionCosts {
             ),
             cost_increase_per_message: DEFAULT_COST_INCREASE_PER_MESSAGE_EMITTED,
             get_block_info: HostFunction::new(DEFAULT_GET_BLOCKTIME_COST, [NOT_USED, NOT_USED]),
+            recover_secp256k1: HostFunction::new(
+                DEFAULT_RECOVER_SECP256K1_COST,
+                [
+                    NOT_USED,
+                    DEFAULT_RECOVER_SECP256K1_SIZE_WEIGHT,
+                    NOT_USED,
+                    NOT_USED,
+                    NOT_USED,
+                    NOT_USED,
+                ],
+            ),
+            verify_signature: HostFunction::new(
+                DEFAULT_VERIFY_SIGNATURE_COST,
+                [
+                    NOT_USED,
+                    DEFAULT_VERIFY_SIGNATURE_SIZE_WEIGHT,
+                    NOT_USED,
+                    NOT_USED,
+                    NOT_USED,
+                    NOT_USED,
+                ],
+            ),
         }
     }
 }
@@ -800,6 +838,8 @@ impl ToBytes for HostFunctionCosts {
         ret.append(&mut self.cost_increase_per_message.to_bytes()?);
         ret.append(&mut self.get_block_info.to_bytes()?);
         ret.append(&mut self.generic_hash.to_bytes()?);
+        ret.append(&mut self.recover_secp256k1.to_bytes()?);
+        ret.append(&mut self.verify_signature.to_bytes()?);
         Ok(ret)
     }
 
@@ -857,6 +897,8 @@ impl ToBytes for HostFunctionCosts {
             + self.cost_increase_per_message.serialized_length()
             + self.get_block_info.serialized_length()
             + self.generic_hash.serialized_length()
+            + self.recover_secp256k1.serialized_length()
+            + self.verify_signature.serialized_length()
     }
 }
 
@@ -913,6 +955,8 @@ impl FromBytes for HostFunctionCosts {
         let (cost_increase_per_message, rem) = FromBytes::from_bytes(rem)?;
         let (get_block_info, rem) = FromBytes::from_bytes(rem)?;
         let (generic_hash, rem) = FromBytes::from_bytes(rem)?;
+        let (recover_secp256k1, rem) = FromBytes::from_bytes(rem)?;
+        let (verify_signature, rem) = FromBytes::from_bytes(rem)?;
         Ok((
             HostFunctionCosts {
                 read_value,
@@ -966,6 +1010,8 @@ impl FromBytes for HostFunctionCosts {
                 cost_increase_per_message,
                 get_block_info,
                 generic_hash,
+                recover_secp256k1,
+                verify_signature,
             },
             rem,
         ))
@@ -1027,6 +1073,8 @@ impl Distribution<HostFunctionCosts> for Standard {
             cost_increase_per_message: rng.gen(),
             get_block_info: rng.gen(),
             generic_hash: rng.gen(),
+            recover_secp256k1: rng.gen(),
+            verify_signature: rng.gen(),
         }
     }
 }
@@ -1097,6 +1145,8 @@ pub mod gens {
             cost_increase_per_message in num::u32::ANY,
             get_block_info in host_function_cost_arb(),
             generic_hash in host_function_cost_arb(),
+            recover_secp256k1 in host_function_cost_arb(),
+            verify_signature in host_function_cost_arb(),
         ) -> HostFunctionCosts {
             HostFunctionCosts {
                 read_value,
@@ -1150,6 +1200,8 @@ pub mod gens {
                 cost_increase_per_message,
                 get_block_info,
                 generic_hash,
+                recover_secp256k1,
+                verify_signature,
             }
         }
     }

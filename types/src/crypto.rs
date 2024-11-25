@@ -17,11 +17,11 @@ pub use asymmetric_key::generate_ed25519_keypair;
 #[cfg(any(feature = "testing", feature = "gens", test))]
 pub use asymmetric_key::gens;
 pub use asymmetric_key::{
-    sign, verify, AsymmetricType, PublicKey, SecretKey, Signature, ED25519_TAG, SECP256K1_TAG,
-    SYSTEM_ACCOUNT, SYSTEM_TAG,
+    recover_secp256k1, sign, verify, AsymmetricType, PublicKey, SecretKey, Signature, ED25519_TAG,
+    SECP256K1_TAG, SYSTEM_ACCOUNT, SYSTEM_TAG,
 };
 pub use error::Error;
-#[cfg(any(feature = "std", test))]
+#[cfg(any(feature = "std", feature = "testing", test))]
 pub use error::ErrorExt;
 
 pub(crate) fn blake2b<T: AsRef<[u8]>>(data: T) -> [u8; BLAKE2B_DIGEST_LENGTH] {

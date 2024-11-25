@@ -20,9 +20,9 @@ use casper_storage::{
     AddressGenerator,
 };
 use casper_types::{
-    account::AccountHash,  BlockHash, ChainspecRegistry, Digest,
-    GenesisAccount, GenesisConfigBuilder, Key, Motes, Phase, ProtocolVersion, PublicKey,
-     SecretKey, StoredValue, Timestamp, TransactionHash, TransactionV1Hash, U512,
+    account::AccountHash, BlockHash, ChainspecRegistry, Digest, GenesisAccount,
+    GenesisConfigBuilder, Key, Motes, Phase, ProtocolVersion, PublicKey, SecretKey, StoredValue,
+    Timestamp, TransactionHash, TransactionV1Hash, U512,
 };
 use fs_extra::dir;
 use once_cell::sync::Lazy;

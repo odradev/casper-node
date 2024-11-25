@@ -27,9 +27,8 @@ use casper_types::{
         MINT,
     },
     BlockGlobalAddr, BlockTime, ByteCode, ByteCodeAddr, ByteCodeHash, CLValue, ChecksumRegistry,
-    Contract, EntityAddr, EntryPointValue, EntryPoints, HashAddr, HoldBalanceHandling, HoldsEpoch,
-    Key, Motes, Package, StoredValue, StoredValueTypeMismatch, SystemHashRegistry, URef, URefAddr,
-    U512,
+    Contract, EntityAddr, EntryPoints, HashAddr, HoldBalanceHandling, HoldsEpoch, Key, Motes,
+    Package, StoredValue, StoredValueTypeMismatch, SystemHashRegistry, URef, URefAddr, U512,
 };
 
 /// Higher-level operations on the state via a `TrackingCopy`.
@@ -594,104 +593,29 @@ where
     }
 
     fn get_named_keys(&self, entity_addr: EntityAddr) -> Result<NamedKeys, Self::Error> {
-        if !self.enable_addressable_entity {
-            let footprint = self.runtime_footprint_by_entity_addr(entity_addr)?;
-            return Ok(footprint.take_named_keys());
-        }
-
-        let keys = self.get_keys_by_prefix(&KeyPrefix::NamedKeysByEntity(entity_addr))?;
-
-        let mut named_keys = NamedKeys::new();
-
-        for entry_key in &keys {
-            match self.read(entry_key)? {
-                Some(StoredValue::NamedKey(named_key)) => {
-                    let key = named_key.get_key().map_err(TrackingCopyError::CLValue)?;
-                    let name = named_key.get_name().map_err(TrackingCopyError::CLValue)?;
-                    named_keys.insert(name, key);
-                }
-                Some(other) => {
-                    return Err(TrackingCopyError::TypeMismatch(
-                        StoredValueTypeMismatch::new("CLValue".to_string(), other.type_name()),
-                    ));
-                }
-                None => match self.cache.reads_cached.get(entry_key) {
-                    Some(StoredValue::NamedKey(named_key_value)) => {
-                        let key = named_key_value
-                            .get_key()
-                            .map_err(TrackingCopyError::CLValue)?;
-                        let name = named_key_value
-                            .get_name()
-                            .map_err(TrackingCopyError::CLValue)?;
-                        named_keys.insert(name, key);
-                    }
-                    Some(_) | None => {
-                        return Err(TrackingCopyError::KeyNotFound(*entry_key));
-                    }
-                },
-            };
-        }
-
-        Ok(named_keys)
+        Ok(self
+            .runtime_footprint_by_entity_addr(entity_addr)?
+            .take_named_keys())
     }
 
     fn get_v1_entry_points(&self, entity_addr: EntityAddr) -> Result<EntryPoints, Self::Error> {
-        if !self.enable_addressable_entity {
-            let footprint = self.runtime_footprint_by_entity_addr(entity_addr)?;
-            return Ok(footprint.entry_points().clone());
-        }
-
-        let keys = self.get_keys_by_prefix(&KeyPrefix::EntryPointsV1ByEntity(entity_addr))?;
-
-        let mut entry_points_v1 = EntryPoints::new();
-
-        for entry_point_key in keys.iter() {
-            match self.read(entry_point_key)? {
-                Some(StoredValue::EntryPoint(EntryPointValue::V1CasperVm(entry_point))) => {
-                    entry_points_v1.add_entry_point(entry_point)
-                }
-                Some(other) => {
-                    return Err(TrackingCopyError::TypeMismatch(
-                        StoredValueTypeMismatch::new(
-                            "EntryPointsV1".to_string(),
-                            other.type_name(),
-                        ),
-                    ));
-                }
-                None => match self.cache.reads_cached.get(entry_point_key) {
-                    Some(StoredValue::EntryPoint(EntryPointValue::V1CasperVm(entry_point))) => {
-                        entry_points_v1.add_entry_point(entry_point.to_owned())
-                    }
-                    Some(other) => {
-                        return Err(TrackingCopyError::TypeMismatch(
-                            StoredValueTypeMismatch::new(
-                                "EntryPointsV1".to_string(),
-                                other.type_name(),
-                            ),
-                        ));
-                    }
-                    None => {
-                        return Err(TrackingCopyError::KeyNotFound(*entry_point_key));
-                    }
-                },
-            }
-        }
-
-        Ok(entry_points_v1)
+        Ok(self
+            .runtime_footprint_by_entity_addr(entity_addr)?
+            .entry_points()
+            .clone())
     }
 
     fn get_package(&mut self, package_hash: HashAddr) -> Result<Package, Self::Error> {
         let key = Key::Hash(package_hash);
         match self.read(&key)? {
             Some(StoredValue::ContractPackage(contract_package)) => Ok(contract_package.into()),
-            Some(other) => Err(Self::Error::TypeMismatch(StoredValueTypeMismatch::new(
-                "ContractPackage".to_string(),
-                other.type_name(),
-            ))),
-            None => match self.read(&Key::SmartContract(package_hash))? {
+            Some(_) | None => match self.read(&Key::SmartContract(package_hash))? {
                 Some(StoredValue::SmartContract(contract_package)) => Ok(contract_package),
                 Some(other) => Err(TrackingCopyError::TypeMismatch(
-                    StoredValueTypeMismatch::new("Package".to_string(), other.type_name()),
+                    StoredValueTypeMismatch::new(
+                        "Package or CLValue".to_string(),
+                        other.type_name(),
+                    ),
                 )),
                 None => Err(Self::Error::ValueNotFound(key.to_formatted_string())),
             },

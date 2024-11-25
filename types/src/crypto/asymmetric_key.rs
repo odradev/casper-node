@@ -13,6 +13,8 @@ use core::{
     iter,
     marker::Copy,
 };
+#[cfg(any(feature = "testing", test))]
+use rand::distributions::{Distribution, Standard};
 #[cfg(any(feature = "std-fs-io", test))]
 use std::path::Path;
 
@@ -28,7 +30,7 @@ use ed25519_dalek::{
 use hex_fmt::HexFmt;
 use k256::ecdsa::{
     signature::{Signer, Verifier},
-    Signature as Secp256k1Signature, SigningKey as Secp256k1SecretKey,
+    RecoveryId, Signature as Secp256k1Signature, SigningKey as Secp256k1SecretKey, VerifyingKey,
     VerifyingKey as Secp256k1PublicKey,
 };
 #[cfg(feature = "json-schema")]
@@ -45,7 +47,7 @@ use serde_json::json;
 #[cfg(any(feature = "std", test))]
 use untrusted::Input;
 
-#[cfg(any(feature = "std", test))]
+#[cfg(any(feature = "std", feature = "testing", test))]
 use crate::crypto::ErrorExt;
 #[cfg(any(feature = "std-fs-io", test))]
 use crate::file_utils::{read_file, write_file, write_private_file};
@@ -221,7 +223,7 @@ impl SecretKey {
     }
 
     /// Generates a new ed25519 variant using the system's secure random number generator.
-    #[cfg(any(feature = "std", test))]
+    #[cfg(any(feature = "std", feature = "testing", test))]
     pub fn generate_ed25519() -> Result<Self, ErrorExt> {
         let mut bytes = [0u8; Self::ED25519_LENGTH];
         getrandom::getrandom(&mut bytes[..])?;
@@ -229,7 +231,7 @@ impl SecretKey {
     }
 
     /// Generates a new secp256k1 variant using the system's secure random number generator.
-    #[cfg(any(feature = "std", test))]
+    #[cfg(any(feature = "std", feature = "testing", test))]
     pub fn generate_secp256k1() -> Result<Self, ErrorExt> {
         let mut bytes = [0u8; Self::SECP256K1_LENGTH];
         getrandom::getrandom(&mut bytes[..])?;
@@ -700,6 +702,18 @@ impl From<&SecretKey> for PublicKey {
             SecretKey::Ed25519(secret_key) => PublicKey::Ed25519(secret_key.into()),
             SecretKey::Secp256k1(secret_key) => PublicKey::Secp256k1(secret_key.into()),
         }
+    }
+}
+
+#[cfg(any(feature = "testing", test))]
+impl Distribution<PublicKey> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> PublicKey {
+        let secret_key = if rng.gen() {
+            SecretKey::generate_ed25519().unwrap()
+        } else {
+            SecretKey::generate_secp256k1().unwrap()
+        };
+        PublicKey::from(&secret_key)
     }
 }
 
@@ -1195,6 +1209,29 @@ pub fn sign<T: AsRef<[u8]>>(
         }
         _ => panic!("secret and public key types must match"),
     }
+}
+
+/// Attempts to recover a Secp256k1 [`PublicKey`] from a message and a signature over it.
+pub fn recover_secp256k1<T: AsRef<[u8]>>(
+    message: T,
+    signature: &Signature,
+    recovery_id: u8,
+) -> Result<PublicKey, Error> {
+    let Signature::Secp256k1(signature) = signature else {
+        return Err(Error::AsymmetricKey(String::from(
+            "public keys can only be recovered from Secp256k1 signatures",
+        )));
+    };
+
+    let Ok(key) = VerifyingKey::recover_from_msg(
+        message.as_ref(),
+        signature,
+        RecoveryId::try_from(recovery_id)?,
+    ) else {
+        return Err(Error::AsymmetricKey(String::from("Key extraction failed")));
+    };
+
+    Ok(PublicKey::Secp256k1(key))
 }
 
 /// Verifies the signature of the given message against the given public key.

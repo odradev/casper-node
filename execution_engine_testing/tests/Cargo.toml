@@ -10,6 +10,7 @@ casper-engine-test-support = { path = "../test_support" }
 casper-execution-engine = { path = "../../execution_engine", features = ["test-support"] }
 casper-storage = { path = "../../storage" }
 casper-types = { path = "../../types", default-features = false, features = ["datasize", "json-schema"] }
+ed25519-dalek = { version = "2.1.1", default-features = false, features = ["alloc", "zeroize"] }
 casper-wasm = "0.46.0"
 clap = "2"
 fs_extra = "1.2.0"

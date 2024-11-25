@@ -28,7 +28,15 @@ use alloc::{
 };
 use core::fmt::{self, Debug, Display, Formatter};
 #[cfg(any(feature = "std", test))]
+use serde::{de, ser, Deserializer, Serializer};
+#[cfg(any(feature = "std", test))]
+use serde_bytes::ByteBuf;
+#[cfg(any(feature = "std", test))]
 use std::hash::Hash;
+#[cfg(any(feature = "std", test))]
+use thiserror::Error;
+#[cfg(any(feature = "std", test))]
+use transaction_v1::TransactionV1Json;
 
 #[cfg(feature = "json-schema")]
 use crate::URef;
@@ -119,18 +127,17 @@ pub(super) static TRANSACTION: Lazy<Transaction> = Lazy::new(|| {
 
 /// A versioned wrapper for a transaction or deploy.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-#[cfg_attr(
-    any(feature = "std", test),
-    derive(Serialize, Deserialize),
-    serde(deny_unknown_fields)
-)]
-#[cfg_attr(feature = "datasize", derive(DataSize))]
 #[cfg_attr(feature = "json-schema", derive(JsonSchema))]
+#[cfg_attr(feature = "datasize", derive(DataSize))]
 pub enum Transaction {
     /// A deploy.
     Deploy(Deploy),
     /// A version 1 transaction.
-    #[cfg_attr(any(feature = "std", test), serde(rename = "Version1"))]
+    #[cfg_attr(
+        feature = "json-schema",
+        serde(rename = "Version1"),
+        schemars(with = "TransactionV1Json")
+    )]
     V1(TransactionV1),
 }
 
@@ -397,6 +404,94 @@ impl Transaction {
     }
 }
 
+#[cfg(any(feature = "std", test))]
+impl Serialize for Transaction {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if serializer.is_human_readable() {
+            TransactionJson::try_from(self.clone())
+                .map_err(|error| ser::Error::custom(format!("{:?}", error)))?
+                .serialize(serializer)
+        } else {
+            let bytes = self
+                .to_bytes()
+                .map_err(|error| ser::Error::custom(format!("{:?}", error)))?;
+            ByteBuf::from(bytes).serialize(serializer)
+        }
+    }
+}
+
+#[cfg(any(feature = "std", test))]
+impl<'de> Deserialize<'de> for Transaction {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        if deserializer.is_human_readable() {
+            let json_helper = TransactionJson::deserialize(deserializer)?;
+            Transaction::try_from(json_helper)
+                .map_err(|error| de::Error::custom(format!("{:?}", error)))
+        } else {
+            let bytes = ByteBuf::deserialize(deserializer)?.into_vec();
+            bytesrepr::deserialize::<Transaction>(bytes)
+                .map_err(|error| de::Error::custom(format!("{:?}", error)))
+        }
+    }
+}
+
+/// A util structure to json-serialize a transaction.
+#[cfg(any(feature = "std", test))]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "json-schema", derive(JsonSchema))]
+#[serde(deny_unknown_fields)]
+enum TransactionJson {
+    /// A deploy.
+    Deploy(Deploy),
+    /// A version 1 transaction.
+    #[serde(rename = "Version1")]
+    V1(TransactionV1Json),
+}
+
+#[cfg(any(feature = "std", test))]
+#[derive(Error, Debug)]
+enum TransactionJsonError {
+    #[error("{0}")]
+    FailedToMap(String),
+}
+
+#[cfg(any(feature = "std", test))]
+impl TryFrom<TransactionJson> for Transaction {
+    type Error = TransactionJsonError;
+    fn try_from(transaction: TransactionJson) -> Result<Self, Self::Error> {
+        match transaction {
+            TransactionJson::Deploy(deploy) => Ok(Transaction::Deploy(deploy)),
+            TransactionJson::V1(v1) => {
+                TransactionV1::try_from(v1)
+                    .map(Transaction::V1)
+                    .map_err(|error| {
+                        TransactionJsonError::FailedToMap(format!(
+                            "Failed to map TransactionJson::V1 to Transaction::V1, err: {}",
+                            error
+                        ))
+                    })
+            }
+        }
+    }
+}
+
+#[cfg(any(feature = "std", test))]
+impl TryFrom<Transaction> for TransactionJson {
+    type Error = TransactionJsonError;
+    fn try_from(transaction: Transaction) -> Result<Self, Self::Error> {
+        match transaction {
+            Transaction::Deploy(deploy) => Ok(TransactionJson::Deploy(deploy)),
+            Transaction::V1(v1) => TransactionV1Json::try_from(v1)
+                .map(TransactionJson::V1)
+                .map_err(|error| {
+                    TransactionJsonError::FailedToMap(format!(
+                        "Failed to map Transaction::V1 to TransactionJson::V1, err: {}",
+                        error
+                    ))
+                }),
+        }
+    }
+}
 /// Calculates gas limit.
 #[cfg(any(feature = "std", test))]
 pub trait GasLimited {
@@ -553,7 +648,10 @@ mod tests {
 #[cfg(test)]
 mod proptests {
     use super::*;
-    use crate::{bytesrepr, gens::transaction_arb};
+    use crate::{
+        bytesrepr,
+        gens::{legal_transaction_arb, transaction_arb},
+    };
     use proptest::prelude::*;
 
     proptest! {
@@ -563,7 +661,7 @@ mod proptests {
         }
 
         #[test]
-        fn json_roundtrip(transaction in transaction_arb()) {
+        fn json_roundtrip(transaction in legal_transaction_arb()) {
             let json_string = serde_json::to_string_pretty(&transaction).unwrap();
             let decoded = serde_json::from_str::<Transaction>(&json_string).unwrap();
             assert_eq!(transaction, decoded);

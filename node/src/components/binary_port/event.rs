@@ -47,6 +47,7 @@ impl Display for Event {
                 BinaryRequest::TrySpeculativeExec { transaction, .. } => {
                     write!(f, "try speculative exec ({})", transaction.hash())
                 }
+                BinaryRequest::KeepAliveRequest => write!(f, "keep alive request"),
             },
         }
     }

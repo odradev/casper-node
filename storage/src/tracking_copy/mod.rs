@@ -842,7 +842,7 @@ where
                     return Ok(query.into_not_found_result("WithdrawPurses value found."));
                 }
                 StoredValue::Unbonding(_) => {
-                    return Ok(query.into_not_found_result("UnbondingPurses value found."));
+                    return Ok(query.into_not_found_result("Unbonding value found."));
                 }
                 StoredValue::MessageTopic(_) => {
                     return Ok(query.into_not_found_result("MessageTopic value found."));

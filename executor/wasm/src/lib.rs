@@ -34,10 +34,9 @@ use casper_storage::{
 use casper_types::{
     account::AccountHash,
     addressable_entity::{ActionThresholds, AssociatedKeys},
-    bytesrepr,
-    AddressableEntity, AddressableEntityHash, ByteCode, ByteCodeAddr, ByteCodeHash, ByteCodeKind,
-    Digest, EntityAddr, EntityKind, Gas, Groups, InitiatorAddr, Key, Package, PackageHash,
-    PackageStatus, Phase, ProtocolVersion, StoredValue, TransactionInvocationTarget,
+    bytesrepr, AddressableEntity, AddressableEntityHash, ByteCode, ByteCodeAddr, ByteCodeHash,
+    ByteCodeKind, Digest, EntityAddr, EntityKind, Gas, Groups, InitiatorAddr, Key, Package,
+    PackageHash, PackageStatus, Phase, ProtocolVersion, StoredValue, TransactionInvocationTarget,
     TransactionRuntime, URef, U512,
 };
 use either::Either;

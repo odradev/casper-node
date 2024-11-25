@@ -22,6 +22,7 @@ pub const RELEASE_1_4_2: &str = "release_1_4_2";
 pub const RELEASE_1_4_3: &str = "release_1_4_3";
 pub const RELEASE_1_4_4: &str = "release_1_4_4";
 pub const RELEASE_1_4_5: &str = "release_1_4_5";
+pub const RELEASE_1_5_8: &str = "release_1_5_8";
 const STATE_JSON_FILE: &str = "state.json";
 const FIXTURES_DIRECTORY: &str = "fixtures";
 const GENESIS_PROTOCOL_VERSION_FIELD: &str = "protocol_version";
@@ -88,6 +89,32 @@ pub fn builder_from_global_state_fixture(
         LmdbWasmTestBuilder::open(
             &path_to_gs,
             ChainspecConfig::default(),
+            lmdb_fixture_state.genesis_protocol_version(),
+            lmdb_fixture_state.post_state_hash,
+        ),
+        lmdb_fixture_state,
+        to,
+    )
+}
+
+pub fn builder_from_global_state_fixture_with_enable_ae(
+    fixture_name: &str,
+    enable_addressable_entity: bool,
+) -> (LmdbWasmTestBuilder, LmdbFixtureState, TempDir) {
+    let source = path_to_lmdb_fixtures().join(fixture_name);
+    let to = tempfile::tempdir().expect("should create temp dir");
+    fs_extra::copy_items(&[source], &to, &dir::CopyOptions::default())
+        .expect("should copy global state fixture");
+
+    let path_to_state = to.path().join(fixture_name).join(STATE_JSON_FILE);
+    let lmdb_fixture_state: LmdbFixtureState =
+        serde_json::from_reader(File::open(path_to_state).unwrap()).unwrap();
+    let path_to_gs = to.path().join(fixture_name);
+
+    (
+        LmdbWasmTestBuilder::open(
+            &path_to_gs,
+            ChainspecConfig::default().with_enable_addressable_entity(enable_addressable_entity),
             lmdb_fixture_state.genesis_protocol_version(),
             lmdb_fixture_state.post_state_hash,
         ),

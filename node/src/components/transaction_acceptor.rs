@@ -16,7 +16,7 @@ use casper_storage::data_access_layer::{balance::BalanceHandling, BalanceRequest
 use casper_types::{
     account::AccountHash, addressable_entity::AddressableEntity, system::auction::ARG_AMOUNT,
     AddressableEntityHash, AddressableEntityIdentifier, BlockHeader, Chainspec, EntityAddr,
-    EntityKind, EntityVersion, EntityVersionKey, EntryPoint, EntryPointAddr, ExecutableDeployItem,
+    EntityKind, EntityVersion, EntityVersionKey, ExecutableDeployItem,
     ExecutableDeployItemIdentifier, InitiatorAddr, Key, Package, PackageAddr, PackageHash,
     PackageIdentifier, Timestamp, Transaction, TransactionEntryPoint, TransactionInvocationTarget,
     TransactionRuntime, TransactionTarget, DEFAULT_ENTRY_POINT_NAME, U512,
@@ -621,33 +621,20 @@ impl TransactionAcceptor {
         };
 
         match maybe_entry_point_name {
-            Some(entry_point_name) => {
-                match EntryPointAddr::new_v1_entry_point_addr(
-                    EntityAddr::SmartContract(contract_hash.value()),
-                    &entry_point_name,
-                ) {
-                    Ok(entry_point_addr) => effect_builder
-                        .get_entry_point_value(
-                            *block_header.state_root_hash(),
-                            Key::EntryPoint(entry_point_addr),
-                        )
-                        .event(move |entry_point_result| Event::GetEntryPointResult {
-                            event_metadata,
-                            block_header,
-                            is_payment,
-                            entry_point_name,
-                            addressable_entity,
-                            maybe_entry_point: entry_point_result.into_v1_entry_point(),
-                        }),
-                    Err(_) => {
-                        let error = Error::parameter_failure(
-                            &block_header,
-                            ParameterFailure::NoSuchEntryPoint { entry_point_name },
-                        );
-                        self.reject_transaction(effect_builder, *event_metadata, error)
-                    }
-                }
-            }
+            Some(entry_point_name) => effect_builder
+                .does_entry_point_exist(
+                    *block_header.state_root_hash(),
+                    contract_hash.value(),
+                    entry_point_name.clone(),
+                )
+                .event(move |entry_point_result| Event::GetEntryPointResult {
+                    event_metadata,
+                    block_header,
+                    is_payment,
+                    entry_point_name,
+                    addressable_entity,
+                    entry_point_exists: entry_point_result.is_some(),
+                }),
 
             None => {
                 if is_payment {
@@ -667,31 +654,19 @@ impl TransactionAcceptor {
         is_payment: bool,
         entry_point_name: String,
         addressable_entity: AddressableEntity,
-        maybe_entry_point: Option<EntryPoint>,
+        entry_point_exist: bool,
     ) -> Effects<Event> {
         match addressable_entity.kind() {
             EntityKind::SmartContract(TransactionRuntime::VmCasperV1)
             | EntityKind::Account(_)
             | EntityKind::System(_) => {
-                let entry_point = match maybe_entry_point {
-                    Some(entry_point) => entry_point,
-                    None => {
-                        let error = Error::parameter_failure(
-                            &block_header,
-                            ParameterFailure::NoSuchEntryPoint { entry_point_name },
-                        );
-                        return self.reject_transaction(effect_builder, *event_metadata, error);
-                    }
-                };
-
-                if entry_point_name != *entry_point.name() {
+                if !entry_point_exist {
                     let error = Error::parameter_failure(
                         &block_header,
                         ParameterFailure::NoSuchEntryPoint { entry_point_name },
                     );
                     return self.reject_transaction(effect_builder, *event_metadata, error);
-                };
-
+                }
                 if is_payment {
                     return self.verify_body(effect_builder, event_metadata, block_header);
                 }
@@ -1027,7 +1002,7 @@ impl<REv: ReactorEventT> Component<REv> for TransactionAcceptor {
                 is_payment,
                 entry_point_name,
                 addressable_entity,
-                maybe_entry_point,
+                entry_point_exists,
             } => self.handle_get_entry_point_result(
                 effect_builder,
                 event_metadata,
@@ -1035,7 +1010,7 @@ impl<REv: ReactorEventT> Component<REv> for TransactionAcceptor {
                 is_payment,
                 entry_point_name,
                 addressable_entity,
-                maybe_entry_point,
+                entry_point_exists,
             ),
             Event::PutToStorageResult {
                 event_metadata,

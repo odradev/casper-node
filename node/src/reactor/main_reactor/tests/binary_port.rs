@@ -23,6 +23,7 @@ use casper_types::{
     bytesrepr::{FromBytes, ToBytes},
     contracts::{ContractHash, ContractPackage, ContractPackageHash},
     execution::{Effects, TransformKindV2, TransformV2},
+    system::auction::DelegatorKind,
     testing::TestRng,
     Account, AddressableEntity, AvailableBlockRange, Block, BlockHash, BlockHeader,
     BlockIdentifier, BlockSynchronizerStatus, ByteCode, ByteCodeAddr, ByteCodeHash, ByteCodeKind,
@@ -1066,7 +1067,7 @@ fn get_named_keys_by_prefix(state_root_hash: Digest, entity_addr: EntityAddr) ->
 fn get_reward(
     era_identifier: Option<EraIdentifier>,
     validator: PublicKey,
-    delegator: Option<PublicKey>,
+    delegator: Option<DelegatorKind>,
 ) -> TestCase {
     let key = InformationRequest::Reward {
         era_identifier,

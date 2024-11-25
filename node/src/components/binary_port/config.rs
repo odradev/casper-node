@@ -1,3 +1,6 @@
+use std::str::FromStr;
+
+use casper_types::TimeDiff;
 use datasize::DataSize;
 use serde::{Deserialize, Serialize};
 
@@ -9,6 +12,10 @@ const DEFAULT_MAX_MESSAGE_SIZE: u32 = 4 * 1024 * 1024;
 const DEFAULT_MAX_CONNECTIONS: usize = 5;
 /// Default maximum number of requests per second.
 const DEFAULT_QPS_LIMIT: usize = 110;
+/// Default interval between connection keepalive checks.
+const DEFAULT_KEEPALIVE_CHECK_INTERVAL: &str = "10sec";
+/// Default amount of time to wait for activity on a connection before considering it stale.
+const DEFAULT_KEEPALIVE_NO_ACTIVITY_TIMEOUT: &str = "120sec";
 
 /// Binary port server configuration.
 #[derive(Clone, DataSize, Debug, Deserialize, Serialize)]
@@ -33,6 +40,11 @@ pub struct Config {
     pub max_connections: usize,
     /// Maximum number of requests per second.
     pub qps_limit: usize,
+    /// Time of interval between keepalive checks for a binary port connection.
+    pub keepalive_check_interval: TimeDiff,
+    /// Duration of time the keepalive mechanism waits for activity on a binary port connection
+    /// before considering it stale and closing it.
+    pub keepalive_no_activity_timeout: TimeDiff,
 }
 
 impl Config {
@@ -47,6 +59,11 @@ impl Config {
             max_message_size_bytes: DEFAULT_MAX_MESSAGE_SIZE,
             max_connections: DEFAULT_MAX_CONNECTIONS,
             qps_limit: DEFAULT_QPS_LIMIT,
+            keepalive_check_interval: TimeDiff::from_str(DEFAULT_KEEPALIVE_CHECK_INTERVAL).unwrap(),
+            keepalive_no_activity_timeout: TimeDiff::from_str(
+                DEFAULT_KEEPALIVE_NO_ACTIVITY_TIMEOUT,
+            )
+            .unwrap(),
         }
     }
 }
