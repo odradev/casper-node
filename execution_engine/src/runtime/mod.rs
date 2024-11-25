@@ -1867,10 +1867,17 @@ where
                     );
                 }
                 SystemEntityType::Auction => {
+                    let mut combined_access_rights = self
+                        .context
+                        .runtime_footprint()
+                        .borrow()
+                        .extract_access_rights(context_entity_hash);
+                    combined_access_rights.extend_access_rights(access_rights.take_access_rights());
+
                     return self.call_host_auction(
                         entry_point_name,
                         &runtime_args,
-                        access_rights,
+                        combined_access_rights,
                         stack,
                     );
                 }

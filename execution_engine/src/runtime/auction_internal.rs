@@ -1,5 +1,5 @@
 use std::collections::BTreeSet;
-use tracing::error;
+use tracing::{debug, error};
 
 use casper_storage::{
     global_state::{error::Error as GlobalStateError, state::StateReader},
@@ -513,11 +513,25 @@ where
     fn get_main_purse(&self) -> Result<URef, Error> {
         // NOTE: this is used by the system and is not (and should not be made to be) accessible
         // from userland.
-        Runtime::context(self)
+        match Runtime::context(self)
             .runtime_footprint()
             .borrow()
             .main_purse()
-            .ok_or(Error::InvalidContext)
+        {
+            None => {
+                debug!("runtime attempt to access non-existent main purse");
+                Err(Error::InvalidContext)
+            }
+            Some(purse) => Ok(purse),
+        }
+    }
+
+    /// Set main purse.
+    fn set_main_purse(&mut self, purse: URef) {
+        Runtime::context(self)
+            .runtime_footprint()
+            .borrow_mut()
+            .set_main_purse(purse);
     }
 }
 

@@ -248,7 +248,11 @@ impl Unbond {
         let mut retained = vec![];
         let mut expired = vec![];
         for era in self.eras {
-            if era_id >= era.era_of_creation() + unbonding_delay {
+            let threshold = era
+                .era_of_creation()
+                .value()
+                .saturating_add(unbonding_delay);
+            if era_id.value() >= threshold {
                 expired.push(era);
             } else {
                 retained.push(era)

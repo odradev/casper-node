@@ -20,7 +20,7 @@ use casper_types::{
     AccessRights, CLTyped, CLValue, Key, KeyTag, PublicKey, StoredValue, URef, U512,
 };
 use std::collections::BTreeSet;
-use tracing::error;
+use tracing::{debug, error};
 
 impl<S> RuntimeProvider for RuntimeNative<S>
 where
@@ -486,10 +486,18 @@ where
     fn get_main_purse(&self) -> Result<URef, Error> {
         // NOTE: this is used by the system and is not (and should not be made to be) accessible
         // from userland.
-        return self
-            .runtime_footprint()
-            .main_purse()
-            .ok_or(Error::InvalidContext);
+        match self.runtime_footprint().main_purse() {
+            None => {
+                debug!("runtime_native attempt to access non-existent main purse");
+                Err(Error::InvalidContext)
+            }
+            Some(purse) => Ok(purse),
+        }
+    }
+
+    /// Set main purse.
+    fn set_main_purse(&mut self, purse: URef) {
+        self.runtime_footprint_mut().set_main_purse(purse);
     }
 }
 

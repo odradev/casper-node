@@ -4,7 +4,10 @@ use rand::{
     Rng,
 };
 
-use casper_types::{execution::Effects, ChainspecRegistry, Digest, GenesisConfig, ProtocolVersion};
+use casper_types::{
+    execution::Effects, ChainspecRegistry, Digest, GenesisConfig, GenesisValidator,
+    ProtocolVersion, PublicKey,
+};
 
 use crate::system::genesis::GenesisError;
 
@@ -31,6 +34,21 @@ impl GenesisRequest {
             config,
             chainspec_registry,
         }
+    }
+
+    /// Set enable entity.
+    pub fn set_enable_entity(&mut self, enable: bool) {
+        self.config.set_enable_entity(enable);
+    }
+
+    /// Push genesis validator.
+    pub fn push_genesis_validator(
+        &mut self,
+        public_key: &PublicKey,
+        genesis_validator: GenesisValidator,
+    ) {
+        self.config
+            .push_genesis_validator(public_key, genesis_validator);
     }
 
     /// Returns chainspec_hash.

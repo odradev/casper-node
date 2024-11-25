@@ -283,6 +283,7 @@ pub trait Auction:
                 if !self.is_valid_uref(uref) {
                     return Err(Error::InvalidContext.into());
                 }
+                self.set_main_purse(uref);
                 uref
             }
         };

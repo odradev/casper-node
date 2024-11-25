@@ -12,8 +12,8 @@ use rand::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AdministratorAccount, Chainspec, GenesisAccount, HoldBalanceHandling, Motes, PublicKey,
-    SystemConfig, WasmConfig,
+    AdministratorAccount, Chainspec, GenesisAccount, GenesisValidator, HoldBalanceHandling, Motes,
+    PublicKey, SystemConfig, WasmConfig,
 };
 
 use super::StorageCosts;
@@ -191,8 +191,29 @@ impl GenesisConfig {
         self.gas_hold_interval_millis
     }
 
+    /// Enable entity.
     pub fn enable_entity(&self) -> bool {
         self.enable_addressable_entity
+    }
+
+    /// Set enable entity.
+    pub fn set_enable_entity(&mut self, enable: bool) {
+        self.enable_addressable_entity = enable
+    }
+
+    /// Push genesis validator.
+    pub fn push_genesis_validator(
+        &mut self,
+        public_key: &PublicKey,
+        genesis_validator: GenesisValidator,
+    ) {
+        if let Some(genesis_account) = self
+            .accounts
+            .iter_mut()
+            .find(|x| &x.public_key() == public_key)
+        {
+            genesis_account.try_set_validator(genesis_validator);
+        }
     }
 }
 
