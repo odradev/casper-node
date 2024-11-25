@@ -42,11 +42,11 @@ pub const DEFAULT_NOP_COST: u32 = 35;
 /// Default cost of the `current_memory` Wasm opcode.
 pub const DEFAULT_CURRENT_MEMORY_COST: u32 = 35;
 /// Default cost of the `grow_memory` Wasm opcode.
-pub const DEFAULT_GROW_MEMORY_COST: u32 = 205;
+pub const DEFAULT_GROW_MEMORY_COST: u32 = 300;
 /// Default cost of the `block` Wasm opcode.
-pub const DEFAULT_CONTROL_FLOW_BLOCK_OPCODE: u32 = 90;
+pub const DEFAULT_CONTROL_FLOW_BLOCK_OPCODE: u32 = 85;
 /// Default cost of the `loop` Wasm opcode.
-pub const DEFAULT_CONTROL_FLOW_LOOP_OPCODE: u32 = 90;
+pub const DEFAULT_CONTROL_FLOW_LOOP_OPCODE: u32 = 85;
 /// Default cost of the `if` Wasm opcode.
 pub const DEFAULT_CONTROL_FLOW_IF_OPCODE: u32 = 35;
 /// Default cost of the `else` Wasm opcode.
@@ -54,7 +54,7 @@ pub const DEFAULT_CONTROL_FLOW_ELSE_OPCODE: u32 = 35;
 /// Default cost of the `end` Wasm opcode.
 pub const DEFAULT_CONTROL_FLOW_END_OPCODE: u32 = 35;
 /// Default cost of the `br` Wasm opcode.
-pub const DEFAULT_CONTROL_FLOW_BR_OPCODE: u32 = 605;
+pub const DEFAULT_CONTROL_FLOW_BR_OPCODE: u32 = 555;
 /// Default cost of the `br_if` Wasm opcode.
 pub const DEFAULT_CONTROL_FLOW_BR_IF_OPCODE: u32 = 170;
 /// Default cost of the `return` Wasm opcode.
@@ -62,9 +62,9 @@ pub const DEFAULT_CONTROL_FLOW_RETURN_OPCODE: u32 = 35;
 /// Default cost of the `select` Wasm opcode.
 pub const DEFAULT_CONTROL_FLOW_SELECT_OPCODE: u32 = 35;
 /// Default cost of the `call` Wasm opcode.
-pub const DEFAULT_CONTROL_FLOW_CALL_OPCODE: u32 = 50;
+pub const DEFAULT_CONTROL_FLOW_CALL_OPCODE: u32 = 75;
 /// Default cost of the `call_indirect` Wasm opcode.
-pub const DEFAULT_CONTROL_FLOW_CALL_INDIRECT_OPCODE: u32 = 45;
+pub const DEFAULT_CONTROL_FLOW_CALL_INDIRECT_OPCODE: u32 = 90;
 /// Default cost of the `drop` Wasm opcode.
 pub const DEFAULT_CONTROL_FLOW_DROP_OPCODE: u32 = 35;
 /// Default fixed cost of the `br_table` Wasm opcode.
