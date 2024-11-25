@@ -36,9 +36,7 @@ pub struct ReadInfo {
 #[repr(C)]
 #[derive(Debug)]
 pub struct CreateResult {
-    pub package_address: [u8; 32],
     pub contract_address: [u8; 32],
-    pub version: u32,
 }
 
 #[repr(C)]

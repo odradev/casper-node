@@ -803,6 +803,7 @@ name = "casper-executor-wasm-common"
 version = "0.1.0"
 dependencies = [
  "bitflags 2.6.0",
+ "blake2 0.10.6",
  "borsh",
  "casper-sdk-sys",
  "hex",
@@ -815,6 +816,7 @@ dependencies = [
 name = "casper-executor-wasm-host"
 version = "0.1.0"
 dependencies = [
+ "base16",
  "bytes",
  "casper-executor-wasm-common",
  "casper-executor-wasm-interface",

@@ -20,7 +20,7 @@ use casper_storage::{
     AddressGeneratorBuilder,
 };
 use casper_types::{
-    execution::Effects, BlockHash, Digest, EntityAddr, Gas, Key, TransactionEntryPoint,
+    execution::Effects, BlockHash, Digest, Gas, Key, TransactionEntryPoint,
     TransactionInvocationTarget, TransactionTarget, U512,
 };
 use thiserror::Error;
@@ -69,9 +69,9 @@ impl WasmV2Result {
         }
     }
 
-    pub(crate) fn contract_hash(&self) -> Option<&[u8]> {
+    pub(crate) fn smart_contract_addr(&self) -> Option<&[u8; 32]> {
         match self {
-            WasmV2Result::Install(result) => Some(result.contract_hash().as_bytes()),
+            WasmV2Result::Install(result) => Some(result.smart_contract_addr()),
             WasmV2Result::Execute(_) => None,
         }
     }
@@ -243,9 +243,6 @@ impl WasmV2Request {
                     .with_transaction_hash(transaction_hash)
                     .with_initiator(*initiator_account_hash)
                     .with_caller_key(initiator_key)
-                    // TODO: Callee is unnecessary as it can be derived from the
-                    // execution target inside the executor
-                    .with_callee_key(initiator_key)
                     .with_chain_name(network_name)
                     .with_transferred_value(value.into()) // TODO: Remove u128 internally
                     .with_block_time(transaction.timestamp().into())
@@ -256,10 +253,10 @@ impl WasmV2Request {
                 let execution_kind = match target {
                     Target::Session { module_bytes } => ExecutionKind::SessionBytes(module_bytes),
                     Target::Stored {
-                        id: TransactionInvocationTarget::ByHash(address),
+                        id: TransactionInvocationTarget::ByHash(smart_contract_addr),
                         entry_point,
                     } => ExecutionKind::Stored {
-                        address: EntityAddr::SmartContract(address),
+                        address: smart_contract_addr,
                         entry_point: entry_point.clone(),
                     },
                     Target::Stored { id, entry_point } => {

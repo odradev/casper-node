@@ -268,7 +268,7 @@ fn test_effects(rng: &mut TestRng) -> TestEffects {
     effects.push(TransformV2::new(
         Key::Hash(post_migration_contract_package_hash.value()),
         TransformKindV2::Write(StoredValue::CLValue(
-            CLValue::from_t((Key::Package(package_addr), package_access_key))
+            CLValue::from_t((Key::SmartContract(package_addr), package_access_key))
                 .expect("should create CLValue"),
         )),
     ));
@@ -298,8 +298,8 @@ fn test_effects(rng: &mut TestRng) -> TestEffects {
     ));
 
     effects.push(TransformV2::new(
-        Key::Package(package_addr),
-        TransformKindV2::Write(StoredValue::Package(Package::new(
+        Key::SmartContract(package_addr),
+        TransformKindV2::Write(StoredValue::SmartContract(Package::new(
             EntityVersions::default(),
             Default::default(),
             Default::default(),

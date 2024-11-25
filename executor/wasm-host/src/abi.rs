@@ -16,8 +16,6 @@ unsafe impl TriviallyTransmutable for ReadInfo {}
 
 pub(crate) struct CreateResult {
     pub(crate) package_address: [u8; 32],
-    pub(crate) contract_address: [u8; 32],
-    pub(crate) version: u32,
 }
 
 unsafe impl TriviallyTransmutable for CreateResult {}

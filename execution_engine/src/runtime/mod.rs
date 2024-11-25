@@ -2171,7 +2171,7 @@ where
         let access_key = if self.context.engine_config().enable_entity {
             let (package, access_key) = self.create_package(lock_status)?;
             self.context
-                .metered_write_gs_unsafe(Key::Package(addr), package)?;
+                .metered_write_gs_unsafe(Key::SmartContract(addr), package)?;
             access_key
         } else {
             let (package, access_key) = self.create_contract_package(lock_status)?;
@@ -2760,7 +2760,7 @@ where
         contract_hash: AddressableEntityHash,
     ) -> Result<Result<(), ApiError>, ExecError> {
         if self.context.engine_config().enable_entity {
-            let contract_package_key = Key::Package(contract_package_hash.value());
+            let contract_package_key = Key::SmartContract(contract_package_hash.value());
             self.context.validate_key(&contract_package_key)?;
 
             let mut contract_package: Package =
@@ -2808,7 +2808,7 @@ where
         contract_hash: AddressableEntityHash,
     ) -> Result<Result<(), ApiError>, ExecError> {
         if self.context.engine_config().enable_entity {
-            let contract_package_key = Key::Package(contract_package_hash.value());
+            let contract_package_key = Key::SmartContract(contract_package_hash.value());
             self.context.validate_key(&contract_package_key)?;
 
             let mut contract_package: Package =
@@ -3376,8 +3376,10 @@ where
 
                 let contract_package_key: Key = package_hash.into();
 
-                self.context
-                    .metered_write_gs_unsafe(contract_package_key, StoredValue::Package(package))?;
+                self.context.metered_write_gs_unsafe(
+                    contract_package_key,
+                    StoredValue::SmartContract(package),
+                )?;
 
                 let contract_by_account = CLValue::from_t(entity_key)?;
 

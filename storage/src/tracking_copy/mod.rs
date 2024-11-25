@@ -817,7 +817,7 @@ where
                 StoredValue::ContractPackage(_) => {
                     return Ok(query.into_not_found_result("ContractPackage value found."));
                 }
-                StoredValue::Package(_) => {
+                StoredValue::SmartContract(_) => {
                     return Ok(query.into_not_found_result("Package value found."));
                 }
                 StoredValue::ByteCode(_) => {

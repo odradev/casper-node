@@ -449,8 +449,7 @@ impl Environment {
 
         let mut result = NonNull::new(result_ptr).expect("Valid pointer");
         unsafe {
-            result.as_mut().contract_address = contract_address;
-            result.as_mut().package_address = package_address;
+            result.as_mut().contract_address = package_address;
         }
 
         let mut contracts = self.contracts.write().unwrap();

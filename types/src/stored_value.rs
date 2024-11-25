@@ -116,8 +116,8 @@ pub enum StoredValue {
     AddressableEntity(AddressableEntity),
     /// Variant that stores [`BidKind`].
     BidKind(BidKind),
-    /// A `Package`.
-    Package(Package),
+    /// A smart contract `Package`.
+    SmartContract(Package),
     /// A record of byte code.
     ByteCode(ByteCode),
     /// Variant that stores a message topic.
@@ -178,7 +178,7 @@ impl StoredValue {
     /// Returns a reference to the wrapped `Package` if this is a `Package` variant.
     pub fn as_package(&self) -> Option<&Package> {
         match self {
-            StoredValue::Package(package) => Some(package),
+            StoredValue::SmartContract(package) => Some(package),
             _ => None,
         }
     }
@@ -343,7 +343,7 @@ impl StoredValue {
     /// Returns the `Package` if this is a `Package` variant.
     pub fn into_package(self) -> Option<Package> {
         match self {
-            StoredValue::Package(package) => Some(package),
+            StoredValue::SmartContract(package) => Some(package),
             _ => None,
         }
     }
@@ -439,7 +439,7 @@ impl StoredValue {
             StoredValue::AddressableEntity(_) => "AddressableEntity".to_string(),
             StoredValue::BidKind(_) => "BidKind".to_string(),
             StoredValue::ByteCode(_) => "ByteCode".to_string(),
-            StoredValue::Package(_) => "Package".to_string(),
+            StoredValue::SmartContract(_) => "Package".to_string(),
             StoredValue::MessageTopic(_) => "MessageTopic".to_string(),
             StoredValue::Message(_) => "Message".to_string(),
             StoredValue::NamedKey(_) => "NamedKey".to_string(),
@@ -465,7 +465,7 @@ impl StoredValue {
             StoredValue::Unbonding(_) => StoredValueTag::Unbonding,
             StoredValue::AddressableEntity(_) => StoredValueTag::AddressableEntity,
             StoredValue::BidKind(_) => StoredValueTag::BidKind,
-            StoredValue::Package(_) => StoredValueTag::Package,
+            StoredValue::SmartContract(_) => StoredValueTag::Package,
             StoredValue::ByteCode(_) => StoredValueTag::ByteCode,
             StoredValue::MessageTopic(_) => StoredValueTag::MessageTopic,
             StoredValue::Message(_) => StoredValueTag::Message,
@@ -531,7 +531,7 @@ impl From<AddressableEntity> for StoredValue {
 
 impl From<Package> for StoredValue {
     fn from(value: Package) -> StoredValue {
-        StoredValue::Package(value)
+        StoredValue::SmartContract(value)
     }
 }
 
@@ -648,7 +648,7 @@ impl TryFrom<StoredValue> for Package {
 
     fn try_from(stored_value: StoredValue) -> Result<Self, Self::Error> {
         match stored_value {
-            StoredValue::Package(contract_package) => Ok(contract_package),
+            StoredValue::SmartContract(contract_package) => Ok(contract_package),
             StoredValue::ContractPackage(contract_package) => Ok(contract_package.into()),
             _ => Err(TypeMismatch::new(
                 "ContractPackage".to_string(),
@@ -772,7 +772,7 @@ impl ToBytes for StoredValue {
                 StoredValue::Unbonding(unbonding_purses) => unbonding_purses.serialized_length(),
                 StoredValue::AddressableEntity(entity) => entity.serialized_length(),
                 StoredValue::BidKind(bid_kind) => bid_kind.serialized_length(),
-                StoredValue::Package(package) => package.serialized_length(),
+                StoredValue::SmartContract(package) => package.serialized_length(),
                 StoredValue::ByteCode(byte_code) => byte_code.serialized_length(),
                 StoredValue::MessageTopic(message_topic_summary) => {
                     message_topic_summary.serialized_length()
@@ -801,7 +801,7 @@ impl ToBytes for StoredValue {
             StoredValue::Unbonding(unbonding_purses) => unbonding_purses.write_bytes(writer),
             StoredValue::AddressableEntity(entity) => entity.write_bytes(writer),
             StoredValue::BidKind(bid_kind) => bid_kind.write_bytes(writer),
-            StoredValue::Package(package) => package.write_bytes(writer),
+            StoredValue::SmartContract(package) => package.write_bytes(writer),
             StoredValue::ByteCode(byte_code) => byte_code.write_bytes(writer),
             StoredValue::MessageTopic(message_topic_summary) => {
                 message_topic_summary.write_bytes(writer)
@@ -861,7 +861,7 @@ impl FromBytes for StoredValue {
                     .map(|(entity, remainder)| (StoredValue::AddressableEntity(entity), remainder))
             }
             tag if tag == StoredValueTag::Package as u8 => Package::from_bytes(remainder)
-                .map(|(package, remainder)| (StoredValue::Package(package), remainder)),
+                .map(|(package, remainder)| (StoredValue::SmartContract(package), remainder)),
             tag if tag == StoredValueTag::ByteCode as u8 => ByteCode::from_bytes(remainder)
                 .map(|(byte_code, remainder)| (StoredValue::ByteCode(byte_code), remainder)),
             tag if tag == StoredValueTag::MessageTopic as u8 => {
@@ -965,7 +965,7 @@ mod serde_helpers {
                     HumanReadableSerHelper::AddressableEntity(payload)
                 }
                 StoredValue::BidKind(payload) => HumanReadableSerHelper::BidKind(payload),
-                StoredValue::Package(payload) => HumanReadableSerHelper::Package(payload),
+                StoredValue::SmartContract(payload) => HumanReadableSerHelper::Package(payload),
                 StoredValue::ByteCode(payload) => HumanReadableSerHelper::ByteCode(payload),
                 StoredValue::MessageTopic(message_topic_summary) => {
                     HumanReadableSerHelper::MessageTopic(message_topic_summary)
@@ -1006,7 +1006,7 @@ mod serde_helpers {
                 }
                 HumanReadableDeserHelper::BidKind(payload) => StoredValue::BidKind(payload),
                 HumanReadableDeserHelper::ByteCode(payload) => StoredValue::ByteCode(payload),
-                HumanReadableDeserHelper::Package(payload) => StoredValue::Package(payload),
+                HumanReadableDeserHelper::Package(payload) => StoredValue::SmartContract(payload),
                 HumanReadableDeserHelper::MessageTopic(message_topic_summary) => {
                     StoredValue::MessageTopic(message_topic_summary)
                 }
