@@ -19,7 +19,7 @@ use std::{
 
 use casper_wasm::elements::Module;
 use casper_wasmi::{MemoryRef, Trap, TrapCode};
-use tracing::error;
+use tracing::{debug, error};
 
 #[cfg(feature = "test-support")]
 use casper_wasmi::RuntimeValue;
@@ -61,7 +61,7 @@ use casper_types::{
     EntityKind, EntityVersion, EntityVersionKey, EntityVersions, Gas, GrantedAccess, Group, Groups,
     HashAddr, HostFunction, HostFunctionCost, InitiatorAddr, Key, NamedArg, Package, PackageHash,
     PackageStatus, Phase, PublicKey, RuntimeArgs, RuntimeFootprint, StoredValue,
-    TransactionRuntime, Transfer, TransferResult, TransferV2, TransferredTo, URef, URefAddr,
+    TransactionRuntime, Transfer, TransferResult, TransferV2, TransferredTo, URef,
     DICTIONARY_ITEM_KEY_MAX_LENGTH, U512,
 };
 
@@ -1082,11 +1082,16 @@ where
                     match Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR) {
                         Ok(pk) => DelegatorKind::PublicKey(pk),
                         Err(_) => {
-                            let purse: URefAddr = Self::get_named_argument(
+                            match Self::get_named_argument(
                                 runtime_args,
                                 auction::ARG_DELEGATOR_PURSE,
-                            )?;
-                            DelegatorKind::Purse(purse)
+                            ) {
+                                Ok(addr) => DelegatorKind::Purse(addr),
+                                Err(err) => {
+                                    debug!(%err, "failed to get delegator purse argument");
+                                    return Err(err);
+                                }
+                            }
                         }
                     }
                 };
@@ -1110,11 +1115,16 @@ where
                     match Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR) {
                         Ok(pk) => DelegatorKind::PublicKey(pk),
                         Err(_) => {
-                            let purse: URefAddr = Self::get_named_argument(
+                            match Self::get_named_argument(
                                 runtime_args,
                                 auction::ARG_DELEGATOR_PURSE,
-                            )?;
-                            DelegatorKind::Purse(purse)
+                            ) {
+                                Ok(addr) => DelegatorKind::Purse(addr),
+                                Err(err) => {
+                                    debug!(%err, "failed to get delegator purse argument");
+                                    return Err(err);
+                                }
+                            }
                         }
                     }
                 };
@@ -1135,11 +1145,16 @@ where
                     match Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR) {
                         Ok(pk) => DelegatorKind::PublicKey(pk),
                         Err(_) => {
-                            let purse: URefAddr = Self::get_named_argument(
+                            match Self::get_named_argument(
                                 runtime_args,
                                 auction::ARG_DELEGATOR_PURSE,
-                            )?;
-                            DelegatorKind::Purse(purse)
+                            ) {
+                                Ok(addr) => DelegatorKind::Purse(addr),
+                                Err(err) => {
+                                    debug!(%err, "failed to get delegator purse argument");
+                                    return Err(err);
+                                }
+                            }
                         }
                     }
                 };
@@ -1852,10 +1867,17 @@ where
                     );
                 }
                 SystemEntityType::Auction => {
+                    let mut combined_access_rights = self
+                        .context
+                        .runtime_footprint()
+                        .borrow()
+                        .extract_access_rights(context_entity_hash);
+                    combined_access_rights.extend_access_rights(access_rights.take_access_rights());
+
                     return self.call_host_auction(
                         entry_point_name,
                         &runtime_args,
-                        access_rights,
+                        combined_access_rights,
                         stack,
                     );
                 }

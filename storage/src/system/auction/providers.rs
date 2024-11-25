@@ -119,4 +119,7 @@ pub trait MintProvider {
 pub trait AccountProvider {
     /// Get currently executing account's purse.
     fn get_main_purse(&self) -> Result<URef, Error>;
+
+    /// Set main purse.
+    fn set_main_purse(&mut self, purse: URef);
 }

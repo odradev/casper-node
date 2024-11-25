@@ -374,6 +374,19 @@ impl GenesisAccount {
             None
         }
     }
+
+    /// Set validator.
+    pub fn try_set_validator(&mut self, genesis_validator: GenesisValidator) -> bool {
+        match self {
+            GenesisAccount::Account { validator, .. } => {
+                *validator = Some(genesis_validator);
+                true
+            }
+            GenesisAccount::System
+            | GenesisAccount::Delegator { .. }
+            | GenesisAccount::Administrator(_) => false,
+        }
+    }
 }
 
 #[cfg(any(feature = "testing", test))]

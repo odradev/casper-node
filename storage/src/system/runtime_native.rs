@@ -479,6 +479,11 @@ where
         &self.runtime_footprint
     }
 
+    /// Returns the addressable entity being used by this instance.
+    pub fn runtime_footprint_mut(&mut self) -> &mut RuntimeFootprint {
+        &mut self.runtime_footprint
+    }
+
     /// Changes the addressable entity being used by this instance.
     pub fn with_addressable_entity(&mut self, runtime_footprint: RuntimeFootprint) {
         self.runtime_footprint = runtime_footprint;

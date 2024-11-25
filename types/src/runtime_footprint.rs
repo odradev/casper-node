@@ -265,6 +265,10 @@ impl RuntimeFootprint {
         self.main_purse
     }
 
+    pub fn set_main_purse(&mut self, purse: URef) {
+        self.main_purse = Some(purse);
+    }
+
     pub fn entry_points(&self) -> &EntryPoints {
         &self.entry_points
     }
