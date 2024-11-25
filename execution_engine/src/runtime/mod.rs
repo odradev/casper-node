@@ -52,7 +52,7 @@ use casper_types::{
     },
     system::{
         self,
-        auction::{self, EraInfo},
+        auction::{self, DelegatorKind, EraInfo},
         handle_payment, mint, CallStackElement, Caller, CallerInfo, SystemEntityType, AUCTION,
         HANDLE_PAYMENT, MINT, STANDARD_PAYMENT,
     },
@@ -61,7 +61,7 @@ use casper_types::{
     EntityKind, EntityVersion, EntityVersionKey, EntityVersions, Gas, GrantedAccess, Group, Groups,
     HashAddr, HostFunction, HostFunctionCost, InitiatorAddr, Key, NamedArg, Package, PackageHash,
     PackageStatus, Phase, PublicKey, RuntimeArgs, RuntimeFootprint, StoredValue,
-    TransactionRuntime, Transfer, TransferResult, TransferV2, TransferredTo, URef,
+    TransactionRuntime, Transfer, TransferResult, TransferV2, TransferredTo, URef, URefAddr,
     DICTIONARY_ITEM_KEY_MAX_LENGTH, U512,
 };
 
@@ -1078,7 +1078,18 @@ where
             auction::METHOD_DELEGATE => (|| {
                 runtime.charge_system_contract_call(auction_costs.delegate)?;
 
-                let delegator = Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR)?;
+                let delegator = {
+                    match Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR) {
+                        Ok(pk) => DelegatorKind::PublicKey(pk),
+                        Err(_) => {
+                            let purse: URefAddr = Self::get_named_argument(
+                                runtime_args,
+                                auction::ARG_DELEGATOR_PURSE,
+                            )?;
+                            DelegatorKind::Purse(purse)
+                        }
+                    }
+                };
                 let validator = Self::get_named_argument(runtime_args, auction::ARG_VALIDATOR)?;
                 let amount = Self::get_named_argument(runtime_args, auction::ARG_AMOUNT)?;
 
@@ -1095,7 +1106,18 @@ where
             auction::METHOD_UNDELEGATE => (|| {
                 runtime.charge_system_contract_call(auction_costs.undelegate)?;
 
-                let delegator = Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR)?;
+                let delegator = {
+                    match Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR) {
+                        Ok(pk) => DelegatorKind::PublicKey(pk),
+                        Err(_) => {
+                            let purse: URefAddr = Self::get_named_argument(
+                                runtime_args,
+                                auction::ARG_DELEGATOR_PURSE,
+                            )?;
+                            DelegatorKind::Purse(purse)
+                        }
+                    }
+                };
                 let validator = Self::get_named_argument(runtime_args, auction::ARG_VALIDATOR)?;
                 let amount = Self::get_named_argument(runtime_args, auction::ARG_AMOUNT)?;
 
@@ -1109,7 +1131,18 @@ where
             auction::METHOD_REDELEGATE => (|| {
                 runtime.charge_system_contract_call(auction_costs.redelegate)?;
 
-                let delegator = Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR)?;
+                let delegator = {
+                    match Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR) {
+                        Ok(pk) => DelegatorKind::PublicKey(pk),
+                        Err(_) => {
+                            let purse: URefAddr = Self::get_named_argument(
+                                runtime_args,
+                                auction::ARG_DELEGATOR_PURSE,
+                            )?;
+                            DelegatorKind::Purse(purse)
+                        }
+                    }
+                };
                 let validator = Self::get_named_argument(runtime_args, auction::ARG_VALIDATOR)?;
                 let amount = Self::get_named_argument(runtime_args, auction::ARG_AMOUNT)?;
                 let new_validator =

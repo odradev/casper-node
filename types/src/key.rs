@@ -31,7 +31,7 @@ use rand::{
 #[cfg(feature = "json-schema")]
 use schemars::JsonSchema;
 use serde::{de::Error as SerdeError, Deserialize, Deserializer, Serialize, Serializer};
-use tracing::warn;
+use tracing::{error, warn};
 
 use crate::{
     account::{AccountHash, ACCOUNT_HASH_LENGTH},
@@ -323,7 +323,7 @@ pub enum Key {
     /// A `Key` under which bid information is stored.
     BidAddr(BidAddr),
     /// A `Key` under which package information is stored.
-    Package(PackageAddr), // TODO: SmartContract
+    Package(PackageAddr),
     /// A `Key` under which an addressable entity is stored.
     AddressableEntity(EntityAddr),
     /// A `Key` under which a byte code record is stored.
@@ -752,12 +752,12 @@ impl Key {
                     BidAddr::legacy(validator_bytes)
                 } else if tag == BidAddrTag::Validator {
                     BidAddr::new_validator_addr(validator_bytes)
-                } else if tag == BidAddrTag::Delegator {
+                } else if tag == BidAddrTag::DelegatedAccount {
                     let delegator_bytes = <[u8; ACCOUNT_HASH_LENGTH]>::try_from(
                         bytes[BidAddr::VALIDATOR_BID_ADDR_LENGTH..].as_ref(),
                     )
                     .map_err(|err| FromStrError::BidAddr(err.to_string()))?;
-                    BidAddr::new_delegator_addr((validator_bytes, delegator_bytes))
+                    BidAddr::new_delegator_account_addr((validator_bytes, delegator_bytes))
                 } else if tag == BidAddrTag::Credit {
                     let era_id = bytesrepr::deserialize_from_slice(
                         &bytes[BidAddr::VALIDATOR_BID_ADDR_LENGTH..],
@@ -1585,7 +1585,16 @@ impl ToBytes for Key {
 
 impl FromBytes for Key {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (tag, remainder) = KeyTag::from_bytes(bytes)?;
+        if bytes.is_empty() {
+            error!("FromBytes for Key: bytes length should not be 0");
+        }
+        let (tag, remainder) = match KeyTag::from_bytes(bytes) {
+            Ok((tag, rem)) => (tag, rem),
+            Err(err) => {
+                error!(%err, "FromBytes for Key");
+                return Err(err);
+            }
+        };
         match tag {
             KeyTag::Account => {
                 let (account_hash, rem) = AccountHash::from_bytes(remainder)?;
@@ -1948,7 +1957,8 @@ mod tests {
     const BID_KEY: Key = Key::Bid(AccountHash::new([42; 32]));
     const UNIFIED_BID_KEY: Key = Key::BidAddr(BidAddr::legacy([42; 32]));
     const VALIDATOR_BID_KEY: Key = Key::BidAddr(BidAddr::new_validator_addr([2; 32]));
-    const DELEGATOR_BID_KEY: Key = Key::BidAddr(BidAddr::new_delegator_addr(([2; 32], [9; 32])));
+    const DELEGATOR_BID_KEY: Key =
+        Key::BidAddr(BidAddr::new_delegator_account_addr(([2; 32], [9; 32])));
     const WITHDRAW_KEY: Key = Key::Withdraw(AccountHash::new([42; 32]));
     const DICTIONARY_KEY: Key = Key::Dictionary([42; 32]);
     const SYSTEM_ENTITY_REGISTRY_KEY: Key = Key::SystemEntityRegistry;
@@ -2374,9 +2384,9 @@ mod tests {
 
     #[test]
     fn should_parse_delegator_bid_key_from_string() {
-        let delegator_bid_addr = BidAddr::new_delegator_addr(([1; 32], [9; 32]));
+        let delegator_bid_addr = BidAddr::new_delegator_account_addr(([1; 32], [9; 32]));
         let delegator_bid_key = Key::BidAddr(delegator_bid_addr);
-        assert_eq!(delegator_bid_addr.tag(), BidAddrTag::Delegator);
+        assert_eq!(delegator_bid_addr.tag(), BidAddrTag::DelegatedAccount);
 
         let original_string = delegator_bid_key.to_formatted_string();
 
@@ -2625,7 +2635,9 @@ mod tests {
         round_trip(&Key::Bid(AccountHash::new(zeros)));
         round_trip(&Key::BidAddr(BidAddr::legacy(zeros)));
         round_trip(&Key::BidAddr(BidAddr::new_validator_addr(zeros)));
-        round_trip(&Key::BidAddr(BidAddr::new_delegator_addr((zeros, nines))));
+        round_trip(&Key::BidAddr(BidAddr::new_delegator_account_addr((
+            zeros, nines,
+        ))));
         round_trip(&Key::Withdraw(AccountHash::new(zeros)));
         round_trip(&Key::Dictionary(zeros));
         round_trip(&Key::Unbond(AccountHash::new(zeros)));

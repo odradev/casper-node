@@ -2949,7 +2949,6 @@ async fn add_and_withdraw_bid_transaction() {
 
     let (_, _bob_initial_balance, _) = test.get_balances(None);
     let (_txn_hash, _block_height, exec_result) = test.send_transaction(txn).await;
-    println!("{:?}", exec_result);
     assert!(exec_result_is_success(&exec_result));
 
     test.fixture

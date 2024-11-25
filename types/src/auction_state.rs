@@ -11,7 +11,9 @@ use serde_map_to_array::KeyValueJsonSchema;
 use serde_map_to_array::{BTreeMapToArray, KeyValueLabels};
 
 use crate::{
-    system::auction::{Bid, BidKind, EraValidators, Staking, ValidatorBid},
+    system::auction::{
+        Bid, BidKind, DelegatorBid, DelegatorKind, EraValidators, Staking, ValidatorBid,
+    },
     Digest, EraId, PublicKey, U512,
 };
 
@@ -32,10 +34,7 @@ static ERA_VALIDATORS: Lazy<EraValidators> = Lazy::new(|| {
 });
 #[cfg(feature = "json-schema")]
 static AUCTION_INFO: Lazy<AuctionState> = Lazy::new(|| {
-    use crate::{
-        system::auction::{DelegationRate, Delegator},
-        AccessRights, SecretKey, URef,
-    };
+    use crate::{system::auction::DelegationRate, AccessRights, SecretKey, URef};
     use num_traits::Zero;
 
     let state_root_hash = Digest::from([11; Digest::LENGTH]);
@@ -58,8 +57,8 @@ static AUCTION_INFO: Lazy<AuctionState> = Lazy::new(|| {
     let delegator_secret_key =
         SecretKey::ed25519_from_bytes([43; SecretKey::ED25519_LENGTH]).unwrap();
     let delegator_public_key = PublicKey::from(&delegator_secret_key);
-    let delegator_bid = Delegator::unlocked(
-        delegator_public_key,
+    let delegator_bid = DelegatorBid::unlocked(
+        delegator_public_key.into(),
         U512::from(10),
         URef::new([251; 32], AccessRights::READ_ADD_WRITE),
         validator_public_key,
@@ -142,7 +141,14 @@ impl AuctionState {
                         u64::MAX,
                         0,
                     );
-                    staking.insert(public_key, (validator_bid, bid.delegators().clone()));
+                    let mut delegators: BTreeMap<DelegatorKind, DelegatorBid> = BTreeMap::new();
+                    for (delegator_public_key, delegator) in bid.delegators() {
+                        delegators.insert(
+                            DelegatorKind::PublicKey(delegator_public_key.clone()),
+                            DelegatorBid::from(delegator.clone()),
+                        );
+                    }
+                    staking.insert(public_key, (validator_bid, delegators));
                 }
             }
 
@@ -161,7 +167,7 @@ impl AuctionState {
                     {
                         let (_, delegators) = occupant.get_mut();
                         delegators.insert(
-                            delegator_bid.delegator_public_key().clone(),
+                            delegator_bid.delegator_kind().clone(),
                             *delegator_bid.clone(),
                         );
                     }
@@ -180,7 +186,7 @@ impl AuctionState {
             state_root_hash,
             block_height,
             era_validators: json_era_validators,
-            bids,
+            bids: BTreeMap::new(), // TODO: figure out if we can retro compat or not
         }
     }
 

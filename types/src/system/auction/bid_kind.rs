@@ -2,12 +2,16 @@ use crate::{
     bytesrepr,
     bytesrepr::{FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
     system::auction::{
-        bid::VestingSchedule, Bid, BidAddr, Delegator, ValidatorBid, ValidatorCredit,
+        bid::VestingSchedule, Bid, BidAddr, DelegatorBid, ValidatorBid, ValidatorCredit,
     },
     EraId, PublicKey, URef, U512,
 };
 
-use crate::system::auction::Bridge;
+use crate::system::auction::{
+    delegator_kind::DelegatorKind,
+    unbond::{Unbond, UnbondKind},
+    Bridge,
+};
 use alloc::{boxed::Box, vec::Vec};
 #[cfg(feature = "datasize")]
 use datasize::DataSize;
@@ -34,6 +38,8 @@ pub enum BidKindTag {
     Credit = 4,
     /// Reservation bid.
     Reservation = 5,
+    /// Unbond.
+    Unbond = 6,
 }
 
 /// Auction bid variants.
@@ -48,13 +54,15 @@ pub enum BidKind {
     /// A bid record containing only validator data.
     Validator(Box<ValidatorBid>),
     /// A bid record containing only delegator data.
-    Delegator(Box<Delegator>),
+    Delegator(Box<DelegatorBid>),
     /// A bridge record pointing to a new `ValidatorBid` after the public key was changed.
     Bridge(Box<Bridge>),
     /// Credited amount.
     Credit(Box<ValidatorCredit>),
     /// Reservation
     Reservation(Box<Reservation>),
+    /// Unbond
+    Unbond(Box<Unbond>),
 }
 
 impl BidKind {
@@ -67,6 +75,7 @@ impl BidKind {
             BidKind::Bridge(bridge) => bridge.old_validator_public_key().clone(),
             BidKind::Credit(validator_credit) => validator_credit.validator_public_key().clone(),
             BidKind::Reservation(reservation) => reservation.validator_public_key().clone(),
+            BidKind::Unbond(unbond) => unbond.validator_public_key().clone(),
         }
     }
 
@@ -78,7 +87,8 @@ impl BidKind {
             | BidKind::Validator(_)
             | BidKind::Delegator(_)
             | BidKind::Credit(_)
-            | BidKind::Reservation(_) => None,
+            | BidKind::Reservation(_)
+            | BidKind::Unbond(_) => None,
         }
     }
 
@@ -91,10 +101,15 @@ impl BidKind {
             }
             BidKind::Delegator(delegator_bid) => {
                 let validator = delegator_bid.validator_public_key().to_account_hash();
-                let delegator = delegator_bid.delegator_public_key().to_account_hash();
-                BidAddr::Delegator {
-                    validator,
-                    delegator,
+                match delegator_bid.delegator_kind() {
+                    DelegatorKind::PublicKey(pk) => BidAddr::DelegatedAccount {
+                        validator,
+                        delegator: pk.to_account_hash(),
+                    },
+                    DelegatorKind::Purse(addr) => BidAddr::DelegatedPurse {
+                        validator,
+                        delegator: *addr,
+                    },
                 }
             }
             BidKind::Bridge(bridge) => {
@@ -107,10 +122,31 @@ impl BidKind {
             }
             BidKind::Reservation(reservation_bid) => {
                 let validator = reservation_bid.validator_public_key().to_account_hash();
-                let delegator = reservation_bid.delegator_public_key().to_account_hash();
-                BidAddr::Reservation {
-                    validator,
-                    delegator,
+                match reservation_bid.delegator_kind() {
+                    DelegatorKind::PublicKey(pk) => BidAddr::ReservedDelegationAccount {
+                        validator,
+                        delegator: pk.to_account_hash(),
+                    },
+                    DelegatorKind::Purse(addr) => BidAddr::ReservedDelegationPurse {
+                        validator,
+                        delegator: *addr,
+                    },
+                }
+            }
+            BidKind::Unbond(unbond) => {
+                let validator = unbond.validator_public_key().to_account_hash();
+                let unbond_kind = unbond.unbond_kind();
+                match unbond_kind {
+                    UnbondKind::Validator(pk) | UnbondKind::DelegatedPublicKey(pk) => {
+                        BidAddr::UnbondAccount {
+                            validator,
+                            unbonder: pk.to_account_hash(),
+                        }
+                    }
+                    UnbondKind::DelegatedPurse(addr) => BidAddr::UnbondPurse {
+                        validator,
+                        unbonder: *addr,
+                    },
                 }
             }
         }
@@ -146,14 +182,19 @@ impl BidKind {
         matches!(self, BidKind::Reservation(_))
     }
 
+    /// Is this instance a unbond record?
+    pub fn is_unbond(&self) -> bool {
+        matches!(self, BidKind::Unbond(_))
+    }
+
     /// The staked amount.
     pub fn staked_amount(&self) -> Option<U512> {
         match self {
             BidKind::Unified(bid) => Some(*bid.staked_amount()),
             BidKind::Validator(validator_bid) => Some(validator_bid.staked_amount()),
             BidKind::Delegator(delegator) => Some(delegator.staked_amount()),
-            BidKind::Bridge(_) | BidKind::Reservation(_) => None,
             BidKind::Credit(credit) => Some(credit.amount()),
+            BidKind::Bridge(_) | BidKind::Reservation(_) | BidKind::Unbond(_) => None,
         }
     }
 
@@ -163,19 +204,40 @@ impl BidKind {
             BidKind::Unified(bid) => Some(*bid.bonding_purse()),
             BidKind::Validator(validator_bid) => Some(*validator_bid.bonding_purse()),
             BidKind::Delegator(delegator) => Some(*delegator.bonding_purse()),
-            BidKind::Bridge(_) | BidKind::Credit(_) | BidKind::Reservation(_) => None,
+            BidKind::Unbond(_)
+            | BidKind::Bridge(_)
+            | BidKind::Credit(_)
+            | BidKind::Reservation(_) => None,
         }
     }
 
-    /// The delegator public key, if relevant.
-    pub fn delegator_public_key(&self) -> Option<PublicKey> {
+    /// The delegator kind, if relevant.
+    pub fn delegator_kind(&self) -> Option<DelegatorKind> {
         match self {
             BidKind::Unified(_)
             | BidKind::Validator(_)
             | BidKind::Bridge(_)
             | BidKind::Credit(_) => None,
-            BidKind::Delegator(bid) => Some(bid.delegator_public_key().clone()),
-            BidKind::Reservation(bid) => Some(bid.delegator_public_key().clone()),
+            BidKind::Unbond(unbond) => match unbond.unbond_kind() {
+                UnbondKind::Validator(_) => None,
+                UnbondKind::DelegatedPublicKey(pk) => Some(DelegatorKind::PublicKey(pk.clone())),
+                UnbondKind::DelegatedPurse(addr) => Some(DelegatorKind::Purse(*addr)),
+            },
+            BidKind::Delegator(bid) => Some(bid.delegator_kind().clone()),
+            BidKind::Reservation(bid) => Some(bid.delegator_kind().clone()),
+        }
+    }
+
+    /// The unbond kind, if relevant.
+    pub fn unbond_kind(&self) -> Option<UnbondKind> {
+        match self {
+            BidKind::Unified(_)
+            | BidKind::Validator(_)
+            | BidKind::Bridge(_)
+            | BidKind::Credit(_)
+            | BidKind::Delegator(_)
+            | BidKind::Reservation(_) => None,
+            BidKind::Unbond(unbond) => Some(unbond.unbond_kind().clone()),
         }
     }
 
@@ -185,8 +247,8 @@ impl BidKind {
             BidKind::Unified(bid) => bid.inactive(),
             BidKind::Validator(validator_bid) => validator_bid.inactive(),
             BidKind::Delegator(delegator) => delegator.staked_amount().is_zero(),
-            BidKind::Bridge(_) | BidKind::Reservation(_) => false,
             BidKind::Credit(credit) => credit.amount().is_zero(),
+            BidKind::Bridge(_) | BidKind::Reservation(_) | BidKind::Unbond(_) => false,
         }
     }
 
@@ -199,7 +261,10 @@ impl BidKind {
             BidKind::Unified(bid) => bid.is_locked(timestamp_millis),
             BidKind::Validator(validator_bid) => validator_bid.is_locked(timestamp_millis),
             BidKind::Delegator(delegator) => delegator.is_locked(timestamp_millis),
-            BidKind::Bridge(_) | BidKind::Credit(_) | BidKind::Reservation(_) => false,
+            BidKind::Bridge(_)
+            | BidKind::Credit(_)
+            | BidKind::Reservation(_)
+            | BidKind::Unbond(_) => false,
         }
     }
 
@@ -219,7 +284,10 @@ impl BidKind {
                 .is_locked_with_vesting_schedule(timestamp_millis, vesting_schedule_period_millis),
             BidKind::Delegator(delegator) => delegator
                 .is_locked_with_vesting_schedule(timestamp_millis, vesting_schedule_period_millis),
-            BidKind::Bridge(_) | BidKind::Credit(_) | BidKind::Reservation(_) => false,
+            BidKind::Bridge(_)
+            | BidKind::Credit(_)
+            | BidKind::Reservation(_)
+            | BidKind::Unbond(_) => false,
         }
     }
 
@@ -230,7 +298,10 @@ impl BidKind {
             BidKind::Unified(bid) => bid.vesting_schedule(),
             BidKind::Validator(validator_bid) => validator_bid.vesting_schedule(),
             BidKind::Delegator(delegator) => delegator.vesting_schedule(),
-            BidKind::Bridge(_) | BidKind::Credit(_) | BidKind::Reservation(_) => None,
+            BidKind::Bridge(_)
+            | BidKind::Credit(_)
+            | BidKind::Reservation(_)
+            | BidKind::Unbond(_) => None,
         }
     }
 
@@ -243,6 +314,7 @@ impl BidKind {
             BidKind::Bridge(_) => BidKindTag::Bridge,
             BidKind::Credit(_) => BidKindTag::Credit,
             BidKind::Reservation(_) => BidKindTag::Reservation,
+            BidKind::Unbond(_) => BidKindTag::Unbond,
         }
     }
 
@@ -254,7 +326,8 @@ impl BidKind {
             BidKind::Unified(_)
             | BidKind::Validator(_)
             | BidKind::Delegator(_)
-            | BidKind::Reservation(_) => None,
+            | BidKind::Reservation(_)
+            | BidKind::Unbond(_) => None,
         }
     }
 }
@@ -269,6 +342,7 @@ impl ToBytes for BidKind {
             BidKind::Bridge(bridge) => (BidKindTag::Bridge, bridge.to_bytes()?),
             BidKind::Credit(credit) => (BidKindTag::Credit, credit.to_bytes()?),
             BidKind::Reservation(reservation) => (BidKindTag::Reservation, reservation.to_bytes()?),
+            BidKind::Unbond(unbond) => (BidKindTag::Unbond, unbond.to_bytes()?),
         };
         result.push(tag as u8);
         result.append(&mut serialized_data);
@@ -284,6 +358,7 @@ impl ToBytes for BidKind {
                 BidKind::Bridge(bridge) => bridge.serialized_length(),
                 BidKind::Credit(credit) => credit.serialized_length(),
                 BidKind::Reservation(reservation) => reservation.serialized_length(),
+                BidKind::Unbond(unbond) => unbond.serialized_length(),
             }
     }
 
@@ -296,6 +371,7 @@ impl ToBytes for BidKind {
             BidKind::Bridge(bridge) => bridge.write_bytes(writer)?,
             BidKind::Credit(credit) => credit.write_bytes(writer)?,
             BidKind::Reservation(reservation) => reservation.write_bytes(writer)?,
+            BidKind::Unbond(unbond) => unbond.write_bytes(writer)?,
         };
         Ok(())
     }
@@ -313,7 +389,7 @@ impl FromBytes for BidKind {
                 })
             }
             tag if tag == BidKindTag::Delegator as u8 => {
-                Delegator::from_bytes(remainder).map(|(delegator_bid, remainder)| {
+                DelegatorBid::from_bytes(remainder).map(|(delegator_bid, remainder)| {
                     (BidKind::Delegator(Box::new(delegator_bid)), remainder)
                 })
             }
@@ -326,6 +402,8 @@ impl FromBytes for BidKind {
                     (BidKind::Reservation(Box::new(reservation)), remainder)
                 })
             }
+            tag if tag == BidKindTag::Unbond as u8 => Unbond::from_bytes(remainder)
+                .map(|(unbond, remainder)| (BidKind::Unbond(Box::new(unbond)), remainder)),
             _ => Err(bytesrepr::Error::Formatting),
         }
     }
@@ -334,7 +412,11 @@ impl FromBytes for BidKind {
 #[cfg(test)]
 mod tests {
     use super::{BidKind, *};
-    use crate::{bytesrepr, system::auction::DelegationRate, AccessRights, SecretKey};
+    use crate::{
+        bytesrepr,
+        system::auction::{delegator_kind::DelegatorKind, DelegationRate},
+        AccessRights, SecretKey,
+    };
 
     #[test]
     fn serialization_roundtrip() {
@@ -354,8 +436,11 @@ mod tests {
         let delegator_public_key = PublicKey::from(
             &SecretKey::ed25519_from_bytes([1u8; SecretKey::ED25519_LENGTH]).unwrap(),
         );
-        let delegator = Delegator::unlocked(
-            delegator_public_key,
+
+        let delegator_kind = DelegatorKind::PublicKey(delegator_public_key);
+
+        let delegator = DelegatorBid::unlocked(
+            delegator_kind,
             U512::one(),
             bonding_purse,
             validator_public_key.clone(),
@@ -409,7 +494,7 @@ mod prop_test_bid_kind_delegator {
 
     proptest! {
         #[test]
-        fn test_value_bid_kind_delegator(bid_kind in gens::delegator_bid_arb()) {
+        fn test_value_bid_kind_delegator(bid_kind in gens::delegator_bid_kind_arb()) {
             bytesrepr::test_serialization_roundtrip(&bid_kind);
         }
     }

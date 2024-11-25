@@ -101,6 +101,7 @@ pub(super) async fn exec_or_requeue<REv>(
                 effect_builder,
                 data_access_layer.clone(),
                 chainspec.as_ref(),
+                &metrics,
                 executable_block.clone(),
             )
             .await
