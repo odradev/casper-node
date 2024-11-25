@@ -7,6 +7,7 @@ use serde::de::DeserializeOwned;
 #[cfg(test)]
 use serde::Serialize;
 use std::{collections::BTreeSet, marker::PhantomData};
+use tracing::error;
 
 use casper_types::{
     bytesrepr::{FromBytes, ToBytes},
@@ -126,8 +127,8 @@ impl<K, V> Copy for VersionedDatabases<K, V> {}
 
 impl<K, V> VersionedDatabases<K, V>
 where
-    K: VersionedKey,
-    V: VersionedValue,
+    K: VersionedKey + std::fmt::Display,
+    V: VersionedValue + 'static,
 {
     pub(super) fn new(
         env: &Environment,
@@ -156,8 +157,15 @@ where
         txn: &Tx,
         key: &K,
     ) -> Result<Option<V>, LmdbExtError> {
-        if let Some(value) = txn.get_value_bytesrepr(self.current, key)? {
-            return Ok(Some(value));
+        match txn.get_value_bytesrepr(self.current, key) {
+            Ok(Some(value)) => return Ok(Some(value)),
+            Ok(None) => {
+                // check legacy db
+            }
+            Err(err) => {
+                error!(%err, "versioned_database: failed to retrieve record from current db");
+                return Err(err);
+            }
         }
 
         let legacy_key = match key.legacy_key() {

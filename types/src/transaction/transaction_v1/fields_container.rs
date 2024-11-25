@@ -24,10 +24,6 @@ pub(crate) const TARGET_MAP_KEY: u16 = 1;
 pub(crate) const ENTRY_POINT_MAP_KEY: u16 = 2;
 #[cfg(any(feature = "std", feature = "testing", feature = "gens", test))]
 pub(crate) const SCHEDULING_MAP_KEY: u16 = 3;
-#[cfg(any(feature = "std", feature = "testing", feature = "gens", test))]
-pub(crate) const TRANSFERRED_VALUE_MAP_KEY: u16 = 4;
-#[cfg(any(feature = "std", feature = "testing", feature = "gens", test))]
-pub(crate) const SEED_MAP_KEY: u16 = 5;
 
 #[cfg(any(feature = "std", feature = "testing", feature = "gens", test))]
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -93,49 +89,6 @@ impl FieldsContainer {
                 }
             })?,
         );
-
-        let transferred_value;
-        let seed;
-
-        match self.target {
-            TransactionTarget::Session {
-                transferred_value: value,
-                seed: maybe_seed,
-                ..
-            } => {
-                transferred_value = value;
-                seed = maybe_seed;
-            }
-            TransactionTarget::Stored {
-                transferred_value: value,
-                ..
-            } => {
-                transferred_value = value;
-                seed = None;
-            }
-            TransactionTarget::Native => {
-                transferred_value = 0;
-                seed = None;
-            }
-        }
-
-        map.insert(
-            TRANSFERRED_VALUE_MAP_KEY,
-            transferred_value.to_bytes().map(Into::into).map_err(|_| {
-                FieldsContainerError::CouldNotSerializeField {
-                    field_index: TRANSFERRED_VALUE_MAP_KEY,
-                }
-            })?,
-        );
-        map.insert(
-            SEED_MAP_KEY,
-            seed.to_bytes().map(Into::into).map_err(|_| {
-                FieldsContainerError::CouldNotSerializeField {
-                    field_index: SEED_MAP_KEY,
-                }
-            })?,
-        );
-
         Ok(map)
     }
 
@@ -161,14 +114,19 @@ impl FieldsContainer {
                 let public_key = PublicKey::random(rng);
                 let delegation_rate = rng.gen();
                 let amount = rng.gen::<u64>();
-                let minimum_delegation_amount = rng.gen::<u32>() as u64;
-                let maximum_delegation_amount = minimum_delegation_amount + rng.gen::<u32>() as u64;
+                let minimum_delegation_amount = rng.gen::<bool>().then(|| rng.gen());
+                let maximum_delegation_amount =
+                    minimum_delegation_amount.map(|minimum_delegation_amount| {
+                        minimum_delegation_amount + rng.gen::<u32>() as u64
+                    });
+                let reserved_slots = rng.gen::<bool>().then(|| rng.gen::<u32>());
                 let args = arg_handling::new_add_bid_args(
                     public_key,
                     delegation_rate,
                     amount,
                     minimum_delegation_amount,
                     maximum_delegation_amount,
+                    reserved_slots,
                 )
                 .unwrap();
                 FieldsContainer::new(
@@ -299,14 +257,17 @@ impl FieldsContainer {
         let public_key = PublicKey::random(rng);
         let delegation_rate = rng.gen();
         let amount = rng.gen::<u64>();
-        let minimum_delegation_amount = rng.gen::<u32>() as u64;
-        let maximum_delegation_amount = minimum_delegation_amount + rng.gen::<u32>() as u64;
+        let minimum_delegation_amount = rng.gen::<bool>().then(|| rng.gen());
+        let maximum_delegation_amount = minimum_delegation_amount
+            .map(|minimum_delegation_amount| minimum_delegation_amount + rng.gen::<u32>() as u64);
+        let reserved_slots = rng.gen::<bool>().then(|| rng.gen::<u32>());
         let args = arg_handling::new_add_bid_args(
             public_key,
             delegation_rate,
             amount,
             minimum_delegation_amount,
             maximum_delegation_amount,
+            reserved_slots,
         )
         .unwrap();
         FieldsContainer::new(

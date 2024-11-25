@@ -10,10 +10,10 @@ use casper_types::{
     execution::Effects,
     system::{
         auction,
-        auction::{DelegationRate, Reservation},
+        auction::{DelegationRate, DelegatorKind, Reservation},
     },
     CLTyped, CLValue, CLValueError, Chainspec, Digest, InitiatorAddr, ProtocolVersion, PublicKey,
-    RuntimeArgs, TransactionEntryPoint, TransactionHash, U512,
+    RuntimeArgs, TransactionEntryPoint, TransactionHash, URefAddr, U512,
 };
 
 use crate::{
@@ -62,6 +62,8 @@ pub enum AuctionMethod {
         /// The minimum bid amount a validator must submit to have
         /// their bid considered as valid.
         minimum_bid_amount: u64,
+        /// Number of delegator slots which can be reserved for specific delegators
+        reserved_slots: u32,
     },
     /// Withdraw bid.
     WithdrawBid {
@@ -76,7 +78,7 @@ pub enum AuctionMethod {
     /// Delegate to validator.
     Delegate {
         /// Delegator public key.
-        delegator: PublicKey,
+        delegator: DelegatorKind,
         /// Validator public key.
         validator: PublicKey,
         /// Delegation amount.
@@ -87,7 +89,7 @@ pub enum AuctionMethod {
     /// Undelegate from validator.
     Undelegate {
         /// Delegator public key.
-        delegator: PublicKey,
+        delegator: DelegatorKind,
         /// Validator public key.
         validator: PublicKey,
         /// Undelegation amount.
@@ -97,7 +99,7 @@ pub enum AuctionMethod {
     /// elapses.
     Redelegate {
         /// Delegator public key.
-        delegator: PublicKey,
+        delegator: DelegatorKind,
         /// Validator public key.
         validator: PublicKey,
         /// Redelegation amount.
@@ -122,7 +124,7 @@ pub enum AuctionMethod {
         /// Validator public key.
         validator: PublicKey,
         /// List of delegator public keys.
-        delegators: Vec<PublicKey>,
+        delegators: Vec<DelegatorKind>,
         /// Max delegators per validator.
         max_delegators_per_validator: u32,
     },
@@ -188,6 +190,8 @@ impl AuctionMethod {
         let maximum_delegation_amount =
             Self::get_named_argument(runtime_args, auction::ARG_MAXIMUM_DELEGATION_AMOUNT)
                 .unwrap_or(global_maximum_delegation);
+        let reserved_slots =
+            Self::get_named_argument(runtime_args, auction::ARG_RESERVED_SLOTS).unwrap_or(0);
 
         Ok(Self::AddBid {
             public_key,
@@ -196,6 +200,7 @@ impl AuctionMethod {
             minimum_delegation_amount,
             maximum_delegation_amount,
             minimum_bid_amount: global_minimum_bid_amount,
+            reserved_slots,
         })
     }
 
@@ -216,7 +221,16 @@ impl AuctionMethod {
         runtime_args: &RuntimeArgs,
         max_delegators_per_validator: u32,
     ) -> Result<Self, AuctionMethodError> {
-        let delegator = Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR)?;
+        let delegator = {
+            match Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR) {
+                Ok(pk) => DelegatorKind::PublicKey(pk),
+                Err(_) => {
+                    let purse: URefAddr =
+                        Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR_PURSE)?;
+                    DelegatorKind::Purse(purse)
+                }
+            }
+        };
         let validator = Self::get_named_argument(runtime_args, auction::ARG_VALIDATOR)?;
         let amount = Self::get_named_argument(runtime_args, auction::ARG_AMOUNT)?;
 
@@ -229,7 +243,16 @@ impl AuctionMethod {
     }
 
     fn new_undelegate(runtime_args: &RuntimeArgs) -> Result<Self, AuctionMethodError> {
-        let delegator = Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR)?;
+        let delegator = {
+            match Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR) {
+                Ok(pk) => DelegatorKind::PublicKey(pk),
+                Err(_) => {
+                    let purse: URefAddr =
+                        Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR_PURSE)?;
+                    DelegatorKind::Purse(purse)
+                }
+            }
+        };
         let validator = Self::get_named_argument(runtime_args, auction::ARG_VALIDATOR)?;
         let amount = Self::get_named_argument(runtime_args, auction::ARG_AMOUNT)?;
 
@@ -241,7 +264,16 @@ impl AuctionMethod {
     }
 
     fn new_redelegate(runtime_args: &RuntimeArgs) -> Result<Self, AuctionMethodError> {
-        let delegator = Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR)?;
+        let delegator = {
+            match Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR) {
+                Ok(pk) => DelegatorKind::PublicKey(pk),
+                Err(_) => {
+                    let purse: URefAddr =
+                        Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR_PURSE)?;
+                    DelegatorKind::Purse(purse)
+                }
+            }
+        };
         let validator = Self::get_named_argument(runtime_args, auction::ARG_VALIDATOR)?;
         let amount = Self::get_named_argument(runtime_args, auction::ARG_AMOUNT)?;
         let new_validator = Self::get_named_argument(runtime_args, auction::ARG_NEW_VALIDATOR)?;
@@ -275,7 +307,7 @@ impl AuctionMethod {
         max_delegators_per_validator: u32,
     ) -> Result<Self, AuctionMethodError> {
         let validator = Self::get_named_argument(runtime_args, auction::ARG_VALIDATOR)?;
-        let delegators = Self::get_named_argument(runtime_args, auction::ARG_DELEGATORS)?;
+        let delegators = Self::get_named_argument(runtime_args, auction::ARG_DELEGATOR_KINDS)?;
 
         Ok(Self::CancelReservations {
             validator,

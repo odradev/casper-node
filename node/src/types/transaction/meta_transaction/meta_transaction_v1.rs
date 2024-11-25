@@ -17,9 +17,7 @@ const ARGS_MAP_KEY: u16 = 0;
 const TARGET_MAP_KEY: u16 = 1;
 const ENTRY_POINT_MAP_KEY: u16 = 2;
 const SCHEDULING_MAP_KEY: u16 = 3;
-const TRANSFERRED_VALUE_MAP_KEY: u16 = 4;
-const SEED_MAP_KEY: u16 = 5;
-const EXPECTED_NUMBER_OF_FIELDS: usize = 6;
+const EXPECTED_NUMBER_OF_FIELDS: usize = 4;
 
 #[derive(Clone, Debug, Serialize, DataSize)]
 pub struct MetaTransactionV1 {
@@ -37,8 +35,6 @@ pub struct MetaTransactionV1 {
     approvals: BTreeSet<Approval>,
     serialized_length: usize,
     payload_hash: Digest,
-    transferred_value: u64,
-    seed: Option<[u8; 32]>,
     has_valid_hash: Result<(), InvalidTransactionV1>,
     #[serde(skip)]
     #[data_size(skip)]
@@ -64,14 +60,6 @@ impl MetaTransactionV1 {
             v1.deserialize_field(SCHEDULING_MAP_KEY).map_err(|error| {
                 InvalidTransaction::V1(InvalidTransactionV1::CouldNotDeserializeField { error })
             })?;
-        let transferred_value =
-            v1.deserialize_field(TRANSFERRED_VALUE_MAP_KEY)
-                .map_err(|error| {
-                    InvalidTransaction::V1(InvalidTransactionV1::CouldNotDeserializeField { error })
-                })?;
-        let seed = v1.deserialize_field(SEED_MAP_KEY).map_err(|error| {
-            InvalidTransaction::V1(InvalidTransactionV1::CouldNotDeserializeField { error })
-        })?;
 
         if v1.number_of_fields() != EXPECTED_NUMBER_OF_FIELDS {
             return Err(InvalidTransaction::V1(
@@ -108,8 +96,6 @@ impl MetaTransactionV1 {
             serialized_length,
             payload_hash,
             approvals,
-            transferred_value,
-            seed,
             has_valid_hash,
         ))
     }
@@ -149,8 +135,6 @@ impl MetaTransactionV1 {
         serialized_length: usize,
         payload_hash: Digest,
         approvals: BTreeSet<Approval>,
-        transferred_value: u64,
-        seed: Option<[u8; 32]>,
         has_valid_hash: Result<(), InvalidTransactionV1>,
     ) -> Self {
         Self {
@@ -169,8 +153,6 @@ impl MetaTransactionV1 {
             serialized_length,
             payload_hash,
             has_valid_hash,
-            transferred_value,
-            seed,
             is_verified: OnceCell::new(),
         }
     }
@@ -654,12 +636,40 @@ impl MetaTransactionV1 {
 
     /// Returns the seed of the transaction.
     pub(crate) fn seed(&self) -> Option<[u8; 32]> {
-        self.seed
+        match &self.target {
+            TransactionTarget::Native => None,
+            TransactionTarget::Stored {
+                id: _,
+                runtime: _,
+                transferred_value: _,
+            } => None,
+            TransactionTarget::Session {
+                is_install_upgrade: _,
+                runtime: _,
+                module_bytes: _,
+                transferred_value: _,
+                seed,
+            } => *seed,
+        }
     }
 
     /// Returns the transferred value of the transaction.
     pub fn transferred_value(&self) -> u64 {
-        self.transferred_value
+        match &self.target {
+            TransactionTarget::Native => 0,
+            TransactionTarget::Stored {
+                id: _,
+                runtime: _,
+                transferred_value,
+            } => *transferred_value,
+            TransactionTarget::Session {
+                is_install_upgrade: _,
+                runtime: _,
+                module_bytes: _,
+                transferred_value,
+                seed: _,
+            } => *transferred_value,
+        }
     }
 }
 

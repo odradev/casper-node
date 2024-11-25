@@ -1,6 +1,6 @@
 use alloc::string::String;
 use core::fmt::{self, Display, Formatter};
-#[cfg(any(feature = "std", test))]
+#[cfg(any(feature = "std", feature = "testing", test))]
 use std::error::Error as StdError;
 
 #[cfg(feature = "datasize")]
@@ -9,7 +9,7 @@ use ed25519_dalek::ed25519::Error as SignatureError;
 #[cfg(any(feature = "std", test))]
 use pem::PemError;
 use serde::Serialize;
-#[cfg(any(feature = "std", test))]
+#[cfg(any(feature = "std", feature = "testing", test))]
 use thiserror::Error;
 
 #[cfg(any(feature = "std-fs-io", test))]
@@ -74,7 +74,7 @@ impl From<SignatureError> for Error {
     }
 }
 
-#[cfg(any(feature = "std", test))]
+#[cfg(any(feature = "std", feature = "testing", test))]
 impl StdError for Error {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
@@ -86,7 +86,7 @@ impl StdError for Error {
 }
 
 /// Cryptographic errors extended with some additional variants.
-#[cfg(any(feature = "std", test))]
+#[cfg(any(feature = "std", feature = "testing", test))]
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum ErrorExt {

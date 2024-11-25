@@ -1,6 +1,6 @@
 use casper_engine_test_support::LmdbWasmTestBuilder;
 use casper_types::{
-    system::auction::{BidsExt, EraInfo, ValidatorBid},
+    system::auction::{BidsExt, DelegatorKind, EraInfo, ValidatorBid},
     Key, PublicKey, U512,
 };
 
@@ -22,8 +22,9 @@ pub fn get_delegator_staked_amount(
     delegator_public_key: PublicKey,
 ) -> U512 {
     let bids = builder.get_bids();
+
     let delegator = bids
-        .delegator_by_public_keys(&validator_public_key, &delegator_public_key)
+        .delegator_by_kind(&validator_public_key, &DelegatorKind::PublicKey(delegator_public_key.clone()))
         .expect("bid should exist for validator-{validator_public_key}, delegator-{delegator_public_key}");
 
     delegator.staked_amount()

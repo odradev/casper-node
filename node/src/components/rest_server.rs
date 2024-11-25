@@ -366,10 +366,8 @@ mod schema_tests {
             "{}/../resources/test/rest_schema_status.json",
             env!("CARGO_MANIFEST_DIR")
         );
-        assert_schema(
-            schema_path,
-            serde_json::to_string_pretty(&schema_for!(GetStatusResult)).unwrap(),
-        );
+        let pretty = serde_json::to_string_pretty(&schema_for!(GetStatusResult)).unwrap();
+        assert_schema(schema_path, pretty);
     }
 
     #[test]

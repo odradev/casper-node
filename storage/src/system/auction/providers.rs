@@ -4,7 +4,7 @@ use casper_types::{
     account::AccountHash,
     bytesrepr::{FromBytes, ToBytes},
     system::{
-        auction::{BidAddr, BidKind, EraInfo, Error, UnbondingPurse},
+        auction::{BidAddr, BidKind, EraInfo, Error, Unbond, UnbondEra, UnbondKind},
         mint,
     },
     CLTyped, Key, KeyTag, URef, U512,
@@ -17,6 +17,9 @@ pub trait RuntimeProvider {
 
     /// Checks if account_hash matches the active session's account.
     fn is_allowed_session_caller(&self, account_hash: &AccountHash) -> bool;
+
+    /// Checks if uref is in access rights.
+    fn is_valid_uref(&self, uref: URef) -> bool;
 
     /// Gets named key under a `name`.
     fn named_keys_get(&self, name: &str) -> Option<Key>;
@@ -60,15 +63,11 @@ pub trait StorageProvider {
     /// Writes given [`BidKind`] at given key.
     fn write_bid(&mut self, key: Key, bid_kind: BidKind) -> Result<(), Error>;
 
-    /// Reads collection of [`UnbondingPurse`]s at account hash derived from given public key
-    fn read_unbonds(&mut self, account_hash: &AccountHash) -> Result<Vec<UnbondingPurse>, Error>;
+    /// Reads [`Unbond`]s at bid address.
+    fn read_unbond(&mut self, bid_addr: BidAddr) -> Result<Option<Unbond>, Error>;
 
-    /// Writes given [`UnbondingPurse`]s at account hash derived from given public key
-    fn write_unbonds(
-        &mut self,
-        account_hash: AccountHash,
-        unbonding_purses: Vec<UnbondingPurse>,
-    ) -> Result<(), Error>;
+    /// Writes given [`Unbond`] if some, else prunes if none at bid address.
+    fn write_unbond(&mut self, bid_addr: BidAddr, unbond: Option<Unbond>) -> Result<(), Error>;
 
     /// Records era info.
     fn record_era_info(&mut self, era_info: EraInfo) -> Result<(), Error>;
@@ -80,7 +79,7 @@ pub trait StorageProvider {
 /// Provides an access to mint.
 pub trait MintProvider {
     /// Returns successfully unbonded stake to origin account.
-    fn unbond(&mut self, unbonding_purse: &UnbondingPurse) -> Result<(), Error>;
+    fn unbond(&mut self, unbond_kind: &UnbondKind, unbond_era: &UnbondEra) -> Result<(), Error>;
 
     /// Allows optimized auction and mint interaction.
     /// Intended to be used only by system contracts to manage staked purses.

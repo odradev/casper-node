@@ -36,9 +36,9 @@ use crate::{
     package::{EntityVersionKey, EntityVersions, Groups, PackageStatus},
     system::{
         auction::{
-            gens::era_info_arb, Bid, BidAddr, BidKind, DelegationRate, Delegator, Reservation,
-            UnbondingPurse, ValidatorBid, ValidatorCredit, WithdrawPurse,
-            DELEGATION_RATE_DENOMINATOR,
+            gens::era_info_arb, Bid, BidAddr, BidKind, DelegationRate, Delegator, DelegatorBid,
+            DelegatorKind, Reservation, UnbondingPurse, ValidatorBid, ValidatorCredit,
+            WithdrawPurse, DELEGATION_RATE_DENOMINATOR,
         },
         mint::BalanceHoldAddr,
         SystemEntityType,
@@ -168,7 +168,7 @@ pub fn bid_addr_validator_arb() -> impl Strategy<Value = BidAddr> {
 pub fn bid_addr_delegator_arb() -> impl Strategy<Value = BidAddr> {
     let x = u8_slice_32();
     let y = u8_slice_32();
-    (x, y).prop_map(BidAddr::new_delegator_addr)
+    (x, y).prop_map(BidAddr::new_delegator_account_addr)
 }
 
 pub fn balance_hold_addr_arb() -> impl Strategy<Value = BalanceHoldAddr> {
@@ -640,6 +640,32 @@ pub(crate) fn delegator_arb() -> impl Strategy<Value = Delegator> {
         )
 }
 
+pub(crate) fn delegator_kind_arb() -> impl Strategy<Value = DelegatorKind> {
+    prop_oneof![
+        public_key_arb_no_system().prop_map(DelegatorKind::PublicKey),
+        array::uniform32(bits::u8::ANY).prop_map(DelegatorKind::Purse)
+    ]
+}
+
+pub(crate) fn delegator_bid_arb() -> impl Strategy<Value = DelegatorBid> {
+    (
+        public_key_arb_no_system(),
+        u512_arb(),
+        uref_arb(),
+        public_key_arb_no_system(),
+    )
+        .prop_map(
+            |(delegator_pk, staked_amount, bonding_purse, validator_pk)| {
+                DelegatorBid::unlocked(
+                    delegator_pk.into(),
+                    staked_amount,
+                    bonding_purse,
+                    validator_pk,
+                )
+            },
+        )
+}
+
 fn delegation_rate_arb() -> impl Strategy<Value = DelegationRate> {
     0..=DELEGATION_RATE_DENOMINATOR // Maximum, allowed value for delegation rate.
 }
@@ -651,11 +677,11 @@ pub(crate) fn reservation_bid_arb() -> impl Strategy<Value = BidKind> {
 pub(crate) fn reservation_arb() -> impl Strategy<Value = Reservation> {
     (
         public_key_arb_no_system(),
-        public_key_arb_no_system(),
+        delegator_kind_arb(),
         delegation_rate_arb(),
     )
-        .prop_map(|(validator_pk, delegator_pk, delegation_rate)| {
-            Reservation::new(validator_pk, delegator_pk, delegation_rate)
+        .prop_map(|(validator_pk, delegator_kind, delegation_rate)| {
+            Reservation::new(validator_pk, delegator_kind, delegation_rate)
         })
 }
 
@@ -706,8 +732,8 @@ pub(crate) fn unified_bid_arb(
         )
 }
 
-pub(crate) fn delegator_bid_arb() -> impl Strategy<Value = BidKind> {
-    delegator_arb().prop_map(|delegator| BidKind::Delegator(Box::new(delegator)))
+pub(crate) fn delegator_bid_kind_arb() -> impl Strategy<Value = BidKind> {
+    delegator_bid_arb().prop_map(|delegator| BidKind::Delegator(Box::new(delegator)))
 }
 
 pub(crate) fn validator_bid_arb() -> impl Strategy<Value = BidKind> {
@@ -846,7 +872,7 @@ pub fn stored_value_arb() -> impl Strategy<Value = StoredValue> {
         era_info_arb(1..10).prop_map(StoredValue::EraInfo),
         unified_bid_arb(0..3).prop_map(StoredValue::BidKind),
         validator_bid_arb().prop_map(StoredValue::BidKind),
-        delegator_bid_arb().prop_map(StoredValue::BidKind),
+        delegator_bid_kind_arb().prop_map(StoredValue::BidKind),
         reservation_bid_arb().prop_map(StoredValue::BidKind),
         credit_bid_arb().prop_map(StoredValue::BidKind),
         withdraws_arb(1..50).prop_map(StoredValue::Withdraw),
@@ -936,6 +962,14 @@ pub fn transaction_scheduling_arb() -> impl Strategy<Value = TransactionScheduli
         any::<u64>().prop_map(
             |timestamp| TransactionScheduling::FutureTimestamp(Timestamp::from(timestamp))
         ),
+    ]
+}
+
+pub fn json_compliant_transaction_scheduling_arb() -> impl Strategy<Value = TransactionScheduling> {
+    prop_oneof![
+        Just(TransactionScheduling::Standard),
+        era_id_arb().prop_map(TransactionScheduling::FutureEra),
+        timestamp_arb().prop_map(TransactionScheduling::FutureTimestamp),
     ]
 }
 
@@ -1145,7 +1179,7 @@ pub fn initiator_addr_arb() -> impl Strategy<Value = InitiatorAddr> {
 
 pub fn timestamp_arb() -> impl Strategy<Value = Timestamp> {
     //The weird u64 value is the max milliseconds that are bofeore year 10000. 5 digit years are
-    // not rfc3339 compliant and will cause an error
+    // not rfc3339 compliant and will cause an error when trying to serialize to json.
     prop_oneof![Just(0_u64), Just(1_u64), Just(253_402_300_799_999_u64)].prop_map(Timestamp::from)
 }
 
@@ -1157,7 +1191,7 @@ pub fn legal_v1_transaction_arb() -> impl Strategy<Value = TransactionV1> {
         pricing_mode_arb(),
         secret_key_arb_no_system(),
         transaction_args_arb(),
-        transaction_scheduling_arb(),
+        json_compliant_transaction_scheduling_arb(),
         legal_target_entry_point_calls_arb(),
     )
         .prop_map(
