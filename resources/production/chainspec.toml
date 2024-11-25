@@ -264,23 +264,23 @@ nop = 35
 # Get current memory operation multiplier.
 current_memory = 35
 # Grow memory cost, per page (64kb).
-grow_memory = 205
+grow_memory = 300
 # Sign extension operations cost
 sign = 35
 
 # Control flow operations multiplier.
 [wasm.v1.opcode_costs.control_flow]
-block = 90
-loop = 90
+block = 85
+loop = 85
 if = 35
 else = 35
 end = 35
-br = 615
+br = 555
 br_if = 170
 return = 35
 select = 35
-call = 50
-call_indirect = 45
+call = 75
+call_indirect = 90
 drop = 35
 
 [wasm.v1.opcode_costs.control_flow.br_table]
