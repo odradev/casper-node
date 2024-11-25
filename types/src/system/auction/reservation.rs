@@ -122,7 +122,7 @@ impl Display for Reservation {
 impl Distribution<Reservation> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Reservation {
         Reservation {
-            delegator_public_key: rng.gen(),
+            delegator_kind: rng.gen(),
             validator_public_key: rng.gen(),
             delegation_rate: rng.gen(),
         }
