@@ -5,6 +5,7 @@ use crate::{
 
 use alloc::{string::String, vec::Vec};
 use core::{convert::TryFrom, fmt::Debug};
+#[cfg(any(feature = "std", test))]
 use thiserror::Error;
 
 #[cfg(feature = "datasize")]
@@ -16,10 +17,7 @@ use rand::{
 };
 #[cfg(feature = "json-schema")]
 use schemars::JsonSchema;
-use serde::{
-    de::{self, Error as SerdeError},
-    Deserialize, Deserializer, Serialize, Serializer,
-};
+use serde::{de::Error as SerdeError, Deserialize, Deserializer, Serialize, Serializer};
 
 #[cfg(any(feature = "testing", test))]
 use crate::testing::TestRng;
@@ -230,6 +228,7 @@ pub struct Message {
     block_index: u64,
 }
 
+#[cfg(any(feature = "std", test))]
 #[derive(Serialize, Deserialize)]
 struct HumanReadableMessage {
     hash_addr: String,
@@ -240,6 +239,7 @@ struct HumanReadableMessage {
     block_index: u64,
 }
 
+#[cfg(any(feature = "std", test))]
 impl From<&Message> for HumanReadableMessage {
     fn from(message: &Message) -> Self {
         Self {
@@ -253,6 +253,7 @@ impl From<&Message> for HumanReadableMessage {
     }
 }
 
+#[cfg(any(feature = "std", test))]
 impl From<&Message> for NonHumanReadableMessage {
     fn from(message: &Message) -> Self {
         Self {
@@ -266,6 +267,7 @@ impl From<&Message> for NonHumanReadableMessage {
     }
 }
 
+#[cfg(any(feature = "std", test))]
 impl From<NonHumanReadableMessage> for Message {
     fn from(message: NonHumanReadableMessage) -> Self {
         Self {
@@ -286,6 +288,7 @@ enum MessageDeserializationError {
     Base16(String),
 }
 
+#[cfg(any(feature = "std", test))]
 impl TryFrom<HumanReadableMessage> for Message {
     type Error = MessageDeserializationError;
     fn try_from(message: HumanReadableMessage) -> Result<Self, Self::Error> {
@@ -309,6 +312,7 @@ impl TryFrom<HumanReadableMessage> for Message {
     }
 }
 
+#[cfg(any(feature = "std", test))]
 #[derive(Serialize, Deserialize)]
 struct NonHumanReadableMessage {
     hash_addr: HashAddr,
@@ -319,6 +323,7 @@ struct NonHumanReadableMessage {
     block_index: u64,
 }
 
+#[cfg(any(feature = "std", test))]
 impl Serialize for Message {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         if serializer.is_human_readable() {
@@ -329,12 +334,13 @@ impl Serialize for Message {
     }
 }
 
+#[cfg(any(feature = "std", test))]
 impl<'de> Deserialize<'de> for Message {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         if deserializer.is_human_readable() {
             let human_readable = HumanReadableMessage::deserialize(deserializer)?;
             Message::try_from(human_readable)
-                .map_err(|error| de::Error::custom(format!("{:?}", error)))
+                .map_err(|error| SerdeError::custom(format!("{:?}", error)))
         } else {
             let non_human_readable = NonHumanReadableMessage::deserialize(deserializer)?;
             Ok(Message::from(non_human_readable))
