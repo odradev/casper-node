@@ -388,7 +388,7 @@ where
         authorization_keys: &BTreeSet<AccountHash>,
         administrative_accounts: &BTreeSet<AccountHash>,
     ) -> Result<(RuntimeFootprint, EntityAddr), Self::Error> {
-        let (entity_addr, entity_record) =
+        let (entity_addr, footprint) =
             self.runtime_footprint_by_account_hash(protocol_version, account_hash)?;
 
         if !administrative_accounts.is_empty()
@@ -398,20 +398,20 @@ where
                 .is_some()
         {
             // Exit early if there's at least a single signature coming from an admin.
-            return Ok((entity_record, entity_addr));
+            return Ok((footprint, entity_addr));
         }
 
         // Authorize using provided authorization keys
-        if !entity_record.can_authorize(authorization_keys) {
+        if !footprint.can_authorize(authorization_keys) {
             return Err(Self::Error::Authorization);
         }
 
         // Check total key weight against deploy threshold
-        if !entity_record.can_deploy_with(authorization_keys) {
+        if !footprint.can_deploy_with(authorization_keys) {
             return Err(Self::Error::DeploymentAuthorizationFailure);
         }
 
-        Ok((entity_record, entity_addr))
+        Ok((footprint, entity_addr))
     }
 
     fn authorized_runtime_footprint_with_access_rights(

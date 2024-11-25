@@ -86,12 +86,8 @@ where
         self.context.subtract_amount_spent(transferred);
     }
 
-    fn get_main_purse(&self) -> URef {
-        self.context
-            .runtime_footprint()
-            .borrow()
-            .main_purse()
-            .expect("did not have purse in mint internal")
+    fn get_main_purse(&self) -> Option<URef> {
+        self.context.runtime_footprint().borrow().main_purse()
     }
 
     fn is_administrator(&self, account_hash: &AccountHash) -> bool {

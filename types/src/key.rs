@@ -909,6 +909,14 @@ impl Key {
             }
         }
 
+        // if let Some(contract_entity_hash) = input.strip_prefix(STATE_PREFIX) {
+        //     let addr = match EntityAddr::from_formatted_str(contract_entity_hash) {
+        //         Ok(ret) => ret,
+        //         Err(err) => panic!("{err}"),
+        //     };
+        //     return Ok(Key::State(addr));
+        // }
+
         Err(FromStrError::UnknownPrefix)
     }
 
@@ -1993,6 +2001,7 @@ mod tests {
     // const STATE_KEY: Key = Key::State(EntityAddr::new_contract_entity_addr([42; 32]));
     const BALANCE_HOLD: Key =
         Key::BalanceHold(BalanceHoldAddr::new_gas([42; 32], BlockTime::new(100)));
+    const STATE_KEY: Key = Key::State(EntityAddr::new_smart_contract([42; 32]));
     const KEYS: &[Key] = &[
         ACCOUNT_KEY,
         HASH_KEY,
@@ -2024,6 +2033,7 @@ mod tests {
         BLOCK_TIME_KEY,
         BLOCK_MESSAGE_COUNT_KEY,
         BALANCE_HOLD,
+        STATE_KEY,
     ];
     const HEX_STRING: &str = "2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a";
     const TOPIC_NAME_HEX_STRING: &str =
@@ -2200,13 +2210,13 @@ mod tests {
             )
         );
 
-        // assert_eq!(
-        //     format!("{}", STATE_KEY),
-        //     format!(
-        //         "Key::State(addressable-entity-contract-{})",
-        //         base16::encode_lower(&[42; 32])
-        //     )
-        // );
+        assert_eq!(
+            format!("{}", STATE_KEY),
+            format!(
+                "Key::State(entity-contract-{})",
+                base16::encode_lower(&[42; 32])
+            )
+        );
         assert_eq!(
             format!("{}", BLOCK_TIME_KEY),
             format!(
@@ -2613,7 +2623,7 @@ mod tests {
         bytesrepr::test_serialization_roundtrip(&MESSAGE_TOPIC_KEY);
         bytesrepr::test_serialization_roundtrip(&MESSAGE_KEY);
         bytesrepr::test_serialization_roundtrip(&NAMED_KEY);
-        // bytesrepr::test_serialization_roundtrip(&STATE_KEY);
+        bytesrepr::test_serialization_roundtrip(&STATE_KEY);
     }
 
     #[test]
@@ -2662,6 +2672,7 @@ mod tests {
         round_trip(&Key::BlockGlobal(BlockGlobalAddr::BlockTime));
         round_trip(&Key::BlockGlobal(BlockGlobalAddr::MessageCount));
         round_trip(&Key::BalanceHold(BalanceHoldAddr::default()));
+        round_trip(&Key::State(EntityAddr::new_system(zeros)));
     }
 
     #[test]
