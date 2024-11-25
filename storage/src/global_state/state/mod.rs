@@ -1279,6 +1279,7 @@ pub trait StateProvider: Send + Sync + Sized {
                 minimum_delegation_amount,
                 maximum_delegation_amount,
                 minimum_bid_amount,
+                reserved_slots,
             } => runtime
                 .add_bid(
                     public_key,
@@ -1288,7 +1289,7 @@ pub trait StateProvider: Send + Sync + Sized {
                     maximum_delegation_amount,
                     minimum_bid_amount,
                     max_delegators_per_validator,
-                    0,
+                    reserved_slots,
                 )
                 .map(AuctionMethodRet::UpdatedAmount)
                 .map_err(TrackingCopyError::Api),

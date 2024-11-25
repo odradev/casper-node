@@ -10,6 +10,11 @@ use core::{
 };
 #[cfg(feature = "datasize")]
 use datasize::DataSize;
+#[cfg(any(feature = "testing", test))]
+use rand::{
+    distributions::{Distribution, Standard},
+    Rng,
+};
 #[cfg(feature = "json-schema")]
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -136,6 +141,17 @@ impl From<URefAddr> for DelegatorKind {
 impl CLTyped for DelegatorKind {
     fn cl_type() -> CLType {
         CLType::Any
+    }
+}
+
+#[cfg(any(feature = "testing", test))]
+impl Distribution<DelegatorKind> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> DelegatorKind {
+        if rng.gen() {
+            DelegatorKind::PublicKey(rng.gen())
+        } else {
+            DelegatorKind::Purse(rng.gen())
+        }
     }
 }
 
