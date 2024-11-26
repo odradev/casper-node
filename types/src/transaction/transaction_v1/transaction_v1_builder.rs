@@ -283,7 +283,7 @@ impl<'a> TransactionV1Builder<'a> {
 
     /// Returns a new `TransactionV1Builder` suitable for building a native change_bid_public_key
     /// transaction.
-    pub fn new_change_bid_public_key<A: Into<U512>>(
+    pub fn new_change_bid_public_key(
         public_key: PublicKey,
         new_public_key: PublicKey,
     ) -> Result<Self, CLValueError> {
