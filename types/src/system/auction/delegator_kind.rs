@@ -1,11 +1,9 @@
-#[cfg(any(feature = "std", test))]
-use crate::checksummed_hex;
 use crate::{
     bytesrepr,
     bytesrepr::{FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
-    CLType, CLTyped, PublicKey, URef, URefAddr,
+    checksummed_hex, CLType, CLTyped, PublicKey, URef, URefAddr,
 };
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 use core::{
     fmt,
     fmt::{Display, Formatter},
@@ -19,13 +17,8 @@ use rand::{
 };
 #[cfg(feature = "json-schema")]
 use schemars::JsonSchema;
-#[cfg(any(feature = "std", test))]
-use serde::{de::Error as SerdeError, Deserializer, Serializer};
-use serde::{Deserialize, Serialize};
-#[cfg(any(feature = "std", test))]
+use serde::{de::Error as SerdeError, Deserialize, Deserializer, Serialize, Serializer};
 use serde_helpers::{HumanReadableDelegatorKind, NonHumanReadableDelegatorKind};
-#[cfg(any(feature = "std", test))]
-use thiserror::Error;
 
 /// DelegatorKindTag variants.
 #[repr(u8)]
@@ -163,7 +156,6 @@ impl Distribution<DelegatorKind> for Standard {
     }
 }
 
-#[cfg(any(feature = "std", test))]
 impl Serialize for DelegatorKind {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         if serializer.is_human_readable() {
@@ -174,14 +166,21 @@ impl Serialize for DelegatorKind {
     }
 }
 
-#[cfg(any(feature = "std", test))]
-#[derive(Error, Debug)]
+#[derive(Debug)]
 enum DelegatorKindError {
-    #[error("Error when deserializing DelegatorKind: {0}")]
     DeserializationError(String),
 }
 
-#[cfg(any(feature = "std", test))]
+impl Display for DelegatorKindError {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            DelegatorKindError::DeserializationError(error) => {
+                write!(f, "Error when deserializing DelegatorKind: {}", error)
+            }
+        }
+    }
+}
+
 impl TryFrom<HumanReadableDelegatorKind> for DelegatorKind {
     type Error = DelegatorKindError;
 
@@ -191,7 +190,7 @@ impl TryFrom<HumanReadableDelegatorKind> for DelegatorKind {
                 Ok(DelegatorKind::PublicKey(public_key))
             }
             HumanReadableDelegatorKind::Purse(encoded) => {
-                let decoded = checksummed_hex::decode(&encoded).map_err(|e| {
+                let decoded = checksummed_hex::decode(encoded).map_err(|e| {
                     DelegatorKindError::DeserializationError(format!(
                         "Failed to decode encoded URefAddr: {}",
                         e
@@ -219,7 +218,7 @@ impl From<NonHumanReadableDelegatorKind> for DelegatorKind {
         }
     }
 }
-#[cfg(any(feature = "std", test))]
+
 impl<'de> Deserialize<'de> for DelegatorKind {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         if deserializer.is_human_readable() {
@@ -233,10 +232,10 @@ impl<'de> Deserialize<'de> for DelegatorKind {
     }
 }
 
-#[cfg(any(feature = "std", test))]
 mod serde_helpers {
     use super::DelegatorKind;
     use crate::{PublicKey, URefAddr};
+    use alloc::string::String;
     use serde::{Deserialize, Serialize};
 
     #[derive(Serialize, Deserialize)]
@@ -270,9 +269,7 @@ mod serde_helpers {
                 DelegatorKind::PublicKey(public_key) => {
                     NonHumanReadableDelegatorKind::PublicKey(public_key.clone())
                 }
-                DelegatorKind::Purse(uref_addr) => {
-                    NonHumanReadableDelegatorKind::Purse(uref_addr.clone())
-                }
+                DelegatorKind::Purse(uref_addr) => NonHumanReadableDelegatorKind::Purse(*uref_addr),
             }
         }
     }

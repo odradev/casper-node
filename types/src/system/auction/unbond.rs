@@ -1,23 +1,17 @@
-#[cfg(any(feature = "std", test))]
-use crate::checksummed_hex;
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
+use core::fmt::{self, Display, Formatter};
 #[cfg(feature = "datasize")]
 use datasize::DataSize;
 #[cfg(feature = "json-schema")]
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 
 use super::{BidAddr, DelegatorKind, UnbondingPurse, WithdrawPurse};
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
-    CLType, CLTyped, EraId, PublicKey, URef, URefAddr, U512,
+    checksummed_hex, CLType, CLTyped, EraId, PublicKey, URef, URefAddr, U512,
 };
-#[cfg(any(feature = "std", test))]
-use serde::{de::Error as SerdeError, Deserializer, Serializer};
-#[cfg(any(feature = "std", test))]
+use serde::{de::Error as SerdeError, Deserialize, Deserializer, Serialize, Serializer};
 use serde_helpers::{HumanReadableUnbondKind, NonHumanReadableUnbondKind};
-#[cfg(any(feature = "std", test))]
-use thiserror::Error;
 
 /// UnbondKindTag variants.
 #[allow(clippy::large_enum_variant)]
@@ -151,7 +145,6 @@ impl From<DelegatorKind> for UnbondKind {
     }
 }
 
-#[cfg(any(feature = "std", test))]
 impl Serialize for UnbondKind {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         if serializer.is_human_readable() {
@@ -162,14 +155,21 @@ impl Serialize for UnbondKind {
     }
 }
 
-#[cfg(any(feature = "std", test))]
-#[derive(Error, Debug)]
+#[derive(Debug)]
 enum UnbondKindError {
-    #[error("Error when deserializing UnbondKind: {0}")]
     DeserializationError(String),
 }
 
-#[cfg(any(feature = "std", test))]
+impl Display for UnbondKindError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            UnbondKindError::DeserializationError(msg) => {
+                write!(f, "Error when deserializing UnbondKind: {}", msg)
+            }
+        }
+    }
+}
+
 impl TryFrom<HumanReadableUnbondKind> for UnbondKind {
     type Error = UnbondKindError;
 
@@ -180,7 +180,7 @@ impl TryFrom<HumanReadableUnbondKind> for UnbondKind {
                 Ok(UnbondKind::DelegatedPublicKey(public_key))
             }
             HumanReadableUnbondKind::DelegatedPurse(encoded) => {
-                let decoded = checksummed_hex::decode(&encoded).map_err(|e| {
+                let decoded = checksummed_hex::decode(encoded).map_err(|e| {
                     UnbondKindError::DeserializationError(format!(
                         "Failed to decode encoded URefAddr: {}",
                         e
@@ -211,7 +211,7 @@ impl From<NonHumanReadableUnbondKind> for UnbondKind {
         }
     }
 }
-#[cfg(any(feature = "std", test))]
+
 impl<'de> Deserialize<'de> for UnbondKind {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         if deserializer.is_human_readable() {
@@ -552,10 +552,10 @@ impl CLTyped for UnbondEra {
     }
 }
 
-#[cfg(any(feature = "std", test))]
 mod serde_helpers {
     use super::UnbondKind;
     use crate::{PublicKey, URefAddr};
+    use alloc::string::String;
     use serde::{Deserialize, Serialize};
 
     #[derive(Serialize, Deserialize)]
@@ -598,7 +598,7 @@ mod serde_helpers {
                     NonHumanReadableUnbondKind::DelegatedPublicKey(public_key.clone())
                 }
                 UnbondKind::DelegatedPurse(uref_addr) => {
-                    NonHumanReadableUnbondKind::DelegatedPurse(uref_addr.clone())
+                    NonHumanReadableUnbondKind::DelegatedPurse(*uref_addr)
                 }
             }
         }
