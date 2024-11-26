@@ -132,7 +132,7 @@ pub enum StoredValue {
     EntryPoint(EntryPointValue),
     /// Raw bytes. Similar to a [`crate::StoredValue::CLValue`] but does not incur overhead of a
     /// [`crate::CLValue`] and [`crate::CLType`].
-    RawBytes(Vec<u8>),
+    RawBytes(#[cfg_attr(feature = "json-schema", schemars(with = "String"))] Vec<u8>),
 }
 
 impl StoredValue {
@@ -915,7 +915,7 @@ mod serde_helpers {
         Reservation(&'a PrepaidKind),
         EntryPoint(&'a EntryPointValue),
         /// Raw bytes.
-        RawBytes(&'a Vec<u8>),
+        RawBytes(Bytes),
     }
 
     #[derive(Deserialize)]
@@ -940,7 +940,7 @@ mod serde_helpers {
         NamedKey(NamedKeyValue),
         EntryPoint(EntryPointValue),
         /// Raw bytes.
-        RawBytes(Vec<u8>),
+        RawBytes(Bytes),
     }
 
     impl<'a> From<&'a StoredValue> for HumanReadableSerHelper<'a> {
@@ -976,7 +976,9 @@ mod serde_helpers {
                 StoredValue::NamedKey(payload) => HumanReadableSerHelper::NamedKey(payload),
                 StoredValue::Prepaid(payload) => HumanReadableSerHelper::Reservation(payload),
                 StoredValue::EntryPoint(payload) => HumanReadableSerHelper::EntryPoint(payload),
-                StoredValue::RawBytes(bytes) => HumanReadableSerHelper::RawBytes(bytes),
+                StoredValue::RawBytes(bytes) => {
+                    HumanReadableSerHelper::RawBytes(bytes.as_slice().into())
+                }
             }
         }
     }
@@ -1015,7 +1017,7 @@ mod serde_helpers {
                 }
                 HumanReadableDeserHelper::NamedKey(payload) => StoredValue::NamedKey(payload),
                 HumanReadableDeserHelper::EntryPoint(payload) => StoredValue::EntryPoint(payload),
-                HumanReadableDeserHelper::RawBytes(bytes) => StoredValue::RawBytes(bytes),
+                HumanReadableDeserHelper::RawBytes(bytes) => StoredValue::RawBytes(bytes.into()),
             }
         }
     }
@@ -1111,6 +1113,15 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("duplicate contract version: ContractVersionKey(1, 1)"));
+    }
+
+    #[test]
+    fn json_serialization_of_raw_bytes() {
+        let stored_value = StoredValue::RawBytes(vec![1, 2, 3, 4]);
+        assert_eq!(
+            serde_json::to_string(&stored_value).unwrap(),
+            r#"{"RawBytes":"01020304"}"#
+        );
     }
 
     proptest! {

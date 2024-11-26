@@ -23,6 +23,8 @@ use schemars::JsonSchema;
 use serde::{de::Error as SerdeError, Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
 #[cfg(any(feature = "std", test))]
+use serde_helpers::{HumanReadableDelegatorKind, NonHumanReadableDelegatorKind};
+#[cfg(any(feature = "std", test))]
 use thiserror::Error;
 
 /// DelegatorKindTag variants.
@@ -162,48 +164,6 @@ impl Distribution<DelegatorKind> for Standard {
 }
 
 #[cfg(any(feature = "std", test))]
-#[derive(Serialize, Deserialize)]
-enum HumanReadableDelegatorKind {
-    PublicKey(PublicKey),
-    Purse(String),
-}
-
-#[cfg(any(feature = "std", test))]
-impl From<&DelegatorKind> for HumanReadableDelegatorKind {
-    fn from(delegator_kind: &DelegatorKind) -> Self {
-        match delegator_kind {
-            DelegatorKind::PublicKey(public_key) => {
-                HumanReadableDelegatorKind::PublicKey(public_key.clone())
-            }
-            DelegatorKind::Purse(uref_addr) => {
-                HumanReadableDelegatorKind::Purse(base16::encode_lower(uref_addr))
-            }
-        }
-    }
-}
-
-#[cfg(any(feature = "std", test))]
-#[derive(Serialize, Deserialize)]
-enum NonHumanReadableDelegatorKind {
-    PublicKey(PublicKey),
-    Purse(URefAddr),
-}
-
-#[cfg(any(feature = "std", test))]
-impl From<&DelegatorKind> for NonHumanReadableDelegatorKind {
-    fn from(delegator_kind: &DelegatorKind) -> Self {
-        match delegator_kind {
-            DelegatorKind::PublicKey(public_key) => {
-                NonHumanReadableDelegatorKind::PublicKey(public_key.clone())
-            }
-            DelegatorKind::Purse(uref_addr) => {
-                NonHumanReadableDelegatorKind::Purse(uref_addr.clone())
-            }
-        }
-    }
-}
-
-#[cfg(any(feature = "std", test))]
 impl Serialize for DelegatorKind {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         if serializer.is_human_readable() {
@@ -216,15 +176,14 @@ impl Serialize for DelegatorKind {
 
 #[cfg(any(feature = "std", test))]
 #[derive(Error, Debug)]
-enum DelegatorKindSerializationError {
-    #[error("Error when serializing DelegatorKind: {0}")]
-    SerializationError(String),
+enum DelegatorKindError {
     #[error("Error when deserializing DelegatorKind: {0}")]
     DeserializationError(String),
 }
 
+#[cfg(any(feature = "std", test))]
 impl TryFrom<HumanReadableDelegatorKind> for DelegatorKind {
-    type Error = DelegatorKindSerializationError;
+    type Error = DelegatorKindError;
 
     fn try_from(value: HumanReadableDelegatorKind) -> Result<Self, Self::Error> {
         match value {
@@ -233,13 +192,13 @@ impl TryFrom<HumanReadableDelegatorKind> for DelegatorKind {
             }
             HumanReadableDelegatorKind::Purse(encoded) => {
                 let decoded = checksummed_hex::decode(&encoded).map_err(|e| {
-                    DelegatorKindSerializationError::DeserializationError(format!(
+                    DelegatorKindError::DeserializationError(format!(
                         "Failed to decode encoded URefAddr: {}",
                         e
                     ))
                 })?;
                 let uref_addr = URefAddr::try_from(decoded.as_ref()).map_err(|e| {
-                    DelegatorKindSerializationError::DeserializationError(format!(
+                    DelegatorKindError::DeserializationError(format!(
                         "Failed to build uref address: {}",
                         e
                     ))
@@ -274,9 +233,95 @@ impl<'de> Deserialize<'de> for DelegatorKind {
     }
 }
 
+#[cfg(any(feature = "std", test))]
+mod serde_helpers {
+    use super::DelegatorKind;
+    use crate::{PublicKey, URefAddr};
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize)]
+    pub(super) enum HumanReadableDelegatorKind {
+        PublicKey(PublicKey),
+        Purse(String),
+    }
+
+    #[derive(Serialize, Deserialize)]
+    pub(super) enum NonHumanReadableDelegatorKind {
+        PublicKey(PublicKey),
+        Purse(URefAddr),
+    }
+
+    impl From<&DelegatorKind> for HumanReadableDelegatorKind {
+        fn from(delegator_kind: &DelegatorKind) -> Self {
+            match delegator_kind {
+                DelegatorKind::PublicKey(public_key) => {
+                    HumanReadableDelegatorKind::PublicKey(public_key.clone())
+                }
+                DelegatorKind::Purse(uref_addr) => {
+                    HumanReadableDelegatorKind::Purse(base16::encode_lower(uref_addr))
+                }
+            }
+        }
+    }
+
+    impl From<&DelegatorKind> for NonHumanReadableDelegatorKind {
+        fn from(delegator_kind: &DelegatorKind) -> Self {
+            match delegator_kind {
+                DelegatorKind::PublicKey(public_key) => {
+                    NonHumanReadableDelegatorKind::PublicKey(public_key.clone())
+                }
+                DelegatorKind::Purse(uref_addr) => {
+                    NonHumanReadableDelegatorKind::Purse(uref_addr.clone())
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::{bytesrepr, system::auction::delegator_kind::DelegatorKind, PublicKey, SecretKey};
+    use rand::Rng;
+
+    use crate::{
+        bytesrepr, system::auction::delegator_kind::DelegatorKind, testing::TestRng, PublicKey,
+        SecretKey,
+    };
+
+    #[test]
+    fn purse_serialized_as_string() {
+        let delegator_kind_payload = DelegatorKind::Purse([1; 32]);
+        let serialized = serde_json::to_string(&delegator_kind_payload).unwrap();
+        assert_eq!(
+            serialized,
+            "{\"Purse\":\"0101010101010101010101010101010101010101010101010101010101010101\"}"
+        );
+    }
+
+    #[test]
+    fn given_broken_address_purse_deserialziation_fails() {
+        let failing =
+            "{\"Purse\":\"Z101010101010101010101010101010101010101010101010101010101010101\"}";
+        let ret = serde_json::from_str::<DelegatorKind>(failing);
+        assert!(ret.is_err());
+        let failing = "{\"Purse\":\"01010101010101010101010101010101010101010101010101010101\"}";
+        let ret = serde_json::from_str::<DelegatorKind>(failing);
+        assert!(ret.is_err());
+    }
+
+    #[test]
+    fn json_roundtrip() {
+        let rng = &mut TestRng::new();
+
+        let delegator_kind_payload = DelegatorKind::PublicKey(PublicKey::random(rng));
+        let json_string = serde_json::to_string_pretty(&delegator_kind_payload).unwrap();
+        let decoded: DelegatorKind = serde_json::from_str(&json_string).unwrap();
+        assert_eq!(decoded, delegator_kind_payload);
+
+        let delegator_kind_payload = DelegatorKind::Purse(rng.gen());
+        let json_string = serde_json::to_string_pretty(&delegator_kind_payload).unwrap();
+        let decoded: DelegatorKind = serde_json::from_str(&json_string).unwrap();
+        assert_eq!(decoded, delegator_kind_payload);
+    }
 
     #[test]
     fn serialization_roundtrip() {
