@@ -281,6 +281,18 @@ impl<'a> TransactionV1Builder<'a> {
         Ok(builder)
     }
 
+    /// Returns a new `TransactionV1Builder` suitable for building a native activate_bid
+    /// transaction.
+    pub fn new_activate_bid(validator: PublicKey) -> Result<Self, CLValueError> {
+        let args = arg_handling::new_activate_bid_args(validator)?;
+        let mut builder = TransactionV1Builder::new();
+        builder.args = TransactionArgs::Named(args);
+        builder.target = TransactionTarget::Native;
+        builder.entry_point = TransactionEntryPoint::ActivateBid;
+        builder.scheduling = Self::DEFAULT_SCHEDULING;
+        Ok(builder)
+    }
+
     /// Returns a new `TransactionV1Builder` suitable for building a native change_bid_public_key
     /// transaction.
     pub fn new_change_bid_public_key(
