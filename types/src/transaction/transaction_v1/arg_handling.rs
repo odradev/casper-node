@@ -7,13 +7,12 @@ use tracing::debug;
 
 #[cfg(any(all(feature = "std", feature = "testing"), test))]
 use crate::{
-    account::AccountHash,
-    bytesrepr::FromBytes,
-    system::auction::{Reservation, ARG_VALIDATOR},
-    CLType, CLValue, InvalidTransactionV1, TransactionArgs,
+    account::AccountHash, bytesrepr::FromBytes, system::auction::ARG_VALIDATOR, CLType, CLValue,
+    InvalidTransactionV1, TransactionArgs,
 };
 use crate::{
-    bytesrepr::ToBytes, CLTyped, CLValueError, PublicKey, RuntimeArgs, TransferTarget, URef, U512,
+    bytesrepr::ToBytes, system::auction::Reservation, CLTyped, CLValueError, PublicKey,
+    RuntimeArgs, TransferTarget, URef, U512,
 };
 #[cfg(any(all(feature = "std", feature = "testing"), test))]
 use alloc::string::ToString;
@@ -55,13 +54,10 @@ const CHANGE_BID_PUBLIC_KEY_ARG_PUBLIC_KEY: RequiredArg<PublicKey> = RequiredArg
 const CHANGE_BID_PUBLIC_KEY_ARG_NEW_PUBLIC_KEY: RequiredArg<PublicKey> =
     RequiredArg::new("new_public_key");
 
-#[cfg(any(all(feature = "std", feature = "testing"), test))]
 const ADD_RESERVATIONS_ARG_RESERVATIONS: RequiredArg<Vec<Reservation>> =
     RequiredArg::new("reservations");
 
-#[cfg(any(all(feature = "std", feature = "testing"), test))]
 const CANCEL_RESERVATIONS_ARG_VALIDATOR: RequiredArg<PublicKey> = RequiredArg::new("validator");
-#[cfg(any(all(feature = "std", feature = "testing"), test))]
 const CANCEL_RESERVATIONS_ARG_DELEGATORS: RequiredArg<Vec<PublicKey>> =
     RequiredArg::new("delegators");
 
