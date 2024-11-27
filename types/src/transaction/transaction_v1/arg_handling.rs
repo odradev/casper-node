@@ -1,4 +1,5 @@
 //! Collection of helper functions and structures to reason about amorphic RuntimeArgs.
+use alloc::vec::Vec;
 use core::marker::PhantomData;
 
 #[cfg(any(all(feature = "std", feature = "testing"), test))]
@@ -416,7 +417,6 @@ pub fn has_valid_change_bid_public_key_args(
 }
 
 /// Creates a `RuntimeArgs` suitable for use in a add resrvations transaction.
-#[cfg(any(all(feature = "std", feature = "testing"), test))]
 pub fn new_add_reservations_args(
     reservations: Vec<Reservation>,
 ) -> Result<RuntimeArgs, CLValueError> {
@@ -436,7 +436,6 @@ pub fn has_valid_add_reservations_args(args: &TransactionArgs) -> Result<(), Inv
 }
 
 /// Creates a `RuntimeArgs` suitable for use in a cancel reservations transaction.
-#[cfg(any(all(feature = "std", feature = "testing"), test))]
 pub fn new_cancel_reservations_args(
     validator: PublicKey,
     delegators: Vec<PublicKey>,
