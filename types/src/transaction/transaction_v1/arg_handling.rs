@@ -7,12 +7,13 @@ use tracing::debug;
 
 #[cfg(any(all(feature = "std", feature = "testing"), test))]
 use crate::{
-    account::AccountHash, bytesrepr::FromBytes, system::auction::ARG_VALIDATOR, CLType, CLValue,
-    InvalidTransactionV1, TransactionArgs,
+    account::AccountHash, bytesrepr::FromBytes, CLType, CLValue, InvalidTransactionV1,
+    TransactionArgs,
 };
 use crate::{
-    bytesrepr::ToBytes, system::auction::Reservation, CLTyped, CLValueError, PublicKey,
-    RuntimeArgs, TransferTarget, URef, U512,
+    bytesrepr::ToBytes,
+    system::auction::{Reservation, ARG_VALIDATOR},
+    CLTyped, CLValueError, PublicKey, RuntimeArgs, TransferTarget, URef, U512,
 };
 #[cfg(any(all(feature = "std", feature = "testing"), test))]
 use alloc::string::ToString;
@@ -47,7 +48,6 @@ const REDELEGATE_ARG_VALIDATOR: RequiredArg<PublicKey> = RequiredArg::new("valid
 const REDELEGATE_ARG_AMOUNT: RequiredArg<U512> = RequiredArg::new("amount");
 const REDELEGATE_ARG_NEW_VALIDATOR: RequiredArg<PublicKey> = RequiredArg::new("new_validator");
 
-#[cfg(any(all(feature = "std", feature = "testing"), test))]
 const ACTIVATE_BID_ARG_VALIDATOR: RequiredArg<PublicKey> = RequiredArg::new(ARG_VALIDATOR);
 
 const CHANGE_BID_PUBLIC_KEY_ARG_PUBLIC_KEY: RequiredArg<PublicKey> = RequiredArg::new("public_key");
