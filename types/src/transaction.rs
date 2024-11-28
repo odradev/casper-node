@@ -87,12 +87,10 @@ pub use transaction_scheduling::TransactionScheduling;
 pub use transaction_target::TransactionTarget;
 #[cfg(any(feature = "std", feature = "testing", feature = "gens", test))]
 pub(crate) use transaction_v1::fields_container::FieldsContainer;
-#[cfg(any(feature = "testing", feature = "gens", test))]
-pub use transaction_v1::TransactionV1Payload;
 pub use transaction_v1::{
     arg_handling, InvalidTransactionV1, TransactionArgs, TransactionV1,
     TransactionV1DecodeFromJsonError, TransactionV1Error, TransactionV1ExcessiveSizeError,
-    TransactionV1Hash,
+    TransactionV1Hash, TransactionV1Payload,
 };
 #[cfg(any(feature = "std", test))]
 pub use transaction_v1::{TransactionV1Builder, TransactionV1BuilderError};
@@ -142,6 +140,16 @@ pub enum Transaction {
 }
 
 impl Transaction {
+    // Deploy variant ctor
+    pub fn from_deploy(deploy: Deploy) -> Self {
+        Transaction::Deploy(deploy)
+    }
+
+    // V1 variant ctor
+    pub fn from_v1(v1: TransactionV1) -> Self {
+        Transaction::V1(v1)
+    }
+
     /// Returns the `TransactionHash` identifying this transaction.
     pub fn hash(&self) -> TransactionHash {
         match self {

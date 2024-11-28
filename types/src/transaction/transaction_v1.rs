@@ -153,6 +153,31 @@ impl TryFrom<TransactionV1> for TransactionV1Json {
 }
 
 impl TransactionV1 {
+    // ctor
+    pub fn new(
+        hash: TransactionV1Hash,
+        payload: TransactionV1Payload,
+        approvals: BTreeSet<Approval>,
+    ) -> Self {
+        Self {
+            hash,
+            payload,
+            approvals,
+            #[cfg(any(feature = "once_cell", test))]
+            is_verified: OnceCell::new(),
+        }
+    }
+
+    // ctor from payload
+    pub fn from_payload(payload: TransactionV1Payload) -> Self {
+        let hash = Digest::hash(
+            payload
+                .to_bytes()
+                .unwrap_or_else(|error| panic!("should serialize body: {}", error)),
+        );
+        TransactionV1::new(hash.into(), payload, BTreeSet::new())
+    }
+
     #[cfg(any(feature = "std", test, feature = "testing"))]
     pub(crate) fn build(
         chain_name: String,
@@ -176,13 +201,8 @@ impl TransactionV1 {
                 .to_bytes()
                 .unwrap_or_else(|error| panic!("should serialize body: {}", error)),
         );
-        let mut transaction = TransactionV1 {
-            hash: hash.into(),
-            payload: transaction_v1_payload,
-            approvals: BTreeSet::new(),
-            #[cfg(any(feature = "once_cell", test))]
-            is_verified: OnceCell::new(),
-        };
+        let mut transaction =
+            TransactionV1::new(hash.into(), transaction_v1_payload, BTreeSet::new());
 
         if let Some(secret_key) = initiator_addr_and_secret_key.secret_key() {
             transaction.sign(secret_key);

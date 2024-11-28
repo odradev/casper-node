@@ -199,7 +199,7 @@ pub use transaction::{
     TransactionEntryPoint, TransactionHash, TransactionId, TransactionInvocationTarget,
     TransactionRuntime, TransactionScheduling, TransactionTarget, TransactionV1,
     TransactionV1DecodeFromJsonError, TransactionV1Error, TransactionV1ExcessiveSizeError,
-    TransactionV1Hash, TransferTarget,
+    TransactionV1Hash, TransactionV1Payload, TransferTarget,
 };
 #[cfg(any(feature = "std", test))]
 pub use transaction::{

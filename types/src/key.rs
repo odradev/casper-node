@@ -35,9 +35,8 @@ use tracing::{error, warn};
 
 use crate::{
     account::{AccountHash, ACCOUNT_HASH_LENGTH},
-    addressable_entity,
     addressable_entity::{
-        AddressableEntityHash, EntityAddr, EntityKindTag, EntryPointAddr, NamedKeyAddr,
+        self, AddressableEntityHash, EntityAddr, EntityKindTag, EntryPointAddr, NamedKeyAddr,
     },
     block::BlockGlobalAddr,
     byte_code,
@@ -758,6 +757,15 @@ impl Key {
                     )
                     .map_err(|err| FromStrError::BidAddr(err.to_string()))?;
                     BidAddr::new_delegator_account_addr((validator_bytes, delegator_bytes))
+                } else if tag == BidAddrTag::DelegatedPurse {
+                    let uref = <[u8; UREF_ADDR_LENGTH]>::try_from(
+                        bytes[BidAddr::VALIDATOR_BID_ADDR_LENGTH..].as_ref(),
+                    )
+                    .map_err(|err| FromStrError::BidAddr(err.to_string()))?;
+                    BidAddr::DelegatedPurse {
+                        validator: AccountHash::new(validator_bytes),
+                        delegator: uref,
+                    }
                 } else if tag == BidAddrTag::Credit {
                     let era_id = bytesrepr::deserialize_from_slice(
                         &bytes[BidAddr::VALIDATOR_BID_ADDR_LENGTH..],
@@ -766,6 +774,39 @@ impl Key {
                     BidAddr::Credit {
                         validator: AccountHash::new(validator_bytes),
                         era_id,
+                    }
+                } else if tag == BidAddrTag::ReservedDelegationAccount {
+                    let delegator_bytes = <[u8; ACCOUNT_HASH_LENGTH]>::try_from(
+                        bytes[BidAddr::VALIDATOR_BID_ADDR_LENGTH..].as_ref(),
+                    )
+                    .map_err(|err| FromStrError::BidAddr(err.to_string()))?;
+                    BidAddr::new_reservation_account_addr((validator_bytes, delegator_bytes))
+                } else if tag == BidAddrTag::ReservedDelegationPurse {
+                    let uref = <[u8; UREF_ADDR_LENGTH]>::try_from(
+                        bytes[BidAddr::VALIDATOR_BID_ADDR_LENGTH..].as_ref(),
+                    )
+                    .map_err(|err| FromStrError::BidAddr(err.to_string()))?;
+                    BidAddr::ReservedDelegationPurse {
+                        validator: AccountHash::new(validator_bytes),
+                        delegator: uref,
+                    }
+                } else if tag == BidAddrTag::UnbondAccount {
+                    let unbonder_bytes = <[u8; ACCOUNT_HASH_LENGTH]>::try_from(
+                        bytes[BidAddr::VALIDATOR_BID_ADDR_LENGTH..].as_ref(),
+                    )
+                    .map_err(|err| FromStrError::BidAddr(err.to_string()))?;
+                    BidAddr::UnbondAccount {
+                        validator: AccountHash::new(validator_bytes),
+                        unbonder: AccountHash::new(unbonder_bytes),
+                    }
+                } else if tag == BidAddrTag::UnbondPurse {
+                    let uref = <[u8; UREF_ADDR_LENGTH]>::try_from(
+                        bytes[BidAddr::VALIDATOR_BID_ADDR_LENGTH..].as_ref(),
+                    )
+                    .map_err(|err| FromStrError::BidAddr(err.to_string()))?;
+                    BidAddr::UnbondPurse {
+                        validator: AccountHash::new(validator_bytes),
+                        unbonder: uref,
                     }
                 } else {
                     return Err(FromStrError::BidAddr("invalid tag".to_string()));
@@ -2724,5 +2765,20 @@ mod tests {
         let decoded = serde_json::from_value(encoded.clone())
             .unwrap_or_else(|_| panic!("{} {}", key, encoded));
         assert_eq!(key, &decoded);
+    }
+}
+
+#[cfg(test)]
+mod proptest {
+    use crate::gens;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn test_json_roundtrip_for_bidaddr_key(key in gens::key_arb()) {
+            let json_string = serde_json::to_string_pretty(&key).unwrap();
+            let decoded = serde_json::from_str(&json_string).unwrap();
+            assert_eq!(key, decoded);
+        }
     }
 }
