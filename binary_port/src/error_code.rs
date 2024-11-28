@@ -290,10 +290,10 @@ pub enum ErrorCode {
     #[error("invalid transaction runtime")]
     InvalidTransactionRuntime = 90,
     /// Key in transfer request malformed
-    #[error("transfer record malformed key")]
+    #[error("malformed transfer record key")]
     TransferRecordMalformedKey = 91,
     /// Malformed information request
-    #[error("transfer record malformed key")]
+    #[error("malformed information request")]
     MalformedInformationRequest = 92,
     /// Malformed binary version
     #[error("malformed version bytes in header of binary request")]

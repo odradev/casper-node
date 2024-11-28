@@ -163,6 +163,24 @@ pub fn key_arb() -> impl Strategy<Value = Key> {
         deploy_hash_arb().prop_map(Key::DeployInfo),
         era_id_arb().prop_map(Key::EraInfo),
         uref_arb().prop_map(|uref| Key::Balance(uref.addr())),
+        bid_addr_validator_arb().prop_map(Key::BidAddr),
+        bid_addr_delegator_arb().prop_map(Key::BidAddr),
+        account_hash_arb().prop_map(Key::Withdraw),
+        u8_slice_32().prop_map(Key::Dictionary),
+        balance_hold_addr_arb().prop_map(Key::BalanceHold),
+        Just(Key::EraSummary)
+    ]
+}
+
+pub fn all_keys_arb() -> impl Strategy<Value = Key> {
+    prop_oneof![
+        account_hash_arb().prop_map(Key::Account),
+        u8_slice_32().prop_map(Key::Hash),
+        uref_arb().prop_map(Key::URef),
+        transfer_v1_addr_arb().prop_map(Key::Transfer),
+        deploy_hash_arb().prop_map(Key::DeployInfo),
+        era_id_arb().prop_map(Key::EraInfo),
+        uref_arb().prop_map(|uref| Key::Balance(uref.addr())),
         account_hash_arb().prop_map(Key::Withdraw),
         u8_slice_32().prop_map(Key::Dictionary),
         balance_hold_addr_arb().prop_map(Key::BalanceHold),
@@ -176,9 +194,9 @@ pub fn key_arb() -> impl Strategy<Value = Key> {
         u8_slice_32().prop_map(Key::SmartContract),
         byte_code_addr_arb().prop_map(Key::ByteCode),
         entity_addr_arb().prop_map(Key::AddressableEntity),
+        block_global_addr_arb().prop_map(Key::BlockGlobal),
         message_addr_arb().prop_map(Key::Message),
         named_key_addr_arb().prop_map(Key::NamedKey),
-        block_global_addr_arb().prop_map(Key::BlockGlobal),
         balance_hold_addr_arb().prop_map(Key::BalanceHold),
         entry_point_addr_arb().prop_map(Key::EntryPoint),
         entity_addr_arb().prop_map(Key::State),
@@ -222,8 +240,7 @@ pub fn bid_addr_delegator_arb() -> impl Strategy<Value = BidAddr> {
 }
 
 pub fn bid_legacy_arb() -> impl Strategy<Value = BidAddr> {
-    let x = u8_slice_32();
-    (x).prop_map(BidAddr::legacy)
+    u8_slice_32().prop_map(BidAddr::legacy)
 }
 
 pub fn bid_addr_delegated_arb() -> impl Strategy<Value = BidAddr> {

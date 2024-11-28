@@ -98,7 +98,7 @@ mod proptests {
 
     use casper_types::{
         bytesrepr::{self, deserialize_from_slice, FromBytes, ToBytes},
-        gens::{blake2b_hash_arb, key_arb, trie_pointer_arb},
+        gens::{all_keys_arb, blake2b_hash_arb, trie_pointer_arb},
         Digest, Key, StoredValue,
     };
 
@@ -198,7 +198,7 @@ mod proptests {
         }
 
         #[test]
-        fn roundtrip_key(key in key_arb()) {
+        fn roundtrip_key(key in all_keys_arb()) {
             bytesrepr::test_serialization_roundtrip(&key);
         }
 
@@ -259,14 +259,14 @@ mod proptests {
         }
 
         #[test]
-        fn bincode_roundtrip_key(key in key_arb()) {
+        fn bincode_roundtrip_key(key in all_keys_arb()) {
              let bincode_bytes = bincode::serialize(&key)?;
              let deserialized_key = bincode::deserialize(&bincode_bytes)?;
              prop_assert_eq!(key, deserialized_key)
         }
 
         #[test]
-        fn serde_roundtrip_key(key in key_arb()) {
+        fn serde_roundtrip_key(key in all_keys_arb()) {
              let json_str = serde_json::to_string(&key)?;
              let deserialized_key = serde_json::from_str(&json_str)?;
              assert_eq!(key, deserialized_key)

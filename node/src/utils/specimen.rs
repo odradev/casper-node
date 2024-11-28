@@ -964,7 +964,7 @@ impl LargestSpecimen for Deploy {
         //       being this maximum size already (see the [`LargestSpecimen`] implementation of
         //       [`ExecutableDeployItem`]). For this reason, we leave `dependencies` and `payment`
         //       small.
-        Deploy::new(
+        Deploy::new_signed(
             LargestSpecimen::largest_specimen(estimator, cache),
             LargestSpecimen::largest_specimen(estimator, cache),
             LargestSpecimen::largest_specimen(estimator, cache),

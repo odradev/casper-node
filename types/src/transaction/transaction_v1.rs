@@ -153,7 +153,7 @@ impl TryFrom<TransactionV1> for TransactionV1Json {
 }
 
 impl TransactionV1 {
-    // ctor
+    /// ctor
     pub fn new(
         hash: TransactionV1Hash,
         payload: TransactionV1Payload,
