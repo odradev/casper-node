@@ -53,6 +53,7 @@ const EXPECTED_FIELD_KEYS: [u16; 4] = [
     SCHEDULING_MAP_KEY,
 ];
 
+/// Structure aggregating internal data of V1 transaction.
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 #[cfg_attr(feature = "datasize", derive(DataSize))]
 #[cfg_attr(
@@ -75,6 +76,7 @@ pub struct TransactionV1Payload {
 }
 
 impl TransactionV1Payload {
+    // ctor
     pub fn new(
         chain_name: String,
         timestamp: Timestamp,
@@ -104,26 +106,32 @@ impl TransactionV1Payload {
         ]
     }
 
+    /// Returns the chain name of the transaction.
     pub fn chain_name(&self) -> &str {
         &self.chain_name
     }
 
+    /// Returns the timestamp of the transaction.
     pub fn timestamp(&self) -> Timestamp {
         self.timestamp
     }
 
+    /// Returns the time-to-live of the transaction.
     pub fn ttl(&self) -> TimeDiff {
         self.ttl
     }
 
+    /// Returns the pricing mode of the transaction.
     pub fn pricing_mode(&self) -> &PricingMode {
         &self.pricing_mode
     }
 
+    /// Returns the initiator address of the transaction.
     pub fn initiator_addr(&self) -> &InitiatorAddr {
         &self.initiator_addr
     }
 
+    /// Returns the fields of the transaction.
     pub fn fields(&self) -> &BTreeMap<u16, Bytes> {
         &self.fields
     }
@@ -138,6 +146,8 @@ impl TransactionV1Payload {
         self.expires() < current_instant
     }
 
+    /// Fetches field from the amorphic `field` map and attempts to deserialize it into a type `T`.
+    /// The deserialization is done using the `FromBytes` trait.
     pub fn deserialize_field<T: FromBytes>(
         &self,
         index: u16,
@@ -154,10 +164,12 @@ impl TransactionV1Payload {
         Ok(value)
     }
 
+    /// Helper method to return size of `fields`.
     pub fn number_of_fields(&self) -> usize {
         self.fields.len()
     }
 
+    /// Makes transaction payload invalid.
     #[cfg(any(all(feature = "std", feature = "testing"), test))]
     pub fn invalidate(&mut self) {
         self.chain_name.clear();

@@ -315,7 +315,7 @@ async fn should_not_set_shared_pre_state_to_lower_block_height() {
               "id" => Some(9_u64),
             },
         };
-        Transaction::Deploy(Deploy::new(
+        Transaction::Deploy(Deploy::new_signed(
             timestamp,
             ttl,
             gas_price,

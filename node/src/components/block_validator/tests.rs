@@ -212,7 +212,7 @@ pub(super) fn new_deploy(rng: &mut TestRng, timestamp: Timestamp, ttl: TimeDiff)
     let dependencies = vec![];
     let gas_price = 1;
 
-    Deploy::new(
+    Deploy::new_signed(
         timestamp,
         ttl,
         gas_price,
@@ -247,7 +247,7 @@ pub(super) fn new_transfer(rng: &mut TestRng, timestamp: Timestamp, ttl: TimeDif
     let dependencies = vec![];
     let gas_price = 1;
 
-    Deploy::new(
+    Deploy::new_signed(
         timestamp,
         ttl,
         gas_price,

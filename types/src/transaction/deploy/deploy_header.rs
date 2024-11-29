@@ -41,7 +41,7 @@ pub struct DeployHeader {
 
 impl DeployHeader {
     #[cfg(any(feature = "std", feature = "json-schema", test))]
-    pub(super) fn new(
+    pub fn new(
         account: PublicKey,
         timestamp: Timestamp,
         ttl: TimeDiff,

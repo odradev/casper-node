@@ -735,29 +735,15 @@ mod tests {
 }
 
 #[cfg(test)]
-mod prop_test_validator_addr {
+mod proptest {
     use proptest::prelude::*;
 
     use crate::{bytesrepr, gens};
 
     proptest! {
         #[test]
-        fn test_value_bid_addr_validator(validator_bid_addr in gens::bid_addr_validator_arb()) {
-            bytesrepr::test_serialization_roundtrip(&validator_bid_addr);
-        }
-    }
-}
-
-#[cfg(test)]
-mod prop_test_delegator_addr {
-    use proptest::prelude::*;
-
-    use crate::{bytesrepr, gens};
-
-    proptest! {
-        #[test]
-        fn test_value_bid_addr_delegator(delegator_bid_addr in gens::bid_addr_delegator_arb()) {
-            bytesrepr::test_serialization_roundtrip(&delegator_bid_addr);
+        fn test_value_bid_addr_validator(bid_addr in gens::bid_addr_arb()) {
+            bytesrepr::test_serialization_roundtrip(&bid_addr);
         }
     }
 }
