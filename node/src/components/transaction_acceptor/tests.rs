@@ -38,7 +38,7 @@ use casper_types::{
     Block, BlockV2, CLValue, Chainspec, ChainspecRawBytes, Contract, Deploy, EraId, HashAddr,
     InvalidDeploy, InvalidTransaction, InvalidTransactionV1, Package, PricingMode, ProtocolVersion,
     PublicKey, SecretKey, StoredValue, TestBlockBuilder, TimeDiff, Timestamp, Transaction,
-    TransactionConfig, TransactionRuntime, TransactionV1, TransactionV1Builder, URef, U512,
+    TransactionConfig, TransactionRuntime, TransactionV1, URef, U512,
 };
 
 use super::*;
@@ -59,7 +59,7 @@ use crate::{
     protocol::Message,
     reactor::{self, EventQueueHandle, QueueKind, Runner, TryCrankOutcome},
     testing::ConditionCheckReactor,
-    types::NodeId,
+    types::{transaction::transaction_v1_builder::TransactionV1Builder, NodeId},
     utils::{Loadable, WithDir},
     NodeRng,
 };
