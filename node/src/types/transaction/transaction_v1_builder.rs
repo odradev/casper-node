@@ -599,9 +599,6 @@ use core::fmt::{self, Display, Formatter};
 #[cfg(feature = "std")]
 use std::error::Error as StdError;
 
-#[cfg(doc)]
-use super::{TransactionV1, TransactionV1Builder};
-
 /// Errors returned while building a [`TransactionV1`] using a [`TransactionV1Builder`].
 #[derive(Clone, Eq, PartialEq, Debug)]
 #[non_exhaustive]
