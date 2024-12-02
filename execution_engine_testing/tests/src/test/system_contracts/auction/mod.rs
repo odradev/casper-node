@@ -171,11 +171,6 @@ fn should_support_contract_staking() {
             .query(None, delegation_key, &[])
             .expect("should have delegation bid")
     {
-        // assert_ne!(
-        //     delegator.staked_amount(),
-        //     delegate_amount,
-        //     "staked amount should execeed delegation amount due to rewards"
-        // );
         delegator.staked_amount()
     } else {
         U512::zero()
