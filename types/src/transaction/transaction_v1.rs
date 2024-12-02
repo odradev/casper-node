@@ -311,7 +311,7 @@ impl TransactionV1 {
         ttl: Option<TimeDiff>,
     ) -> Self {
         let secret_key = SecretKey::random(rng);
-        let timestamp = maybe_timestamp.unwrap_or_else(|| Timestamp::random(rng));
+        let timestamp = maybe_timestamp.unwrap_or_else(|| Timestamp::now());
         let ttl_millis = ttl.map_or(
             rng.gen_range(60_000..TransactionConfig::default().max_ttl.millis()),
             |ttl| ttl.millis(),
