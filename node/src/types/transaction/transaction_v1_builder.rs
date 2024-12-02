@@ -397,6 +397,45 @@ impl<'a> TransactionV1Builder<'a> {
         }
     }
 
+    #[cfg(test)]
+    pub fn new_random_with_category_and_timestamp_and_ttl(
+        rng: &mut TestRng,
+        lane: u8,
+        timestamp: Option<Timestamp>,
+        ttl: Option<TimeDiff>,
+    ) -> Self {
+        let secret_key = SecretKey::random(rng);
+        let ttl_millis = ttl.map_or(
+            rng.gen_range(60_000..TransactionConfig::default().max_ttl.millis()),
+            |ttl| ttl.millis(),
+        );
+        let FieldsContainer {
+            args,
+            target,
+            entry_point,
+            scheduling,
+        } = FieldsContainer::random_of_lane(rng, lane);
+        TransactionV1Builder {
+            chain_name: Some(rng.random_string(5..10)),
+            timestamp: timestamp.unwrap_or(Timestamp::now()),
+            ttl: TimeDiff::from_millis(ttl_millis),
+            args,
+            target,
+            entry_point,
+            scheduling,
+            pricing_mode: PricingMode::Fixed {
+                gas_price_tolerance: 5,
+                additional_computation_factor: 0,
+            },
+            initiator_addr: Some(InitiatorAddr::PublicKey(PublicKey::from(&secret_key))),
+            secret_key: Some(secret_key),
+            _phantom_data: PhantomData,
+            invalid_approvals: vec![],
+            #[cfg(any(all(feature = "std", feature = "testing"), test))]
+            additional_fields: BTreeMap::new(),
+        }
+    }
+
     /// Sets the `chain_name` in the transaction.
     ///
     /// Must be provided or building will fail.

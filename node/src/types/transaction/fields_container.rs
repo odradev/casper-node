@@ -7,7 +7,7 @@ use casper_types::{
 #[cfg(test)]
 use casper_types::{
     testing::TestRng, PublicKey, RuntimeArgs, TransactionInvocationTarget, TransactionRuntime,
-    TransferTarget,
+    TransferTarget, AUCTION_LANE_ID, INSTALL_UPGRADE_LANE_ID, MINT_LANE_ID,
 };
 #[cfg(test)]
 use rand::{Rng, RngCore};
@@ -197,6 +197,75 @@ impl FieldsContainer {
             }
             _ => unreachable!(),
         }
+    }
+
+    /// Returns a random `FieldsContainer`.
+    #[cfg(test)]
+    pub fn random_of_lane(rng: &mut TestRng, lane_id: u8) -> Self {
+        match lane_id {
+            MINT_LANE_ID => Self::random_transfer(rng),
+            AUCTION_LANE_ID => Self::random_staking(rng),
+            INSTALL_UPGRADE_LANE_ID => Self::random_install_upgrade(rng),
+            _ => Self::random_standard(rng),
+        }
+    }
+
+    #[cfg(test)]
+    fn random_install_upgrade(rng: &mut TestRng) -> Self {
+        let target = TransactionTarget::Session {
+            module_bytes: Bytes::from(rng.random_vec(0..100)),
+            runtime: TransactionRuntime::VmCasperV1,
+            is_install_upgrade: true,
+            transferred_value: 0,
+            seed: None,
+        };
+        FieldsContainer::new(
+            TransactionArgs::Named(RuntimeArgs::random(rng)),
+            target,
+            TransactionEntryPoint::Call,
+            TransactionScheduling::random(rng),
+        )
+    }
+
+    #[cfg(test)]
+    fn random_staking(rng: &mut TestRng) -> Self {
+        let public_key = PublicKey::random(rng);
+        let delegation_rate = rng.gen();
+        let amount = rng.gen::<u64>();
+        let minimum_delegation_amount = rng.gen::<bool>().then(|| rng.gen());
+        let maximum_delegation_amount = minimum_delegation_amount
+            .map(|minimum_delegation_amount| minimum_delegation_amount + rng.gen::<u32>() as u64);
+        let reserved_slots = rng.gen::<bool>().then(|| rng.gen::<u32>());
+        let args = arg_handling::new_add_bid_args(
+            public_key,
+            delegation_rate,
+            amount,
+            minimum_delegation_amount,
+            maximum_delegation_amount,
+            reserved_slots,
+        )
+        .unwrap();
+        FieldsContainer::new(
+            TransactionArgs::Named(args),
+            TransactionTarget::Native,
+            TransactionEntryPoint::AddBid,
+            TransactionScheduling::random(rng),
+        )
+    }
+
+    #[cfg(test)]
+    fn random_transfer(rng: &mut TestRng) -> Self {
+        let amount = rng.gen_range(2_500_000_000..=u64::MAX);
+        let maybe_source = if rng.gen() { Some(rng.gen()) } else { None };
+        let target = TransferTarget::random(rng);
+        let maybe_id = rng.gen::<bool>().then(|| rng.gen());
+        let args = arg_handling::new_transfer_args(amount, maybe_source, target, maybe_id).unwrap();
+        FieldsContainer::new(
+            TransactionArgs::Named(args),
+            TransactionTarget::Native,
+            TransactionEntryPoint::Transfer,
+            TransactionScheduling::random(rng),
+        )
     }
 
     #[cfg(test)]
