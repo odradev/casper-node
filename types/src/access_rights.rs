@@ -231,6 +231,11 @@ impl ContextAccessRights {
         }
     }
 
+    /// Reference to access rights.
+    pub fn access_rights(&self) -> &BTreeMap<URefAddr, AccessRights> {
+        &self.access_rights
+    }
+
     /// Consume into access rights.
     pub fn take_access_rights(self) -> BTreeMap<URefAddr, AccessRights> {
         self.access_rights
