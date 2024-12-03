@@ -1,4 +1,3 @@
-mod chain_utils;
 pub mod install;
 pub(crate) mod system;
 
@@ -14,7 +13,7 @@ use casper_execution_engine::{
     },
     execution::ExecError,
 };
-use casper_executor_wasm_common::flags::ReturnFlags;
+use casper_executor_wasm_common::{chain_utils, flags::ReturnFlags};
 use casper_executor_wasm_host::context::Context;
 use casper_executor_wasm_interface::{
     executor::{
@@ -35,11 +34,10 @@ use casper_storage::{
 use casper_types::{
     account::AccountHash,
     addressable_entity::{ActionThresholds, AssociatedKeys},
-    bytesrepr,
-    contracts::{ContractHash, ContractPackageHash},
-    AddressableEntity, ByteCode, ByteCodeAddr, ByteCodeHash, ByteCodeKind, Digest, EntityAddr,
-    EntityKind, Gas, Groups, InitiatorAddr, Key, Package, PackageHash, PackageStatus, Phase,
-    ProtocolVersion, StoredValue, TransactionInvocationTarget, TransactionRuntime, URef, U512,
+    bytesrepr, AddressableEntity, AddressableEntityHash, ByteCode, ByteCodeAddr, ByteCodeHash,
+    ByteCodeKind, Digest, EntityAddr, EntityKind, Gas, Groups, InitiatorAddr, Key, Package,
+    PackageHash, PackageStatus, Phase, ProtocolVersion, StoredValue, TransactionInvocationTarget,
+    TransactionRuntime, URef, U512,
 };
 use either::Either;
 use install::{InstallContractError, InstallContractRequest, InstallContractResult};
@@ -150,37 +148,48 @@ impl ExecutorV2 {
             block_height,
         } = install_request;
 
+        let bytecode_hash = chain_utils::compute_wasm_bytecode_hash(&wasm_bytes);
+
         let caller_key = Key::Account(initiator);
         let _source_purse = get_purse_for_entity(&mut tracking_copy, caller_key);
 
         // 1. Store package hash
-        let contract_package = Package::new(
+        let smart_contract_addr: [u8; 32] = chain_utils::compute_predictable_address(
+            chain_name.as_bytes(),
+            initiator.value(),
+            bytecode_hash,
+            seed,
+        );
+
+        let mut smart_contract = Package::new(
             Default::default(),
             Default::default(),
             Groups::default(),
             PackageStatus::Unlocked,
         );
 
-        let bytecode_hash = chain_utils::compute_wasm_bytecode_hash(&wasm_bytes);
+        let protocol_version = ProtocolVersion::V2_0_0;
 
-        let package_hash_bytes: [u8; 32];
-        let contract_hash = chain_utils::compute_predictable_address(
+        let protocol_version_major = protocol_version.value().major;
+        let next_version = smart_contract.next_entity_version_for(protocol_version_major);
+        let entity_hash =
+            chain_utils::compute_next_contract_hash_version(smart_contract_addr, next_version);
+        let entity_version_key = smart_contract.insert_entity_version(
+            protocol_version_major,
+            AddressableEntityHash::new(entity_hash),
+        );
+        debug_assert_eq!(entity_version_key.entity_version(), next_version);
+
+        let smart_contract_addr = chain_utils::compute_predictable_address(
             chain_name.as_bytes(),
-            initiator,
+            initiator.value(),
             bytecode_hash,
             seed,
         );
 
-        {
-            let mut gen = address_generator.write();
-            package_hash_bytes = gen.create_address(); // TODO: Do we need packages at all in new
-                                                       // VM?
-                                                       // contract_hash = gen.create_address();
-        }
-
         tracking_copy.write(
-            Key::Package(package_hash_bytes),
-            StoredValue::Package(contract_package),
+            Key::SmartContract(smart_contract_addr),
+            StoredValue::SmartContract(smart_contract),
         );
 
         // 2. Store wasm
@@ -194,9 +203,7 @@ impl ExecutorV2 {
         );
 
         // 3. Store addressable entity
-
-        let entity_addr = EntityAddr::SmartContract(contract_hash);
-        let addressable_entity_key = Key::AddressableEntity(entity_addr);
+        let addressable_entity_key = Key::AddressableEntity(EntityAddr::SmartContract(entity_hash));
 
         // TODO: abort(str) as an alternative to trap
         let main_purse: URef = match system::mint_mint(
@@ -217,7 +224,7 @@ impl ExecutorV2 {
         };
 
         let addressable_entity = AddressableEntity::new(
-            PackageHash::new(package_hash_bytes),
+            PackageHash::new(smart_contract_addr),
             ByteCodeHash::new(bytecode_hash),
             ProtocolVersion::V2_0_0,
             main_purse,
@@ -237,9 +244,8 @@ impl ExecutorV2 {
                 let execute_request = ExecuteRequestBuilder::default()
                     .with_initiator(initiator)
                     .with_caller_key(caller_key)
-                    .with_callee_key(addressable_entity_key)
                     .with_target(ExecutionKind::Stored {
-                        address: entity_addr,
+                        address: smart_contract_addr,
                         entry_point: entry_point_name,
                     })
                     .with_gas_limit(gas_limit)
@@ -294,9 +300,7 @@ impl ExecutorV2 {
 
         match state_provider.commit_effects(state_root_hash, effects.clone()) {
             Ok(post_state_hash) => Ok(InstallContractResult {
-                contract_package_hash: ContractPackageHash::new(package_hash_bytes),
-                contract_hash: ContractHash::new(contract_hash),
-                version: 1,
+                smart_contract_addr,
                 gas_usage: ctor_gas_usage,
                 effects,
                 post_state_hash,
@@ -313,7 +317,6 @@ impl ExecutorV2 {
         let ExecuteRequest {
             initiator,
             caller_key,
-            callee_key: _,
             gas_limit,
             execution_kind,
             input,
@@ -337,15 +340,34 @@ impl ExecutorV2 {
                 (wasm_bytes.clone(), Either::Left(DEFAULT_WASM_ENTRY_POINT))
             }
             ExecutionKind::Stored {
-                address: entity_addr,
+                address: smart_contract_addr,
                 entry_point,
             } => {
-                let key = Key::AddressableEntity(*entity_addr); // TODO: Error handling
-                let legacy_key = Key::Hash(entity_addr.value());
+                let smart_contract_key = Key::SmartContract(*smart_contract_addr);
+                let legacy_key = Key::Hash(*smart_contract_addr);
 
-                let contract = tracking_copy
-                    .read_first(&[&key, &legacy_key])
+                let mut contract = tracking_copy
+                    .read_first(&[&legacy_key, &smart_contract_key])
                     .expect("should read contract");
+
+                // let entity_addr: EntityAddr;
+
+                // Resolve indirection - get the latest version from the smart contract package
+                // versions. let old_contract = contract.clone();
+                // let latest_version_key;
+                if let Some(StoredValue::SmartContract(smart_contract_package)) = &contract {
+                    let contract_hash = smart_contract_package
+                        .versions()
+                        .latest()
+                        .expect("should have last entry");
+                    let entity_addr = EntityAddr::SmartContract(contract_hash.value());
+                    let latest_version_key = Key::AddressableEntity(entity_addr);
+                    assert_ne!(&entity_addr.value(), smart_contract_addr);
+                    let new_contract = tracking_copy
+                        .read(&latest_version_key)
+                        .expect("should read latest version");
+                    contract = new_contract;
+                };
 
                 match contract {
                     Some(StoredValue::AddressableEntity(addressable_entity)) => {
@@ -363,9 +385,11 @@ impl ExecutorV2 {
                                     block_height,
                                 );
 
+                                let entity_addr = EntityAddr::SmartContract(*smart_contract_addr);
+
                                 return self.execute_legacy_wasm_byte_code(
                                     initiator,
-                                    entity_addr,
+                                    &entity_addr,
                                     entry_point.clone(),
                                     &input,
                                     &mut tracking_copy,
@@ -438,9 +462,11 @@ impl ExecutorV2 {
                         let block_info =
                             BlockInfo::new(state_hash, block_time, parent_block_hash, block_height);
 
+                        let entity_addr = EntityAddr::SmartContract(*smart_contract_addr);
+
                         return self.execute_legacy_wasm_byte_code(
                             initiator,
-                            entity_addr,
+                            &entity_addr,
                             entry_point.clone(),
                             &input,
                             &mut tracking_copy,
@@ -450,10 +476,13 @@ impl ExecutorV2 {
                         );
                     }
                     Some(stored_value) => {
-                        todo!("Not yet implemented {stored_value:?}");
+                        todo!(
+                            "Unexpected {stored_value:?} under key {:?}",
+                            &execution_kind
+                        );
                     }
                     None => {
-                        panic!("No code found");
+                        panic!("No code found in {smart_contract_key:?}");
                     }
                 }
             }
@@ -463,11 +492,12 @@ impl ExecutorV2 {
 
         let mut initial_tracking_copy = tracking_copy.fork2();
 
+        // Derive callee key from the execution target.
         let callee_key = match &execution_kind {
             ExecutionKind::Stored {
-                address: entity_addr,
+                address: smart_contract_addr,
                 ..
-            } => Key::AddressableEntity(*entity_addr),
+            } => Key::SmartContract(*smart_contract_addr),
             ExecutionKind::SessionBytes(_wasm_bytes) => Key::Account(initiator),
         };
 
@@ -775,8 +805,23 @@ fn get_purse_for_entity<R: GlobalStateReader>(
 
             addressable_entity.main_purse()
         }
-        StoredValue::AddressableEntity(addressable_entity) => addressable_entity.main_purse(),
         StoredValue::Account(account) => account.main_purse(),
+        StoredValue::SmartContract(smart_contract_package) => {
+            let contract_hash = smart_contract_package
+                .versions()
+                .latest()
+                .expect("should have last entry");
+            let entity_addr = EntityAddr::SmartContract(contract_hash.value());
+            let latest_version_key = Key::AddressableEntity(entity_addr);
+            let new_contract = tracking_copy
+                .read(&latest_version_key)
+                .expect("should read latest version");
+            let addressable_entity = new_contract
+                .expect("should have addressable entity")
+                .into_addressable_entity()
+                .expect("should be addressable entity");
+            addressable_entity.main_purse()
+        }
         other => panic!("should be account or contract received {other:?}"),
     }
 }

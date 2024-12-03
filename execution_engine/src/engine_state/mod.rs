@@ -106,7 +106,7 @@ impl ExecutionEngineV1 {
                 &authorization_keys,
                 &self.config().administrative_accounts,
             ) {
-                Ok((addressable_entity, entity_hash)) => (addressable_entity, entity_hash),
+                Ok((runtime_footprint, entity_hash)) => (runtime_footprint, entity_hash),
                 Err(tce) => {
                     return WasmV1Result::precondition_failure(gas_limit, Error::TrackingCopy(tce))
                 }

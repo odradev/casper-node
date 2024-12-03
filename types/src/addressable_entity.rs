@@ -797,6 +797,13 @@ impl EntityAddr {
 
         Err(FromStrError::InvalidPrefix)
     }
+
+    pub fn into_smart_contract(&self) -> Option<[u8; 32]> {
+        match self {
+            EntityAddr::SmartContract(addr) => Some(*addr),
+            _ => None,
+        }
+    }
 }
 
 impl ToBytes for EntityAddr {
@@ -1764,6 +1771,16 @@ mod tests {
     #[test]
     fn entity_addr_formatted_string_roundtrip() {
         let entity_addr = EntityAddr::Account([5; 32]);
+        let encoded = entity_addr.to_formatted_string();
+        let decoded = EntityAddr::from_formatted_str(&encoded).expect("must get entity addr");
+        assert_eq!(decoded, entity_addr);
+
+        let entity_addr = EntityAddr::SmartContract([5; 32]);
+        let encoded = entity_addr.to_formatted_string();
+        let decoded = EntityAddr::from_formatted_str(&encoded).expect("must get entity addr");
+        assert_eq!(decoded, entity_addr);
+
+        let entity_addr = EntityAddr::System([5; 32]);
         let encoded = entity_addr.to_formatted_string();
         let decoded = EntityAddr::from_formatted_str(&encoded).expect("must get entity addr");
         assert_eq!(decoded, entity_addr);

@@ -175,6 +175,7 @@ pub fn casper_create(
     transferred_value: u128,
     constructor: Option<&str>,
     input_data: Option<&[u8]>,
+    seed: Option<&[u8; 32]>,
 ) -> Result<casper_sdk_sys::CreateResult, CallError> {
     let (code_ptr, code_size): (*const u8, usize) = match code {
         Some(code) => (code.as_ptr(), code.len()),
@@ -194,6 +195,8 @@ pub fn casper_create(
             constructor.map(|s| s.len()).unwrap_or(0),
             input_data.map(|s| s.as_ptr()).unwrap_or(ptr::null()),
             input_data.map(|s| s.len()).unwrap_or(0),
+            seed.map(|s| s.as_ptr()).unwrap_or(ptr::null()),
+            seed.map(|s| s.len()).unwrap_or(0),
             result.as_mut_ptr(),
         )
     };

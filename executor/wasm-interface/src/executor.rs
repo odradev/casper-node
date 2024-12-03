@@ -8,7 +8,7 @@ use casper_storage::{
     AddressGenerator, TrackingCopy,
 };
 use casper_types::{
-    account::AccountHash, execution::Effects, BlockHash, BlockTime, Digest, EntityAddr, Key,
+    account::AccountHash, execution::Effects, BlockHash, BlockTime, Digest, HashAddr, Key,
     TransactionHash,
 };
 use parking_lot::RwLock;
@@ -24,11 +24,6 @@ pub struct ExecuteRequest {
     ///
     /// Either a `[`Key::Account`]` or a `[`Key::AddressableEntity`].
     pub caller_key: Key,
-    /// Callee's address key. TODO: Remove this field as the callee is derived from the execution
-    /// kind field.
-    ///
-    /// Either a `[`Key::Account`]` or a `[`Key::AddressableEntity`].
-    pub callee_key: Key,
     /// Gas limit.
     pub gas_limit: u64,
     /// Target for execution.
@@ -63,7 +58,6 @@ pub struct ExecuteRequest {
 pub struct ExecuteRequestBuilder {
     initiator: Option<AccountHash>,
     caller_key: Option<Key>,
-    callee_key: Option<Key>,
     gas_limit: Option<u64>,
     target: Option<ExecutionKind>,
     input: Option<Bytes>,
@@ -87,12 +81,6 @@ impl ExecuteRequestBuilder {
     /// Set the caller's key.
     pub fn with_caller_key(mut self, caller_key: Key) -> Self {
         self.caller_key = Some(caller_key);
-        self
-    }
-
-    /// Set the callee's key.
-    pub fn with_callee_key(mut self, callee_key: Key) -> Self {
-        self.callee_key = Some(callee_key);
         self
     }
 
@@ -189,7 +177,6 @@ impl ExecuteRequestBuilder {
     pub fn build(self) -> Result<ExecuteRequest, &'static str> {
         let initiator = self.initiator.ok_or("Initiator is not set")?;
         let caller_key = self.caller_key.ok_or("Caller is not set")?;
-        let callee_key = self.callee_key.ok_or("Callee is not set")?;
         let gas_limit = self.gas_limit.ok_or("Gas limit is not set")?;
         let execution_kind = self.target.ok_or("Target is not set")?;
         let input = self.input.ok_or("Input is not set")?;
@@ -208,7 +195,6 @@ impl ExecuteRequestBuilder {
         Ok(ExecuteRequest {
             initiator,
             caller_key,
-            callee_key,
             gas_limit,
             execution_kind,
             input,
@@ -303,7 +289,7 @@ pub enum ExecutionKind {
     /// Execute a stored contract by its address.
     Stored {
         /// Address of the contract.
-        address: EntityAddr,
+        address: HashAddr,
         /// Entry point to call.
         entry_point: String,
     },

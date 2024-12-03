@@ -40,7 +40,7 @@ use casper_types::{
     ConsensusProtocolName, Deploy, EraId, FeeHandling, Gas, HoldBalanceHandling, Key, Motes,
     NextUpgrade, PricingHandling, PricingMode, ProtocolVersion, PublicKey, RefundHandling, Rewards,
     SecretKey, StoredValue, SystemHashRegistry, TimeDiff, Timestamp, Transaction, TransactionHash,
-    TransactionV1Builder, TransactionV1Config, ValidatorConfig, U512,
+    TransactionV1Config, ValidatorConfig, U512,
 };
 
 use crate::{
@@ -64,7 +64,10 @@ use crate::{
     testing::{
         self, filter_reactor::FilterReactor, network::TestingNetwork, ConditionCheckReactor,
     },
-    types::{BlockPayload, ExitCode, NodeId, SyncHandling},
+    types::{
+        transaction::transaction_v1_builder::TransactionV1Builder, BlockPayload, ExitCode, NodeId,
+        SyncHandling,
+    },
     utils::{External, Loadable, Source, RESOURCES_PATH},
     WithDir,
 };

@@ -32,6 +32,8 @@ macro_rules! for_each_host_function {
                 constructor_size: usize,
                 input_ptr: *const u8,
                 input_size: usize,
+                seed_ptr: *const u8,
+                seed_size: usize,
                 result_ptr: *mut $crate::CreateResult,
             ) -> u32;
 

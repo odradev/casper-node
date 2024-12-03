@@ -1577,11 +1577,10 @@
           },
           "uniqueItems": true
         }
-      },
-      "additionalProperties": false
+      }
     },
     "TransactionV1Payload": {
-      "description": "A unit of work sent by a client to the network, which when executed can cause global state to be altered.",
+      "description": "Internal payload of the transaction. The actual data over which the signing is done.",
       "type": "object",
       "required": [
         "chain_name",
@@ -1609,9 +1608,7 @@
         },
         "fields": {
           "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/Bytes"
-          }
+          "additionalProperties": true
         }
       },
       "additionalProperties": false
@@ -2452,14 +2449,7 @@
           ],
           "properties": {
             "Purse": {
-              "type": "array",
-              "items": {
-                "type": "integer",
-                "format": "uint8",
-                "minimum": 0.0
-              },
-              "maxItems": 32,
-              "minItems": 32
+              "type": "string"
             }
           },
           "additionalProperties": false
@@ -3248,14 +3238,7 @@
           ],
           "properties": {
             "DelegatedPurse": {
-              "type": "array",
-              "items": {
-                "type": "integer",
-                "format": "uint8",
-                "minimum": 0.0
-              },
-              "maxItems": 32,
-              "minItems": 32
+              "type": "string"
             }
           },
           "additionalProperties": false
@@ -3842,13 +3825,13 @@
           "additionalProperties": false
         },
         {
-          "description": "A `Package`.",
+          "description": "A smart contract `Package`.",
           "type": "object",
           "required": [
-            "Package"
+            "SmartContract"
           ],
           "properties": {
-            "Package": {
+            "SmartContract": {
               "$ref": "#/definitions/Package"
             }
           },
@@ -3940,12 +3923,7 @@
           ],
           "properties": {
             "RawBytes": {
-              "type": "array",
-              "items": {
-                "type": "integer",
-                "format": "uint8",
-                "minimum": 0.0
-              }
+              "type": "string"
             }
           },
           "additionalProperties": false
@@ -5014,14 +4992,7 @@
       "properties": {
         "hash_addr": {
           "description": "The identity of the entity that produced the message.",
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "format": "uint8",
-            "minimum": 0.0
-          },
-          "maxItems": 32,
-          "minItems": 32
+          "type": "string"
         },
         "message": {
           "description": "The payload of the message.",

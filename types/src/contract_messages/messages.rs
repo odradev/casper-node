@@ -5,6 +5,8 @@ use crate::{
 
 use alloc::{string::String, vec::Vec};
 use core::{convert::TryFrom, fmt::Debug};
+#[cfg(any(feature = "std", test))]
+use thiserror::Error;
 
 #[cfg(feature = "datasize")]
 use datasize::DataSize;
@@ -207,11 +209,12 @@ impl FromBytes for MessagePayload {
 }
 
 /// Message that was emitted by an addressable entity during execution.
-#[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 #[cfg_attr(feature = "datasize", derive(DataSize))]
 #[cfg_attr(feature = "json-schema", derive(JsonSchema))]
 pub struct Message {
     /// The identity of the entity that produced the message.
+    #[cfg_attr(feature = "json-schema", schemars(with = "String"))]
     hash_addr: HashAddr,
     /// The payload of the message.
     message: MessagePayload,
@@ -223,6 +226,126 @@ pub struct Message {
     topic_index: u32,
     /// Message index in the block.
     block_index: u64,
+}
+
+#[cfg(any(feature = "std", test))]
+#[derive(Serialize, Deserialize)]
+struct HumanReadableMessage {
+    hash_addr: String,
+    message: MessagePayload,
+    topic_name: String,
+    topic_name_hash: TopicNameHash,
+    topic_index: u32,
+    block_index: u64,
+}
+
+#[cfg(any(feature = "std", test))]
+impl From<&Message> for HumanReadableMessage {
+    fn from(message: &Message) -> Self {
+        Self {
+            hash_addr: base16::encode_lower(&message.hash_addr),
+            message: message.message.clone(),
+            topic_name: message.topic_name.clone(),
+            topic_name_hash: message.topic_name_hash,
+            topic_index: message.topic_index,
+            block_index: message.block_index,
+        }
+    }
+}
+
+#[cfg(any(feature = "std", test))]
+impl From<&Message> for NonHumanReadableMessage {
+    fn from(message: &Message) -> Self {
+        Self {
+            hash_addr: message.hash_addr,
+            message: message.message.clone(),
+            topic_name: message.topic_name.clone(),
+            topic_name_hash: message.topic_name_hash,
+            topic_index: message.topic_index,
+            block_index: message.block_index,
+        }
+    }
+}
+
+#[cfg(any(feature = "std", test))]
+impl From<NonHumanReadableMessage> for Message {
+    fn from(message: NonHumanReadableMessage) -> Self {
+        Self {
+            hash_addr: message.hash_addr,
+            message: message.message,
+            topic_name: message.topic_name,
+            topic_name_hash: message.topic_name_hash,
+            topic_index: message.topic_index,
+            block_index: message.block_index,
+        }
+    }
+}
+
+#[cfg(any(feature = "std", test))]
+#[derive(Error, Debug)]
+enum MessageDeserializationError {
+    #[error("{0}")]
+    Base16(String),
+}
+
+#[cfg(any(feature = "std", test))]
+impl TryFrom<HumanReadableMessage> for Message {
+    type Error = MessageDeserializationError;
+    fn try_from(message: HumanReadableMessage) -> Result<Self, Self::Error> {
+        let decoded = checksummed_hex::decode(message.hash_addr).map_err(|e| {
+            MessageDeserializationError::Base16(format!(
+                "Failed to decode hash addr checksummed: {}",
+                e
+            ))
+        })?;
+        let hash_addr = HashAddr::try_from(decoded.as_ref()).map_err(|e| {
+            MessageDeserializationError::Base16(format!("Failed to decode hash address: {}", e))
+        })?;
+        Ok(Self {
+            hash_addr,
+            message: message.message,
+            topic_name: message.topic_name,
+            topic_name_hash: message.topic_name_hash,
+            topic_index: message.topic_index,
+            block_index: message.block_index,
+        })
+    }
+}
+
+#[cfg(any(feature = "std", test))]
+#[derive(Serialize, Deserialize)]
+struct NonHumanReadableMessage {
+    hash_addr: HashAddr,
+    message: MessagePayload,
+    topic_name: String,
+    topic_name_hash: TopicNameHash,
+    topic_index: u32,
+    block_index: u64,
+}
+
+#[cfg(any(feature = "std", test))]
+impl Serialize for Message {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if serializer.is_human_readable() {
+            HumanReadableMessage::from(self).serialize(serializer)
+        } else {
+            NonHumanReadableMessage::from(self).serialize(serializer)
+        }
+    }
+}
+
+#[cfg(any(feature = "std", test))]
+impl<'de> Deserialize<'de> for Message {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        if deserializer.is_human_readable() {
+            let human_readable = HumanReadableMessage::deserialize(deserializer)?;
+            Message::try_from(human_readable)
+                .map_err(|error| SerdeError::custom(format!("{:?}", error)))
+        } else {
+            let non_human_readable = NonHumanReadableMessage::deserialize(deserializer)?;
+            Ok(Message::from(non_human_readable))
+        }
+    }
 }
 
 impl Message {
@@ -401,5 +524,15 @@ mod tests {
         let json_string = serde_json::to_string_pretty(&message_payload).unwrap();
         let decoded: MessagePayload = serde_json::from_str(&json_string).unwrap();
         assert_eq!(decoded, message_payload);
+    }
+
+    #[test]
+    fn message_json_roundtrip() {
+        let rng = &mut TestRng::new();
+
+        let message = Message::random(rng);
+        let json_string = serde_json::to_string_pretty(&message).unwrap();
+        let decoded: Message = serde_json::from_str(&json_string).unwrap();
+        assert_eq!(decoded, message);
     }
 }

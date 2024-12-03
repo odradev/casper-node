@@ -974,8 +974,8 @@ fn should_distribute_rewards_after_restaking_delegated_funds() {
         delegator_1_stake =
             get_delegator_staked_amount(&mut builder, VALIDATOR_1.clone(), DELEGATOR_1.clone());
 
-        let updelegate_amount = U512::from(1_000_000);
-        let updelegate_result = builder.bidding(
+        let undelegate_amount = U512::from(1_000_000);
+        let undelegate_result = builder.bidding(
             None,
             protocol_version,
             (*DELEGATOR_2_ADDR).into(),
@@ -983,10 +983,10 @@ fn should_distribute_rewards_after_restaking_delegated_funds() {
                 max_delegators_per_validator: u32::MAX,
                 validator: VALIDATOR_1.clone(),
                 delegator: DelegatorKind::PublicKey(DELEGATOR_2.clone()),
-                amount: updelegate_amount,
+                amount: undelegate_amount,
             },
         );
-        assert!(updelegate_result.is_success(), "{:?}", updelegate_result);
+        assert!(undelegate_result.is_success(), "{:?}", undelegate_result);
         builder.commit_transforms(builder.get_post_state_hash(), undelegate_result.effects());
         delegator_2_stake =
             get_delegator_staked_amount(&mut builder, VALIDATOR_1.clone(), DELEGATOR_2.clone());
@@ -998,9 +998,10 @@ fn should_distribute_rewards_after_restaking_delegated_funds() {
                     public_key: VALIDATOR_1.clone(),
                     amount,
                     delegation_rate: 0,
-                    minimum_delegation_amount: updelegate_amount.as_u64(),
-                    maximum_delegation_amount: updelegate_amount.as_u64(),
+                    minimum_delegation_amount: undelegate_amount.as_u64(),
+                    maximum_delegation_amount: undelegate_amount.as_u64(),
                     minimum_bid_amount: DEFAULT_MINIMUM_BID_AMOUNT,
+                    reserved_slots: 0,
                 }
             } else {
                 AuctionMethod::WithdrawBid {

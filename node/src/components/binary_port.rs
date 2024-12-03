@@ -260,7 +260,10 @@ where
             }
             let Ok(block_hash) = bytesrepr::deserialize_from_slice(&key) else {
                 debug!("received an incorrectly serialized key for a transfer record");
-                return BinaryResponse::new_error(ErrorCode::BadRequest, protocol_version);
+                return BinaryResponse::new_error(
+                    ErrorCode::TransferRecordMalformedKey,
+                    protocol_version,
+                );
             };
             let Some(transfers) = effect_builder
                 .get_block_transfers_from_storage(block_hash)
@@ -312,7 +315,10 @@ where
                 Ok(req) => handle_info_request(req, effect_builder, protocol_version).await,
                 Err(error) => {
                     debug!(?tag, %error, "failed to parse an information request");
-                    BinaryResponse::new_error(ErrorCode::BadRequest, protocol_version)
+                    BinaryResponse::new_error(
+                        ErrorCode::MalformedInformationRequest,
+                        protocol_version,
+                    )
                 }
             }
         }
@@ -800,7 +806,7 @@ where
             Ok(Some(Either::Left(ValueWithProof::new(contract, proof))))
         }
         (other, _) => {
-            let Some((Key::Package(addr), _)) = other
+            let Some((Key::SmartContract(addr), _)) = other
                 .as_cl_value()
                 .and_then(|cl_val| cl_val.to_t::<(Key, URef)>().ok())
             else {
@@ -827,13 +833,15 @@ where
         + From<ContractRuntimeRequest>
         + From<ReactorInfoRequest>,
 {
-    let key = Key::Package(package_addr);
+    let key = Key::SmartContract(package_addr);
     let Some(result) = get_global_state_item(effect_builder, state_root_hash, key, vec![]).await?
     else {
         return Ok(None);
     };
     match result.into_inner() {
-        (StoredValue::Package(contract), proof) => Ok(Some(ValueWithProof::new(contract, proof))),
+        (StoredValue::SmartContract(contract), proof) => {
+            Ok(Some(ValueWithProof::new(contract, proof)))
+        }
         other => {
             debug!(
                 ?other,
@@ -1509,12 +1517,12 @@ fn extract_header(payload: &[u8]) -> Result<(BinaryRequestHeader, &[u8]), ErrorC
     const BINARY_VERSION_LENGTH_BYTES: usize = std::mem::size_of::<u16>();
 
     if payload.len() < BINARY_VERSION_LENGTH_BYTES {
-        return Err(ErrorCode::BadRequest);
+        return Err(ErrorCode::MalformedBinaryVersion);
     }
 
     let binary_protocol_version = match u16::from_bytes(payload) {
         Ok((binary_protocol_version, _)) => binary_protocol_version,
-        Err(_) => return Err(ErrorCode::BadRequest),
+        Err(_) => return Err(ErrorCode::MalformedProtocolVersion),
     };
 
     if binary_protocol_version != BinaryRequestHeader::BINARY_REQUEST_VERSION {
@@ -1525,7 +1533,7 @@ fn extract_header(payload: &[u8]) -> Result<(BinaryRequestHeader, &[u8]), ErrorC
         Ok((header, remainder)) => Ok((header, remainder)),
         Err(error) => {
             debug!(%error, "failed to parse binary request header");
-            Err(ErrorCode::BadRequest)
+            Err(ErrorCode::MalformedBinaryRequestHeader)
         }
     }
 }
@@ -1576,7 +1584,7 @@ where
         Err(error) => {
             debug!(%error, "failed to parse binary request body");
             return (
-                BinaryResponse::new_error(ErrorCode::BadRequest, protocol_version),
+                BinaryResponse::new_error(ErrorCode::MalformedBinaryRequest, protocol_version),
                 request_id,
             );
         }

@@ -1,17 +1,17 @@
-use alloc::vec::Vec;
-
+use alloc::{string::String, vec::Vec};
+use core::fmt::{self, Display, Formatter};
 #[cfg(feature = "datasize")]
 use datasize::DataSize;
 #[cfg(feature = "json-schema")]
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
-use crate::{
-    bytesrepr::{self, FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
-    CLType, CLTyped, EraId, PublicKey, URef, URefAddr, U512,
-};
 
 use super::{BidAddr, DelegatorKind, UnbondingPurse, WithdrawPurse};
+use crate::{
+    bytesrepr::{self, FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
+    checksummed_hex, CLType, CLTyped, EraId, PublicKey, URef, URefAddr, U512,
+};
+use serde::{de::Error as SerdeError, Deserialize, Deserializer, Serialize, Serializer};
+use serde_helpers::{HumanReadableUnbondKind, NonHumanReadableUnbondKind};
 
 /// UnbondKindTag variants.
 #[allow(clippy::large_enum_variant)]
@@ -27,13 +27,13 @@ pub enum UnbondKindTag {
 }
 
 /// Unbond variants.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Ord, PartialOrd)]
+#[derive(Debug, PartialEq, Eq, Clone, Ord, PartialOrd)]
 #[cfg_attr(feature = "datasize", derive(DataSize))]
 #[cfg_attr(feature = "json-schema", derive(JsonSchema))]
 pub enum UnbondKind {
     Validator(PublicKey),
     DelegatedPublicKey(PublicKey),
-    DelegatedPurse(URefAddr),
+    DelegatedPurse(#[cfg_attr(feature = "json-schema", schemars(with = "String"))] URefAddr),
 }
 
 impl UnbondKind {
@@ -141,6 +141,86 @@ impl From<DelegatorKind> for UnbondKind {
         match value {
             DelegatorKind::PublicKey(pk) => UnbondKind::DelegatedPublicKey(pk),
             DelegatorKind::Purse(addr) => UnbondKind::DelegatedPurse(addr),
+        }
+    }
+}
+
+impl Serialize for UnbondKind {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if serializer.is_human_readable() {
+            HumanReadableUnbondKind::from(self).serialize(serializer)
+        } else {
+            NonHumanReadableUnbondKind::from(self).serialize(serializer)
+        }
+    }
+}
+
+#[derive(Debug)]
+enum UnbondKindError {
+    DeserializationError(String),
+}
+
+impl Display for UnbondKindError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            UnbondKindError::DeserializationError(msg) => {
+                write!(f, "Error when deserializing UnbondKind: {}", msg)
+            }
+        }
+    }
+}
+
+impl TryFrom<HumanReadableUnbondKind> for UnbondKind {
+    type Error = UnbondKindError;
+
+    fn try_from(value: HumanReadableUnbondKind) -> Result<Self, Self::Error> {
+        match value {
+            HumanReadableUnbondKind::Validator(public_key) => Ok(UnbondKind::Validator(public_key)),
+            HumanReadableUnbondKind::DelegatedPublicKey(public_key) => {
+                Ok(UnbondKind::DelegatedPublicKey(public_key))
+            }
+            HumanReadableUnbondKind::DelegatedPurse(encoded) => {
+                let decoded = checksummed_hex::decode(encoded).map_err(|e| {
+                    UnbondKindError::DeserializationError(format!(
+                        "Failed to decode encoded URefAddr: {}",
+                        e
+                    ))
+                })?;
+                let uref_addr = URefAddr::try_from(decoded.as_ref()).map_err(|e| {
+                    UnbondKindError::DeserializationError(format!(
+                        "Failed to build uref address: {}",
+                        e
+                    ))
+                })?;
+                Ok(UnbondKind::DelegatedPurse(uref_addr))
+            }
+        }
+    }
+}
+
+impl From<NonHumanReadableUnbondKind> for UnbondKind {
+    fn from(value: NonHumanReadableUnbondKind) -> Self {
+        match value {
+            NonHumanReadableUnbondKind::Validator(public_key) => UnbondKind::Validator(public_key),
+            NonHumanReadableUnbondKind::DelegatedPublicKey(public_key) => {
+                UnbondKind::DelegatedPublicKey(public_key)
+            }
+            NonHumanReadableUnbondKind::DelegatedPurse(uref_addr) => {
+                UnbondKind::DelegatedPurse(uref_addr)
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for UnbondKind {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        if deserializer.is_human_readable() {
+            let human_readable = HumanReadableUnbondKind::deserialize(deserializer)?;
+            UnbondKind::try_from(human_readable)
+                .map_err(|error| SerdeError::custom(format!("{:?}", error)))
+        } else {
+            let non_human_readable = NonHumanReadableUnbondKind::deserialize(deserializer)?;
+            Ok(UnbondKind::from(non_human_readable))
         }
     }
 }
@@ -472,14 +552,70 @@ impl CLTyped for UnbondEra {
     }
 }
 
+mod serde_helpers {
+    use super::UnbondKind;
+    use crate::{PublicKey, URefAddr};
+    use alloc::string::String;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize)]
+    pub(super) enum HumanReadableUnbondKind {
+        Validator(PublicKey),
+        DelegatedPublicKey(PublicKey),
+        DelegatedPurse(String),
+    }
+
+    #[derive(Serialize, Deserialize)]
+    pub(super) enum NonHumanReadableUnbondKind {
+        Validator(PublicKey),
+        DelegatedPublicKey(PublicKey),
+        DelegatedPurse(URefAddr),
+    }
+
+    impl From<&UnbondKind> for HumanReadableUnbondKind {
+        fn from(unbond_source: &UnbondKind) -> Self {
+            match unbond_source {
+                UnbondKind::Validator(public_key) => {
+                    HumanReadableUnbondKind::Validator(public_key.clone())
+                }
+                UnbondKind::DelegatedPublicKey(public_key) => {
+                    HumanReadableUnbondKind::DelegatedPublicKey(public_key.clone())
+                }
+                UnbondKind::DelegatedPurse(uref_addr) => {
+                    HumanReadableUnbondKind::DelegatedPurse(base16::encode_lower(uref_addr))
+                }
+            }
+        }
+    }
+
+    impl From<&UnbondKind> for NonHumanReadableUnbondKind {
+        fn from(unbond_kind: &UnbondKind) -> Self {
+            match unbond_kind {
+                UnbondKind::Validator(public_key) => {
+                    NonHumanReadableUnbondKind::Validator(public_key.clone())
+                }
+                UnbondKind::DelegatedPublicKey(public_key) => {
+                    NonHumanReadableUnbondKind::DelegatedPublicKey(public_key.clone())
+                }
+                UnbondKind::DelegatedPurse(uref_addr) => {
+                    NonHumanReadableUnbondKind::DelegatedPurse(*uref_addr)
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use rand::Rng;
+
     use crate::{
         bytesrepr,
         system::auction::{
             unbond::{Unbond, UnbondKind},
             UnbondEra,
         },
+        testing::TestRng,
         AccessRights, EraId, PublicKey, SecretKey, URef, U512,
     };
 
@@ -537,5 +673,47 @@ mod tests {
             vec![],
         );
         assert!(!delegator_unbond.is_validator());
+    }
+
+    #[test]
+    fn purse_serialized_as_string() {
+        let delegator_kind_payload = UnbondKind::DelegatedPurse([1; 32]);
+        let serialized = serde_json::to_string(&delegator_kind_payload).unwrap();
+        assert_eq!(
+            serialized,
+            "{\"DelegatedPurse\":\"0101010101010101010101010101010101010101010101010101010101010101\"}"
+        );
+    }
+
+    #[test]
+    fn given_broken_address_purse_deserialziation_fails() {
+        let failing =
+            "{\"DelegatedPurse\":\"Z101010101010101010101010101010101010101010101010101010101010101\"}";
+        let ret = serde_json::from_str::<UnbondKind>(failing);
+        assert!(ret.is_err());
+        let failing =
+            "{\"DelegatedPurse\":\"01010101010101010101010101010101010101010101010101010101\"}";
+        let ret = serde_json::from_str::<UnbondKind>(failing);
+        assert!(ret.is_err());
+    }
+
+    #[test]
+    fn json_roundtrip() {
+        let rng = &mut TestRng::new();
+
+        let entity = UnbondKind::Validator(PublicKey::random(rng));
+        let json_string = serde_json::to_string_pretty(&entity).unwrap();
+        let decoded: UnbondKind = serde_json::from_str(&json_string).unwrap();
+        assert_eq!(decoded, entity);
+
+        let entity = UnbondKind::DelegatedPublicKey(PublicKey::random(rng));
+        let json_string = serde_json::to_string_pretty(&entity).unwrap();
+        let decoded: UnbondKind = serde_json::from_str(&json_string).unwrap();
+        assert_eq!(decoded, entity);
+
+        let entity = UnbondKind::DelegatedPurse(rng.gen());
+        let json_string = serde_json::to_string_pretty(&entity).unwrap();
+        let decoded: UnbondKind = serde_json::from_str(&json_string).unwrap();
+        assert_eq!(decoded, entity);
     }
 }

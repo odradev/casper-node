@@ -6,7 +6,6 @@ mod contract_messages;
 mod counter_factory;
 mod deploy;
 mod explorer;
-mod gas_counter;
 mod get_balance;
 mod groups;
 mod host_function_costs;

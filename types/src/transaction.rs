@@ -28,7 +28,15 @@ use alloc::{
 };
 use core::fmt::{self, Debug, Display, Formatter};
 #[cfg(any(feature = "std", test))]
+use serde::{de, ser, Deserializer, Serializer};
+#[cfg(any(feature = "std", test))]
+use serde_bytes::ByteBuf;
+#[cfg(any(feature = "std", test))]
 use std::hash::Hash;
+#[cfg(any(feature = "std", test))]
+use thiserror::Error;
+#[cfg(any(feature = "std", test))]
+use transaction_v1::TransactionV1Json;
 
 #[cfg(feature = "json-schema")]
 use crate::URef;
@@ -60,8 +68,6 @@ pub use deploy::{
     Deploy, DeployDecodeFromJsonError, DeployError, DeployExcessiveSizeError, DeployHash,
     DeployHeader, DeployId, ExecutableDeployItem, ExecutableDeployItemIdentifier, InvalidDeploy,
 };
-#[cfg(any(feature = "std", test))]
-pub use deploy::{DeployBuilder, DeployBuilderError};
 pub use error::InvalidTransaction;
 pub use execution_info::ExecutionInfo;
 pub use initiator_addr::InitiatorAddr;
@@ -77,17 +83,14 @@ pub use transaction_invocation_target::TransactionInvocationTarget;
 pub use transaction_runtime::TransactionRuntime;
 pub use transaction_scheduling::TransactionScheduling;
 pub use transaction_target::TransactionTarget;
+#[cfg(feature = "json-schema")]
+pub(crate) use transaction_v1::arg_handling;
 #[cfg(any(feature = "std", feature = "testing", feature = "gens", test))]
 pub(crate) use transaction_v1::fields_container::FieldsContainer;
-#[cfg(any(feature = "testing", feature = "gens", test))]
-pub use transaction_v1::TransactionV1Payload;
 pub use transaction_v1::{
-    arg_handling, InvalidTransactionV1, TransactionArgs, TransactionV1,
-    TransactionV1DecodeFromJsonError, TransactionV1Error, TransactionV1ExcessiveSizeError,
-    TransactionV1Hash,
+    InvalidTransactionV1, TransactionArgs, TransactionV1, TransactionV1DecodeFromJsonError,
+    TransactionV1Error, TransactionV1ExcessiveSizeError, TransactionV1Hash, TransactionV1Payload,
 };
-#[cfg(any(feature = "std", test))]
-pub use transaction_v1::{TransactionV1Builder, TransactionV1BuilderError};
 pub use transfer_target::TransferTarget;
 
 const DEPLOY_TAG: u8 = 0;
@@ -105,36 +108,57 @@ pub(super) static TRANSACTION: Lazy<Transaction> = Lazy::new(|| {
     )
     .unwrap();
     let id = Some(999);
-
-    let v1_txn = TransactionV1Builder::new_transfer(30_000_000_000_u64, Some(source), target, id)
-        .unwrap()
-        .with_chain_name("casper-example")
-        .with_timestamp(*Timestamp::example())
-        .with_ttl(TimeDiff::from_seconds(3_600))
-        .with_secret_key(secret_key)
-        .build()
-        .unwrap();
+    let amount = 30_000_000_000_u64;
+    let args = arg_handling::new_transfer_args(amount, Some(source), target, id).unwrap();
+    let container = FieldsContainer::new(
+        TransactionArgs::Named(args),
+        TransactionTarget::Native,
+        TransactionEntryPoint::Transfer,
+        TransactionScheduling::Standard,
+    );
+    let pricing_mode = PricingMode::Fixed {
+        gas_price_tolerance: 5,
+        additional_computation_factor: 0,
+    };
+    let initiator_addr_and_secret_key = InitiatorAddrAndSecretKey::SecretKey(secret_key);
+    let v1_txn = TransactionV1::build(
+        "casper-example".to_string(),
+        *Timestamp::example(),
+        TimeDiff::from_seconds(3_600),
+        pricing_mode,
+        container.to_map().unwrap(),
+        initiator_addr_and_secret_key,
+    );
     Transaction::V1(v1_txn)
 });
 
 /// A versioned wrapper for a transaction or deploy.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-#[cfg_attr(
-    any(feature = "std", test),
-    derive(Serialize, Deserialize),
-    serde(deny_unknown_fields)
-)]
-#[cfg_attr(feature = "datasize", derive(DataSize))]
 #[cfg_attr(feature = "json-schema", derive(JsonSchema))]
+#[cfg_attr(feature = "datasize", derive(DataSize))]
 pub enum Transaction {
     /// A deploy.
     Deploy(Deploy),
     /// A version 1 transaction.
-    #[cfg_attr(any(feature = "std", test), serde(rename = "Version1"))]
+    #[cfg_attr(
+        feature = "json-schema",
+        serde(rename = "Version1"),
+        schemars(with = "TransactionV1Json")
+    )]
     V1(TransactionV1),
 }
 
 impl Transaction {
+    // Deploy variant ctor
+    pub fn from_deploy(deploy: Deploy) -> Self {
+        Transaction::Deploy(deploy)
+    }
+
+    // V1 variant ctor
+    pub fn from_v1(v1: TransactionV1) -> Self {
+        Transaction::V1(v1)
+    }
+
     /// Returns the `TransactionHash` identifying this transaction.
     pub fn hash(&self) -> TransactionHash {
         match self {
@@ -397,6 +421,94 @@ impl Transaction {
     }
 }
 
+#[cfg(any(feature = "std", test))]
+impl Serialize for Transaction {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if serializer.is_human_readable() {
+            TransactionJson::try_from(self.clone())
+                .map_err(|error| ser::Error::custom(format!("{:?}", error)))?
+                .serialize(serializer)
+        } else {
+            let bytes = self
+                .to_bytes()
+                .map_err(|error| ser::Error::custom(format!("{:?}", error)))?;
+            ByteBuf::from(bytes).serialize(serializer)
+        }
+    }
+}
+
+#[cfg(any(feature = "std", test))]
+impl<'de> Deserialize<'de> for Transaction {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        if deserializer.is_human_readable() {
+            let json_helper = TransactionJson::deserialize(deserializer)?;
+            Transaction::try_from(json_helper)
+                .map_err(|error| de::Error::custom(format!("{:?}", error)))
+        } else {
+            let bytes = ByteBuf::deserialize(deserializer)?.into_vec();
+            bytesrepr::deserialize::<Transaction>(bytes)
+                .map_err(|error| de::Error::custom(format!("{:?}", error)))
+        }
+    }
+}
+
+/// A util structure to json-serialize a transaction.
+#[cfg(any(feature = "std", test))]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "json-schema", derive(JsonSchema))]
+#[serde(deny_unknown_fields)]
+enum TransactionJson {
+    /// A deploy.
+    Deploy(Deploy),
+    /// A version 1 transaction.
+    #[serde(rename = "Version1")]
+    V1(TransactionV1Json),
+}
+
+#[cfg(any(feature = "std", test))]
+#[derive(Error, Debug)]
+enum TransactionJsonError {
+    #[error("{0}")]
+    FailedToMap(String),
+}
+
+#[cfg(any(feature = "std", test))]
+impl TryFrom<TransactionJson> for Transaction {
+    type Error = TransactionJsonError;
+    fn try_from(transaction: TransactionJson) -> Result<Self, Self::Error> {
+        match transaction {
+            TransactionJson::Deploy(deploy) => Ok(Transaction::Deploy(deploy)),
+            TransactionJson::V1(v1) => {
+                TransactionV1::try_from(v1)
+                    .map(Transaction::V1)
+                    .map_err(|error| {
+                        TransactionJsonError::FailedToMap(format!(
+                            "Failed to map TransactionJson::V1 to Transaction::V1, err: {}",
+                            error
+                        ))
+                    })
+            }
+        }
+    }
+}
+
+#[cfg(any(feature = "std", test))]
+impl TryFrom<Transaction> for TransactionJson {
+    type Error = TransactionJsonError;
+    fn try_from(transaction: Transaction) -> Result<Self, Self::Error> {
+        match transaction {
+            Transaction::Deploy(deploy) => Ok(TransactionJson::Deploy(deploy)),
+            Transaction::V1(v1) => TransactionV1Json::try_from(v1)
+                .map(TransactionJson::V1)
+                .map_err(|error| {
+                    TransactionJsonError::FailedToMap(format!(
+                        "Failed to map Transaction::V1 to TransactionJson::V1, err: {}",
+                        error
+                    ))
+                }),
+        }
+    }
+}
 /// Calculates gas limit.
 #[cfg(any(feature = "std", test))]
 pub trait GasLimited {
@@ -553,7 +665,10 @@ mod tests {
 #[cfg(test)]
 mod proptests {
     use super::*;
-    use crate::{bytesrepr, gens::transaction_arb};
+    use crate::{
+        bytesrepr,
+        gens::{legal_transaction_arb, transaction_arb},
+    };
     use proptest::prelude::*;
 
     proptest! {
@@ -563,7 +678,7 @@ mod proptests {
         }
 
         #[test]
-        fn json_roundtrip(transaction in transaction_arb()) {
+        fn json_roundtrip(transaction in legal_transaction_arb()) {
             let json_string = serde_json::to_string_pretty(&transaction).unwrap();
             let decoded = serde_json::from_str::<Transaction>(&json_string).unwrap();
             assert_eq!(transaction, decoded);

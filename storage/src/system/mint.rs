@@ -17,7 +17,7 @@ use casper_types::{
         mint::{Error, ROUND_SEIGNIORAGE_RATE_KEY, TOTAL_SUPPLY_KEY},
         Caller,
     },
-    Key, PublicKey, SystemHashRegistry, URef, U512,
+    Key, PublicKey, URef, U512,
 };
 
 use crate::system::mint::{
@@ -112,7 +112,7 @@ pub trait Mint: RuntimeProvider + StorageProvider + SystemProvider {
         if !self.allow_unrestricted_transfers() {
             let registry = self
                 .get_system_entity_registry()
-                .unwrap_or_else(|_| SystemHashRegistry::new());
+                .map_err(|_| Error::UnableToGetSystemRegistry)?;
             let immediate_caller = self.get_immediate_caller();
             match immediate_caller {
                 Some(Caller::Entity { entity_addr, .. })
@@ -239,9 +239,11 @@ pub trait Mint: RuntimeProvider + StorageProvider + SystemProvider {
         if self.available_balance(target)?.is_none() {
             return Err(Error::DestNotFound);
         }
-        if self.get_caller() != PublicKey::System.to_account_hash()
-            && self.get_main_purse().addr() == source.addr()
-        {
+        let addr = match self.get_main_purse() {
+            None => return Err(Error::InvalidURef),
+            Some(uref) => uref.addr(),
+        };
+        if self.get_caller() != PublicKey::System.to_account_hash() && addr == source.addr() {
             if amount > self.get_approved_spending_limit() {
                 return Err(Error::UnapprovedSpendingAmount);
             }

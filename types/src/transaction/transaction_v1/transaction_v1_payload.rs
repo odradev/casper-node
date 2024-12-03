@@ -12,13 +12,19 @@ use crate::{
     },
     DisplayIter, InitiatorAddr, TimeDiff, Timestamp,
 };
+#[cfg(any(feature = "std", test))]
+use crate::{TransactionArgs, TransactionEntryPoint, TransactionScheduling, TransactionTarget};
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 #[cfg(feature = "datasize")]
 use datasize::DataSize;
 #[cfg(feature = "json-schema")]
 use schemars::JsonSchema;
 #[cfg(any(feature = "std", test))]
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+#[cfg(any(feature = "std", test))]
+use serde_json::Value;
+#[cfg(any(feature = "std", test))]
+use thiserror::Error;
 
 const INITIATOR_ADDR_FIELD_INDEX: u16 = 0;
 const TIMESTAMP_FIELD_INDEX: u16 = 1;
@@ -31,30 +37,34 @@ const ARGS_MAP_KEY: u16 = 0;
 const TARGET_MAP_KEY: u16 = 1;
 const ENTRY_POINT_MAP_KEY: u16 = 2;
 const SCHEDULING_MAP_KEY: u16 = 3;
+#[cfg(any(feature = "std", test))]
+const ARGS_MAP_HUMAN_READABLE_KEY: &str = "args";
+#[cfg(any(feature = "std", test))]
+const TARGET_MAP_HUMAN_READABLE_KEY: &str = "target";
+#[cfg(any(feature = "std", test))]
+const ENTRY_POINT_MAP_HUMAN_READABLE_KEY: &str = "entry_point";
+#[cfg(any(feature = "std", test))]
+const SCHEDULING_MAP_HUMAN_READABLE_KEY: &str = "scheduling";
 
-const EXPECTED_FIELD_KEYS: [u16; 6] = [
+const EXPECTED_FIELD_KEYS: [u16; 4] = [
     ARGS_MAP_KEY,
     TARGET_MAP_KEY,
     ENTRY_POINT_MAP_KEY,
     SCHEDULING_MAP_KEY,
-    4,
-    5,
 ];
 
+/// Structure aggregating internal data of V1 transaction.
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+#[cfg_attr(feature = "datasize", derive(DataSize))]
 #[cfg_attr(
     any(feature = "std", test),
     derive(Serialize, Deserialize),
     serde(deny_unknown_fields)
 )]
-#[cfg_attr(feature = "datasize", derive(DataSize))]
 #[cfg_attr(
     feature = "json-schema",
     derive(JsonSchema),
-    schemars(
-        description = "A unit of work sent by a client to the network, which when executed can \
-        cause global state to be altered."
-    )
+    schemars(with = "TransactionV1PayloadJson")
 )]
 pub struct TransactionV1Payload {
     initiator_addr: InitiatorAddr,
@@ -66,6 +76,7 @@ pub struct TransactionV1Payload {
 }
 
 impl TransactionV1Payload {
+    // ctor
     pub fn new(
         chain_name: String,
         timestamp: Timestamp,
@@ -95,26 +106,32 @@ impl TransactionV1Payload {
         ]
     }
 
+    /// Returns the chain name of the transaction.
     pub fn chain_name(&self) -> &str {
         &self.chain_name
     }
 
+    /// Returns the timestamp of the transaction.
     pub fn timestamp(&self) -> Timestamp {
         self.timestamp
     }
 
+    /// Returns the time-to-live of the transaction.
     pub fn ttl(&self) -> TimeDiff {
         self.ttl
     }
 
+    /// Returns the pricing mode of the transaction.
     pub fn pricing_mode(&self) -> &PricingMode {
         &self.pricing_mode
     }
 
+    /// Returns the initiator address of the transaction.
     pub fn initiator_addr(&self) -> &InitiatorAddr {
         &self.initiator_addr
     }
 
+    /// Returns the fields of the transaction.
     pub fn fields(&self) -> &BTreeMap<u16, Bytes> {
         &self.fields
     }
@@ -129,6 +146,8 @@ impl TransactionV1Payload {
         self.expires() < current_instant
     }
 
+    /// Fetches field from the amorphic `field` map and attempts to deserialize it into a type `T`.
+    /// The deserialization is done using the `FromBytes` trait.
     pub fn deserialize_field<T: FromBytes>(
         &self,
         index: u16,
@@ -145,14 +164,174 @@ impl TransactionV1Payload {
         Ok(value)
     }
 
+    /// Helper method to return size of `fields`.
     pub fn number_of_fields(&self) -> usize {
         self.fields.len()
     }
 
+    /// Makes transaction payload invalid.
     #[cfg(any(all(feature = "std", feature = "testing"), test))]
     pub fn invalidate(&mut self) {
         self.chain_name.clear();
     }
+}
+
+#[cfg(any(feature = "std", test))]
+impl TryFrom<TransactionV1PayloadJson> for TransactionV1Payload {
+    type Error = TransactionV1PayloadJsonError;
+    fn try_from(transaction_v1_json: TransactionV1PayloadJson) -> Result<Self, Self::Error> {
+        Ok(TransactionV1Payload {
+            initiator_addr: transaction_v1_json.initiator_addr,
+            timestamp: transaction_v1_json.timestamp,
+            ttl: transaction_v1_json.ttl,
+            chain_name: transaction_v1_json.chain_name,
+            pricing_mode: transaction_v1_json.pricing_mode,
+            fields: from_human_readable_fields(&transaction_v1_json.fields)?,
+        })
+    }
+}
+
+#[cfg(any(feature = "std", test))]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "json-schema",
+    derive(JsonSchema),
+    schemars(
+        description = "Internal payload of the transaction. The actual data over which the signing is done.",
+        rename = "TransactionV1Payload",
+    )
+)]
+pub(super) struct TransactionV1PayloadJson {
+    initiator_addr: InitiatorAddr,
+    timestamp: Timestamp,
+    ttl: TimeDiff,
+    chain_name: String,
+    pricing_mode: PricingMode,
+    fields: BTreeMap<String, Value>,
+}
+
+#[cfg(any(feature = "std", test))]
+#[derive(Error, Debug)]
+
+pub(super) enum TransactionV1PayloadJsonError {
+    #[error("{0}")]
+    FailedToMap(String),
+}
+
+#[cfg(any(feature = "std", test))]
+impl TryFrom<TransactionV1Payload> for TransactionV1PayloadJson {
+    type Error = TransactionV1PayloadJsonError;
+
+    fn try_from(value: TransactionV1Payload) -> Result<Self, Self::Error> {
+        Ok(TransactionV1PayloadJson {
+            initiator_addr: value.initiator_addr,
+            timestamp: value.timestamp,
+            ttl: value.ttl,
+            chain_name: value.chain_name,
+            pricing_mode: value.pricing_mode,
+            fields: to_human_readable_fields(&value.fields)?,
+        })
+    }
+}
+
+#[cfg(any(feature = "std", test))]
+fn from_human_readable_fields(
+    fields: &BTreeMap<String, Value>,
+) -> Result<BTreeMap<u16, Bytes>, TransactionV1PayloadJsonError> {
+    let number_of_expected_fields = EXPECTED_FIELD_KEYS.len();
+    if fields.len() != number_of_expected_fields {
+        return Err(TransactionV1PayloadJsonError::FailedToMap(format!(
+            "Expected exactly {} fields",
+            number_of_expected_fields
+        )));
+    }
+    let args_bytes = to_bytesrepr::<TransactionArgs>(fields, ARGS_MAP_HUMAN_READABLE_KEY)?;
+    let target_bytes = to_bytesrepr::<TransactionTarget>(fields, TARGET_MAP_HUMAN_READABLE_KEY)?;
+    let entry_point_bytes =
+        to_bytesrepr::<TransactionEntryPoint>(fields, ENTRY_POINT_MAP_HUMAN_READABLE_KEY)?;
+    let schedule_bytes =
+        to_bytesrepr::<TransactionScheduling>(fields, SCHEDULING_MAP_HUMAN_READABLE_KEY)?;
+    Ok(BTreeMap::from_iter(vec![
+        (ARGS_MAP_KEY, args_bytes),
+        (TARGET_MAP_KEY, target_bytes),
+        (ENTRY_POINT_MAP_KEY, entry_point_bytes),
+        (SCHEDULING_MAP_KEY, schedule_bytes),
+    ]))
+}
+
+#[cfg(any(feature = "std", test))]
+fn to_human_readable_fields(
+    fields: &BTreeMap<u16, Bytes>,
+) -> Result<BTreeMap<String, Value>, TransactionV1PayloadJsonError> {
+    let args_value =
+        extract_and_deserialize_field::<TransactionArgs>(fields, ARGS_MAP_KEY, "args")?;
+    let target_value =
+        extract_and_deserialize_field::<TransactionTarget>(fields, TARGET_MAP_KEY, "target")?;
+    let entry_point_value = extract_and_deserialize_field::<TransactionEntryPoint>(
+        fields,
+        ENTRY_POINT_MAP_KEY,
+        "entry_point",
+    )?;
+    let scheduling_value = extract_and_deserialize_field::<TransactionScheduling>(
+        fields,
+        SCHEDULING_MAP_KEY,
+        "scheduling",
+    )?;
+
+    Ok(BTreeMap::from_iter(vec![
+        (ARGS_MAP_HUMAN_READABLE_KEY.to_string(), args_value),
+        (TARGET_MAP_HUMAN_READABLE_KEY.to_string(), target_value),
+        (
+            ENTRY_POINT_MAP_HUMAN_READABLE_KEY.to_string(),
+            entry_point_value,
+        ),
+        (
+            SCHEDULING_MAP_HUMAN_READABLE_KEY.to_string(),
+            scheduling_value,
+        ),
+    ]))
+}
+
+#[cfg(any(feature = "std", test))]
+fn to_bytesrepr<T: ToBytes + DeserializeOwned>(
+    fields: &BTreeMap<String, Value>,
+    field_name: &str,
+) -> Result<Bytes, TransactionV1PayloadJsonError> {
+    let value_json = fields
+        .get(field_name)
+        .ok_or(TransactionV1PayloadJsonError::FailedToMap(format!(
+            "Could not find {field_name} field"
+        )))?;
+    let deserialized = serde_json::from_value::<T>(value_json.clone())
+        .map_err(|e| TransactionV1PayloadJsonError::FailedToMap(format!("{:?}", e)))?;
+    deserialized
+        .to_bytes()
+        .map(|bytes| bytes.into())
+        .map_err(|e| TransactionV1PayloadJsonError::FailedToMap(format!("{:?}", e)))
+}
+
+#[cfg(any(feature = "std", test))]
+fn extract_and_deserialize_field<T: FromBytes + Serialize>(
+    fields: &BTreeMap<u16, Bytes>,
+    key: u16,
+    field_name: &str,
+) -> Result<Value, TransactionV1PayloadJsonError> {
+    let value_bytes = fields
+        .get(&key)
+        .ok_or(TransactionV1PayloadJsonError::FailedToMap(format!(
+            "Could not find {field_name} field"
+        )))?;
+    let (from_bytes, remainder) = T::from_bytes(value_bytes)
+        .map_err(|e| TransactionV1PayloadJsonError::FailedToMap(format!("{:?}", e)))?;
+    if !remainder.is_empty() {
+        return Err(TransactionV1PayloadJsonError::FailedToMap(format!(
+            "Unexpexcted bytes in {field_name} field"
+        )));
+    }
+    let value = serde_json::to_value(from_bytes)
+        .map_err(|e| TransactionV1PayloadJsonError::FailedToMap(format!("{:?}", e)))?;
+    Ok(value)
 }
 
 impl ToBytes for TransactionV1Payload {

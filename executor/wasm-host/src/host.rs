@@ -5,6 +5,7 @@ use crate::system::{self, MintArgs, MintTransferArgs};
 use crate::{abi::CreateResult, context::Context};
 use bytes::Bytes;
 use casper_executor_wasm_common::{
+    chain_utils,
     entry_point::{
         ENTRY_POINT_PAYMENT_CALLER, ENTRY_POINT_PAYMENT_DIRECT_INVOCATION_ONLY,
         ENTRY_POINT_PAYMENT_SELF_ONWARD,
@@ -21,10 +22,11 @@ use casper_storage::{
 use casper_types::{
     account::AccountHash,
     addressable_entity::{ActionThresholds, AssociatedKeys, NamedKeyAddr},
-    AddressableEntity, BlockHash, ByteCode, ByteCodeAddr, ByteCodeHash, ByteCodeKind, CLType,
-    Digest, EntityAddr, EntityKind, EntryPoint, EntryPointAccess, EntryPointAddr,
-    EntryPointPayment, EntryPointType, EntryPointValue, Groups, HashAddr, Key, Package,
-    PackageHash, PackageStatus, ProtocolVersion, StoredValue, TransactionRuntime, URef, U512,
+    AddressableEntity, AddressableEntityHash, BlockHash, ByteCode, ByteCodeAddr, ByteCodeHash,
+    ByteCodeKind, CLType, Digest, EntityAddr, EntityKind, EntryPoint, EntryPointAccess,
+    EntryPointAddr, EntryPointPayment, EntryPointType, EntryPointValue, Groups, HashAddr, Key,
+    Package, PackageHash, PackageStatus, ProtocolVersion, StoredValue, TransactionRuntime, URef,
+    U512,
 };
 use either::Either;
 use num_derive::FromPrimitive;
@@ -270,12 +272,12 @@ fn keyspace_to_global_state_key<S: GlobalStateReader, E: Executor>(
 ) -> Option<Key> {
     let entity_addr = match context.callee {
         Key::Account(account_hash) => EntityAddr::new_account(account_hash.value()),
-        Key::AddressableEntity(addressable_entity_hash) => {
-            EntityAddr::new_smart_contract(addressable_entity_hash.value())
+        Key::SmartContract(smart_contract_addr) => {
+            EntityAddr::new_smart_contract(smart_contract_addr)
         }
         _ => {
             // This should never happen, as the caller is always an account or a smart contract.
-            return None;
+            panic!("Unexpected callee variant: {:?}", context.callee)
         }
     };
 
@@ -352,6 +354,8 @@ pub fn casper_create<S: GlobalStateReader + 'static, E: Executor + 'static>(
     entry_point_len: u32,
     input_ptr: u32,
     input_len: u32,
+    seed_ptr: u32,
+    seed_len: u32,
     result_ptr: u32,
 ) -> VMResult<HostResult> {
     let code = if code_ptr != 0 {
@@ -366,6 +370,17 @@ pub fn casper_create<S: GlobalStateReader + 'static, E: Executor + 'static>(
         let mut value_bytes = [0u8; 16];
         caller.memory_read_into(value_ptr, &mut value_bytes)?;
         u128::from_le_bytes(value_bytes)
+    };
+
+    let seed = if seed_ptr != 0 {
+        if seed_len != 32 {
+            return Ok(Err(HostError::NotCallable));
+        }
+        let seed_bytes = caller.memory_read(seed_ptr, seed_len as usize)?;
+        let seed_bytes: [u8; 32] = seed_bytes.try_into().unwrap(); // SAFETY: We checked for length.
+        Some(seed_bytes)
+    } else {
+        None
     };
 
     // For calling a constructor
@@ -398,45 +413,61 @@ pub fn casper_create<S: GlobalStateReader + 'static, E: Executor + 'static>(
         Some(input_data)
     };
 
+    let bytecode_hash = chain_utils::compute_wasm_bytecode_hash(&code);
+
+    let bytecode = ByteCode::new(ByteCodeKind::V2CasperWasm, code.clone().into());
+    let bytecode_addr = ByteCodeAddr::V2CasperWasm(bytecode_hash);
+
     // 1. Store package hash
-    let contract_package = Package::new(
+    let mut smart_contract_package = Package::new(
         Default::default(),
         Default::default(),
         Groups::default(),
         PackageStatus::Unlocked,
     );
 
-    let bytecode_hash = Digest::hash(&code);
+    let protocol_version = ProtocolVersion::V2_0_0;
 
-    // TODO: Compute predictable address based on the callee (as the owner) and include a seed.
-    // let contract_hash: HashAddr = {
-    //     let bytecode_hash = Digest::hash(&code);
-    //     let contract_hash = chain_utils::compute_predictable_address(
-    //         caller.context().chain_name.as_bytes(),
-    //         caller.context().initiator,
-    //         bytecode_hash.into(),
-    //     );
-    //     contract_hash
-    // };
+    let first_version =
+        smart_contract_package.next_entity_version_for(protocol_version.value().major);
 
-    let package_hash_bytes: HashAddr;
-    let contract_hash: HashAddr;
+    let callee_addr = match &caller.context().callee {
+        Key::Account(initiator_addr) => initiator_addr.value(),
+        Key::SmartContract(smart_contract_addr) => *smart_contract_addr,
+        other => panic!("Unexpected callee: {:?}", other),
+    };
 
-    {
-        let mut gen = caller.context().address_generator.write();
-        package_hash_bytes = gen.create_address();
-        contract_hash = gen.create_address();
-    }
+    let smart_contract_addr: HashAddr = chain_utils::compute_predictable_address(
+        caller.context().chain_name.as_bytes(),
+        callee_addr,
+        bytecode_hash,
+        seed,
+    );
+
+    let contract_hash =
+        chain_utils::compute_next_contract_hash_version(smart_contract_addr, first_version);
+
+    smart_contract_package.insert_entity_version(
+        protocol_version.value().major,
+        AddressableEntityHash::new(contract_hash),
+    );
+
+    assert!(
+        caller
+            .context_mut()
+            .tracking_copy
+            .read(&Key::SmartContract(smart_contract_addr))
+            .unwrap()
+            .is_none(),
+        "TODO: Check if the contract already exists and fail"
+    );
 
     caller.context_mut().tracking_copy.write(
-        Key::Package(package_hash_bytes),
-        StoredValue::Package(contract_package),
+        Key::SmartContract(smart_contract_addr),
+        StoredValue::SmartContract(smart_contract_package),
     );
 
     // 2. Store wasm
-
-    let bytecode = ByteCode::new(ByteCodeKind::V2CasperWasm, code.clone().into());
-    let bytecode_addr = ByteCodeAddr::V2CasperWasm(bytecode_hash.value());
 
     caller.context_mut().tracking_copy.write(
         Key::ByteCode(bytecode_addr),
@@ -469,8 +500,8 @@ pub fn casper_create<S: GlobalStateReader + 'static, E: Executor + 'static>(
     };
 
     let addressable_entity = AddressableEntity::new(
-        PackageHash::new(package_hash_bytes),
-        ByteCodeHash::new(bytecode_hash.value()),
+        PackageHash::new(smart_contract_addr),
+        ByteCodeHash::new(bytecode_hash),
         ProtocolVersion::V2_0_0,
         main_purse,
         AssociatedKeys::default(),
@@ -494,11 +525,10 @@ pub fn casper_create<S: GlobalStateReader + 'static, E: Executor + 'static>(
             let execute_request = ExecuteRequestBuilder::default()
                 .with_initiator(caller.context().initiator)
                 .with_caller_key(caller.context().callee)
-                .with_callee_key(addressable_entity_key)
                 .with_gas_limit(gas_limit)
                 .with_target(ExecutionKind::Stored {
-                    address: entity_addr,
-                    entry_point: entry_point_name, //Some(Selector::new(selector)),
+                    address: smart_contract_addr,
+                    entry_point: entry_point_name,
                 })
                 .with_input(input_data.unwrap_or_default())
                 .with_transferred_value(value)
@@ -553,23 +583,8 @@ pub fn casper_create<S: GlobalStateReader + 'static, E: Executor + 'static>(
         None => None,
     };
 
-    // if let Some(state) = initial_state {
-    //     eprintln!(
-    //         "Write initial state {}bytes under {contract_hash:?}",
-    //         state.len()
-    //     );
-    //     let smart_contract_addr = EntityAddr::SmartContract(contract_hash);
-    //     let key = Key::State(smart_contract_addr);
-    //     caller
-    //         .context_mut()
-    //         .tracking_copy
-    //         .write(key, StoredValue::RawBytes(state.into()));
-    // }
-
     let create_result = CreateResult {
-        package_address: package_hash_bytes,
-        contract_address: contract_hash,
-        version: 1,
+        package_address: smart_contract_addr,
     };
 
     let create_result_bytes = safe_transmute::transmute_one_to_bytes(&create_result);
@@ -609,7 +624,7 @@ pub fn casper_call<S: GlobalStateReader + 'static, E: Executor + 'static>(
     // let vm = VM::new();
     // vm.
     let address = caller.memory_read(address_ptr, address_len as _)?;
-    let address: HashAddr = address.try_into().unwrap(); // TODO: Error handling
+    let smart_contract_addr: HashAddr = address.try_into().unwrap(); // TODO: Error handling
 
     let input_data: Bytes = caller.memory_read(input_ptr, input_len as _)?.into();
 
@@ -638,14 +653,12 @@ pub fn casper_call<S: GlobalStateReader + 'static, E: Executor + 'static>(
         .try_into_remaining()
         .expect("should be remaining");
 
-    let entity_addr = EntityAddr::new_smart_contract(address);
     let execute_request = ExecuteRequestBuilder::default()
         .with_initiator(caller.context().initiator)
         .with_caller_key(caller.context().callee)
-        .with_callee_key(Key::AddressableEntity(entity_addr))
         .with_gas_limit(gas_limit)
         .with_target(ExecutionKind::Stored {
-            address: entity_addr,
+            address: smart_contract_addr,
             entry_point,
         })
         .with_transferred_value(value)
@@ -732,7 +745,7 @@ pub fn casper_env_caller<S: GlobalStateReader, E: Executor>(
     // "unified".
     let (entity_kind, data) = match &caller.context().caller {
         Key::Account(account_hash) => (0u32, account_hash.value()),
-        Key::AddressableEntity(entity_addr) => (1u32, entity_addr.value()),
+        Key::SmartContract(smart_contract_addr) => (1u32, *smart_contract_addr),
         other => panic!("Unexpected caller: {:?}", other),
     };
     let mut data = &data[..];
@@ -794,12 +807,44 @@ pub fn casper_env_balance<S: GlobalStateReader, E: Executor>(
                 return Ok(0);
             }
             let hash_bytes = caller.memory_read(entity_addr_ptr, entity_addr_len as usize)?;
+            let hash_bytes: [u8; 32] = hash_bytes.try_into().unwrap(); // SAFETY: We checked for length.
 
-            // Key::AddressableEntity(EntityAddr)
-
-            Either::Right(Key::AddressableEntity(EntityAddr::SmartContract(
-                hash_bytes.try_into().unwrap(),
-            )))
+            let smart_contract_key = Key::SmartContract(hash_bytes);
+            match caller.context_mut().tracking_copy.read(&smart_contract_key) {
+                Ok(Some(StoredValue::SmartContract(smart_contract_package))) => {
+                    match smart_contract_package.versions().latest() {
+                        Some(addressible_entity_hash) => {
+                            let key = Key::AddressableEntity(EntityAddr::SmartContract(
+                                addressible_entity_hash.value(),
+                            ));
+                            // Either::Right(Key::AddressableEntity(*addressible_entity_hash))
+                            Either::Right(key)
+                        }
+                        None => {
+                            warn!(
+                                ?smart_contract_key,
+                                "Unable to find latest addressible entity hash for contract"
+                            );
+                            return Ok(0);
+                        }
+                    }
+                }
+                Ok(Some(_)) => {
+                    return Ok(0);
+                }
+                Ok(None) => {
+                    // Not found, balance is 0
+                    return Ok(0);
+                }
+                Err(error) => {
+                    error!(
+                        hash_bytes = base16::encode_lower(&hash_bytes),
+                        ?error,
+                        "Error while reading from storage; aborting"
+                    );
+                    panic!("Error while reading from storage")
+                }
+            }
         }
         None => return Ok(0),
     };
@@ -818,7 +863,7 @@ pub fn casper_env_balance<S: GlobalStateReader, E: Executor>(
                 Ok(Some(other_entity)) => {
                     panic!("Unexpected entity type: {:?}", other_entity)
                 }
-                Ok(None) => return Ok(0),
+                Ok(None) => panic!("Key not found while checking balance"), //return Ok(0),
                 Err(error) => {
                     panic!("Error while reading from storage; aborting key={entity_key:?} error={error:?}")
                 }
@@ -882,7 +927,7 @@ pub fn casper_transfer<S: GlobalStateReader + 'static, E: Executor>(
         (entity_addr, runtime_footprint)
     };
 
-    let callee_addressable_entity_key = match caller.context().callee {
+    let callee_addressable_entity_key = match dbg!(caller.context().callee) {
         callee_account_key @ Key::Account(_account_hash) => {
             match caller.context_mut().tracking_copy.read(&callee_account_key) {
                 Ok(Some(StoredValue::CLValue(indirect))) => {
@@ -902,16 +947,43 @@ pub fn casper_transfer<S: GlobalStateReader + 'static, E: Executor>(
                 }
             }
         }
-        addressable_entity_key @ Key::AddressableEntity(_entity_addr) => addressable_entity_key,
-        other => panic!("should be account or addressable entity but got {other:?}"),
+        smart_contract_key @ Key::SmartContract(_) => {
+            match caller.context_mut().tracking_copy.read(&smart_contract_key) {
+                Ok(Some(StoredValue::SmartContract(smart_contract_package))) => {
+                    match smart_contract_package.versions().latest() {
+                        Some(addressible_entity_hash) => Key::AddressableEntity(
+                            EntityAddr::SmartContract(addressible_entity_hash.value()),
+                        ),
+                        None => {
+                            warn!(
+                                ?smart_contract_key,
+                                "Unable to find latest addressible entity hash for contract"
+                            );
+                            return Ok(u32_from_host_result(Err(HostError::NotCallable)));
+                        }
+                    }
+                }
+                Ok(Some(other)) => panic!("should be smart contract but got {other:?}"),
+                Ok(None) => return Ok(u32_from_host_result(Err(HostError::NotCallable))),
+                Err(error) => {
+                    error!(
+                        ?error,
+                        ?smart_contract_key,
+                        "Error while reading from storage; aborting"
+                    );
+                    panic!("Error while reading from storage")
+                }
+            }
+        }
+        other => panic!("should be account or smart contract but got {other:?}"),
     };
 
-    let callee_stored_value = caller
+    let callee_stored_value = dbg!(caller
         .context_mut()
         .tracking_copy
-        .read(&callee_addressable_entity_key)
-        .expect("should read account")
-        .expect("should have account");
+        .read(&callee_addressable_entity_key))
+    .expect("should read account")
+    .expect("should have account");
     let callee_addressable_entity = callee_stored_value
         .into_addressable_entity()
         .expect("should be addressable entity");
@@ -997,12 +1069,43 @@ pub fn casper_upgrade<S: GlobalStateReader + 'static, E: Executor>(
         Some(input_data)
     };
 
-    let callee_addressable_entity_key = match caller.context().callee {
+    let (smart_contract_addr, callee_addressable_entity_key) = match caller.context().callee {
         Key::Account(_account_hash) => {
             error!("Account upgrade is not possible");
             return Ok(Err(HostError::NotCallable));
         }
-        addressable_entity_key @ Key::AddressableEntity(_entity_addr) => addressable_entity_key,
+        addressable_entity_key @ Key::SmartContract(smart_contract_addr) => {
+            let smart_contract_key = addressable_entity_key;
+            match caller.context_mut().tracking_copy.read(&smart_contract_key) {
+                Ok(Some(StoredValue::SmartContract(smart_contract_package))) => {
+                    match smart_contract_package.versions().latest() {
+                        Some(addressible_entity_hash) => {
+                            let key = Key::AddressableEntity(EntityAddr::SmartContract(
+                                addressible_entity_hash.value(),
+                            ));
+                            (smart_contract_addr, key)
+                        }
+                        None => {
+                            warn!(
+                                ?smart_contract_key,
+                                "Unable to find latest addressible entity hash for contract"
+                            );
+                            return Ok(Err(HostError::NotCallable));
+                        }
+                    }
+                }
+                Ok(Some(other)) => panic!("should be smart contract but got {other:?}"),
+                Ok(None) => return Ok(Err(HostError::NotCallable)),
+                Err(error) => {
+                    error!(
+                        ?error,
+                        ?smart_contract_key,
+                        "Error while reading from storage; aborting"
+                    );
+                    panic!("Error while reading from storage")
+                }
+            }
+        }
         other => panic!("should be account or addressable entity but got {other:?}"),
     };
 
@@ -1048,17 +1151,12 @@ pub fn casper_upgrade<S: GlobalStateReader + 'static, E: Executor>(
             .try_into_remaining()
             .expect("should be remaining");
 
-        let entity_addr = callee_addressable_entity_key
-            .into_entity_addr()
-            .expect("should be entity addr");
-
         let execute_request = ExecuteRequestBuilder::default()
             .with_initiator(caller.context().initiator)
             .with_caller_key(caller.context().callee)
-            .with_callee_key(callee_addressable_entity_key)
             .with_gas_limit(gas_limit)
             .with_target(ExecutionKind::Stored {
-                address: entity_addr,
+                address: smart_contract_addr,
                 entry_point: entry_point_name.clone(),
             })
             .with_input(input_data.unwrap_or_default())

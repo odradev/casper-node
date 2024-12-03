@@ -1,5 +1,3 @@
-#[cfg(any(feature = "std", test))]
-mod deploy_builder;
 pub mod deploy_category;
 mod deploy_hash;
 mod deploy_header;
@@ -65,8 +63,6 @@ use crate::{
 use crate::{chainspec::PricingHandling, Chainspec, LARGE_WASM_LANE_ID};
 #[cfg(any(feature = "std", test))]
 use crate::{system::auction::ARG_AMOUNT, transaction::GasLimited, Gas, Motes, U512};
-#[cfg(any(feature = "std", test))]
-pub use deploy_builder::{DeployBuilder, DeployBuilderError};
 pub use deploy_hash::DeployHash;
 pub use deploy_header::DeployHeader;
 pub use deploy_id::DeployId;
@@ -122,8 +118,6 @@ static DEPLOY: Lazy<Deploy> = Lazy::new(|| {
 });
 
 /// A signed smart contract.
-///
-/// To construct a new `Deploy`, use a [`DeployBuilder`].
 #[derive(Clone, Eq, Debug)]
 #[cfg_attr(
     any(feature = "std", test),
@@ -152,10 +146,27 @@ pub struct Deploy {
 }
 
 impl Deploy {
+    /// Constructs a new `Deploy`.
+    pub fn new(
+        hash: DeployHash,
+        header: DeployHeader,
+        payment: ExecutableDeployItem,
+        session: ExecutableDeployItem,
+    ) -> Deploy {
+        Deploy {
+            hash,
+            header,
+            payment,
+            session,
+            approvals: BTreeSet::new(),
+            #[cfg(any(feature = "once_cell", test))]
+            is_valid: OnceCell::new(),
+        }
+    }
     /// Constructs a new signed `Deploy`.
     #[cfg(any(all(feature = "std", feature = "testing"), test))]
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub fn new_signed(
         timestamp: Timestamp,
         ttl: TimeDiff,
         gas_price: u64,
@@ -186,7 +197,6 @@ impl Deploy {
         )
     }
 
-    /// Called by the `DeployBuilder` to construct a new `Deploy`.
     #[cfg(any(feature = "std", test))]
     #[allow(clippy::too_many_arguments)]
     fn build(
@@ -581,7 +591,7 @@ impl Deploy {
 
         let secret_key = SecretKey::random(rng);
 
-        Deploy::new(
+        Deploy::new_signed(
             timestamp,
             ttl,
             gas_price,
@@ -633,7 +643,7 @@ impl Deploy {
             args: payment_args,
         };
         let secret_key = SecretKey::random(rng);
-        Deploy::new(
+        Deploy::new_signed(
             timestamp,
             ttl,
             deploy.header.gas_price(),
@@ -666,7 +676,7 @@ impl Deploy {
             args: payment_args,
         };
         let secret_key = SecretKey::random(rng);
-        Deploy::new(
+        Deploy::new_signed(
             Timestamp::now(),
             deploy.header.ttl(),
             deploy.header.gas_price(),
@@ -868,7 +878,7 @@ impl Deploy {
             None => TimeDiff::from_seconds(rng.gen_range(60..3600)),
             Some(ttl) => ttl,
         };
-        Deploy::new(
+        Deploy::new_signed(
             timestamp,
             ttl,
             1,
@@ -963,7 +973,7 @@ impl Deploy {
         let deploy = Self::random_valid_native_transfer(rng);
         let secret_key = SecretKey::random(rng);
 
-        Deploy::new(
+        Deploy::new_signed(
             Timestamp::zero(),
             TimeDiff::from_seconds(1u32),
             deploy.header.gas_price(),
@@ -995,7 +1005,7 @@ impl Deploy {
         let deploy = Self::random_valid_native_transfer(rng);
         let secret_key = SecretKey::random(rng);
 
-        Deploy::new(
+        Deploy::new_signed(
             deploy.header.timestamp(),
             deploy.header.ttl(),
             deploy.header.gas_price(),
@@ -1013,7 +1023,7 @@ impl Deploy {
         let deploy = Self::random_valid_native_transfer(rng);
         let secret_key = SecretKey::random(rng);
 
-        Deploy::new(
+        Deploy::new_signed(
             deploy.header.timestamp(),
             deploy.header.ttl(),
             deploy.header.gas_price(),
@@ -1032,7 +1042,7 @@ impl Deploy {
         let deploy = Self::random(rng);
         let secret_key = SecretKey::random(rng);
 
-        Deploy::new(
+        Deploy::new_signed(
             deploy.header.timestamp(),
             deploy.header.ttl(),
             gas_price,
@@ -1579,7 +1589,7 @@ mod tests {
             transfer_args.insert_cl_value("amount", value);
             transfer_args
         };
-        Deploy::new(
+        Deploy::new_signed(
             Timestamp::now(),
             ttl,
             gas_price,
@@ -2112,7 +2122,7 @@ mod tests {
             transfer_args
         };
 
-        let deploy = Deploy::new(
+        let deploy = Deploy::new_signed(
             Timestamp::now(),
             config.max_ttl,
             GAS_PRICE_TOLERANCE as u64,

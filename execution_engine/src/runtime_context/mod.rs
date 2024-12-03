@@ -741,7 +741,7 @@ where
             | StoredValue::ByteCode(_)
             | StoredValue::Contract(_)
             | StoredValue::AddressableEntity(_)
-            | StoredValue::Package(_)
+            | StoredValue::SmartContract(_)
             | StoredValue::LegacyTransfer(_)
             | StoredValue::DeployInfo(_)
             | StoredValue::EraInfo(_)
@@ -1434,7 +1434,7 @@ where
         let package_hash_key = Key::from(package_hash);
         self.validate_key(&package_hash_key)?;
         let contract_package = if self.engine_config.enable_entity {
-            self.read_gs_typed::<Package>(&Key::Package(package_hash.value()))?
+            self.read_gs_typed::<Package>(&Key::SmartContract(package_hash.value()))?
         } else {
             let cp = self.read_gs_typed::<ContractPackage>(&Key::Hash(package_hash.value()))?;
             cp.into()

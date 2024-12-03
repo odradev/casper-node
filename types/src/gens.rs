@@ -2,6 +2,8 @@
 //! [`Proptest`](https://crates.io/crates/proptest).
 #![allow(missing_docs)]
 
+use core::u32;
+
 use alloc::{
     boxed::Box,
     collections::{BTreeMap, BTreeSet},
@@ -16,12 +18,12 @@ use crate::{
     },
     addressable_entity::{
         action_thresholds::gens::action_thresholds_arb, associated_keys::gens::associated_keys_arb,
-        MessageTopics, NamedKeyValue, Parameters, Weight,
+        MessageTopics, NamedKeyAddr, NamedKeyValue, Parameters, Weight,
     },
     block::BlockGlobalAddr,
     byte_code::ByteCodeKind,
     bytesrepr::Bytes,
-    contract_messages::{MessageChecksum, MessageTopicSummary, TopicNameHash},
+    contract_messages::{MessageAddr, MessageChecksum, MessageTopicSummary, TopicNameHash},
     contracts::{
         Contract, ContractHash, ContractPackage, ContractPackageStatus, ContractVersionKey,
         ContractVersions, EntryPoint as ContractEntryPoint, EntryPoints as ContractEntryPoints,
@@ -51,12 +53,13 @@ use crate::{
         gens::{transfer_v1_addr_arb, transfer_v1_arb},
         TransferAddr,
     },
-    AccessRights, AddressableEntity, AddressableEntityHash, BlockTime, ByteCode, CLType, CLValue,
-    Digest, EntityAddr, EntityKind, EntryPoint, EntryPointAccess, EntryPointPayment,
-    EntryPointType, EntryPoints, EraId, Group, InitiatorAddr, Key, NamedArg, Package, Parameter,
-    Phase, PricingMode, ProtocolVersion, PublicKey, RuntimeArgs, SemVer, StoredValue, TimeDiff,
-    Timestamp, Transaction, TransactionEntryPoint, TransactionInvocationTarget, TransactionRuntime,
-    TransactionScheduling, TransactionTarget, TransactionV1, URef, U128, U256, U512,
+    AccessRights, AddressableEntity, AddressableEntityHash, BlockTime, ByteCode, ByteCodeAddr,
+    CLType, CLValue, Digest, EntityAddr, EntityKind, EntryPoint, EntryPointAccess, EntryPointAddr,
+    EntryPointPayment, EntryPointType, EntryPoints, EraId, Group, InitiatorAddr, Key, NamedArg,
+    Package, Parameter, Phase, PricingMode, ProtocolVersion, PublicKey, RuntimeArgs, SemVer,
+    StoredValue, TimeDiff, Timestamp, Transaction, TransactionEntryPoint,
+    TransactionInvocationTarget, TransactionRuntime, TransactionScheduling, TransactionTarget,
+    TransactionV1, URef, U128, U256, U512,
 };
 use proptest::{
     array, bits, bool,
@@ -117,6 +120,40 @@ pub fn era_id_arb() -> impl Strategy<Value = EraId> {
     any::<u64>().prop_map(EraId::from)
 }
 
+pub fn named_key_addr_arb() -> impl Strategy<Value = NamedKeyAddr> {
+    (entity_addr_arb(), u8_slice_32())
+        .prop_map(|(entity_addr, b)| NamedKeyAddr::new_named_key_entry(entity_addr, b))
+}
+
+pub fn message_addr_arb() -> impl Strategy<Value = MessageAddr> {
+    prop_oneof![
+        (u8_slice_32(), u8_slice_32()).prop_map(|(hash_addr, topic_name_hash)| {
+            MessageAddr::new_topic_addr(hash_addr, TopicNameHash::new(topic_name_hash))
+        }),
+        (u8_slice_32(), u8_slice_32(), example_u32_arb()).prop_map(
+            |(hash_addr, topic_name_hash, index)| MessageAddr::new_message_addr(
+                hash_addr,
+                TopicNameHash::new(topic_name_hash),
+                index
+            )
+        ),
+    ]
+}
+
+pub fn entry_point_addr_arb() -> impl Strategy<Value = EntryPointAddr> {
+    (entity_addr_arb(), any::<String>()).prop_map(|(entity_addr, b)| {
+        EntryPointAddr::new_v1_entry_point_addr(entity_addr, &b).unwrap()
+    })
+}
+
+pub fn byte_code_addr_arb() -> impl Strategy<Value = ByteCodeAddr> {
+    prop_oneof![
+        Just(ByteCodeAddr::Empty),
+        u8_slice_32().prop_map(ByteCodeAddr::V1CasperWasm),
+        u8_slice_32().prop_map(ByteCodeAddr::V2CasperWasm),
+    ]
+}
+
 pub fn key_arb() -> impl Strategy<Value = Key> {
     prop_oneof![
         account_hash_arb().prop_map(Key::Account),
@@ -131,7 +168,38 @@ pub fn key_arb() -> impl Strategy<Value = Key> {
         account_hash_arb().prop_map(Key::Withdraw),
         u8_slice_32().prop_map(Key::Dictionary),
         balance_hold_addr_arb().prop_map(Key::BalanceHold),
+        Just(Key::EraSummary)
+    ]
+}
+
+pub fn all_keys_arb() -> impl Strategy<Value = Key> {
+    prop_oneof![
+        account_hash_arb().prop_map(Key::Account),
+        u8_slice_32().prop_map(Key::Hash),
+        uref_arb().prop_map(Key::URef),
+        transfer_v1_addr_arb().prop_map(Key::Transfer),
+        deploy_hash_arb().prop_map(Key::DeployInfo),
+        era_id_arb().prop_map(Key::EraInfo),
+        uref_arb().prop_map(|uref| Key::Balance(uref.addr())),
+        account_hash_arb().prop_map(Key::Withdraw),
+        u8_slice_32().prop_map(Key::Dictionary),
+        balance_hold_addr_arb().prop_map(Key::BalanceHold),
         Just(Key::EraSummary),
+        Just(Key::SystemEntityRegistry),
+        Just(Key::ChainspecRegistry),
+        Just(Key::ChecksumRegistry),
+        bid_addr_arb().prop_map(Key::BidAddr),
+        account_hash_arb().prop_map(Key::Bid),
+        account_hash_arb().prop_map(Key::Unbond),
+        u8_slice_32().prop_map(Key::SmartContract),
+        byte_code_addr_arb().prop_map(Key::ByteCode),
+        entity_addr_arb().prop_map(Key::AddressableEntity),
+        block_global_addr_arb().prop_map(Key::BlockGlobal),
+        message_addr_arb().prop_map(Key::Message),
+        named_key_addr_arb().prop_map(Key::NamedKey),
+        balance_hold_addr_arb().prop_map(Key::BalanceHold),
+        entry_point_addr_arb().prop_map(Key::EntryPoint),
+        entity_addr_arb().prop_map(Key::State),
     ]
 }
 
@@ -169,6 +237,49 @@ pub fn bid_addr_delegator_arb() -> impl Strategy<Value = BidAddr> {
     let x = u8_slice_32();
     let y = u8_slice_32();
     (x, y).prop_map(BidAddr::new_delegator_account_addr)
+}
+
+pub fn bid_legacy_arb() -> impl Strategy<Value = BidAddr> {
+    u8_slice_32().prop_map(BidAddr::legacy)
+}
+
+pub fn bid_addr_delegated_arb() -> impl Strategy<Value = BidAddr> {
+    (public_key_arb_no_system(), delegator_kind_arb()).prop_map(|(validator, delegator_kind)| {
+        BidAddr::new_delegator_kind(&validator, &delegator_kind)
+    })
+}
+
+pub fn bid_addr_credit_arb() -> impl Strategy<Value = BidAddr> {
+    (public_key_arb_no_system(), era_id_arb())
+        .prop_map(|(validator, era_id)| BidAddr::new_credit(&validator, era_id))
+}
+
+pub fn bid_addr_reservation_account_arb() -> impl Strategy<Value = BidAddr> {
+    (public_key_arb_no_system(), public_key_arb_no_system())
+        .prop_map(|(validator, delegator)| BidAddr::new_reservation_account(&validator, &delegator))
+}
+
+pub fn bid_addr_reservation_purse_arb() -> impl Strategy<Value = BidAddr> {
+    (public_key_arb_no_system(), u8_slice_32())
+        .prop_map(|(validator, uref)| BidAddr::new_reservation_purse(&validator, uref))
+}
+
+pub fn bid_addr_new_unbond_account_arb() -> impl Strategy<Value = BidAddr> {
+    (public_key_arb_no_system(), public_key_arb_no_system())
+        .prop_map(|(validator, unbonder)| BidAddr::new_unbond_account(validator, unbonder))
+}
+
+pub fn bid_addr_arb() -> impl Strategy<Value = BidAddr> {
+    prop_oneof![
+        bid_addr_validator_arb(),
+        bid_addr_delegator_arb(),
+        bid_legacy_arb(),
+        bid_addr_delegated_arb(),
+        bid_addr_credit_arb(),
+        bid_addr_reservation_account_arb(),
+        bid_addr_reservation_purse_arb(),
+        bid_addr_new_unbond_account_arb(),
+    ]
 }
 
 pub fn balance_hold_addr_arb() -> impl Strategy<Value = BalanceHoldAddr> {
@@ -866,7 +977,7 @@ pub fn stored_value_arb() -> impl Strategy<Value = StoredValue> {
         contract_arb().prop_map(StoredValue::Contract),
         contract_package_arb().prop_map(StoredValue::ContractPackage),
         addressable_entity_arb().prop_map(StoredValue::AddressableEntity),
-        package_arb().prop_map(StoredValue::Package),
+        package_arb().prop_map(StoredValue::SmartContract),
         transfer_v1_arb().prop_map(StoredValue::LegacyTransfer),
         deploy_info_arb().prop_map(StoredValue::DeployInfo),
         era_info_arb(1..10).prop_map(StoredValue::EraInfo),
@@ -899,7 +1010,7 @@ pub fn stored_value_arb() -> impl Strategy<Value = StoredValue> {
                 StoredValue::Unbonding(_) => stored_value,
                 StoredValue::AddressableEntity(_) => stored_value,
                 StoredValue::BidKind(_) => stored_value,
-                StoredValue::Package(_) => stored_value,
+                StoredValue::SmartContract(_) => stored_value,
                 StoredValue::ByteCode(_) => stored_value,
                 StoredValue::MessageTopic(_) => stored_value,
                 StoredValue::Message(_) => stored_value,
@@ -962,6 +1073,14 @@ pub fn transaction_scheduling_arb() -> impl Strategy<Value = TransactionScheduli
         any::<u64>().prop_map(
             |timestamp| TransactionScheduling::FutureTimestamp(Timestamp::from(timestamp))
         ),
+    ]
+}
+
+pub fn json_compliant_transaction_scheduling_arb() -> impl Strategy<Value = TransactionScheduling> {
+    prop_oneof![
+        Just(TransactionScheduling::Standard),
+        era_id_arb().prop_map(TransactionScheduling::FutureEra),
+        timestamp_arb().prop_map(TransactionScheduling::FutureTimestamp),
     ]
 }
 
@@ -1171,7 +1290,7 @@ pub fn initiator_addr_arb() -> impl Strategy<Value = InitiatorAddr> {
 
 pub fn timestamp_arb() -> impl Strategy<Value = Timestamp> {
     //The weird u64 value is the max milliseconds that are bofeore year 10000. 5 digit years are
-    // not rfc3339 compliant and will cause an error
+    // not rfc3339 compliant and will cause an error when trying to serialize to json.
     prop_oneof![Just(0_u64), Just(1_u64), Just(253_402_300_799_999_u64)].prop_map(Timestamp::from)
 }
 
@@ -1183,7 +1302,7 @@ pub fn legal_v1_transaction_arb() -> impl Strategy<Value = TransactionV1> {
         pricing_mode_arb(),
         secret_key_arb_no_system(),
         transaction_args_arb(),
-        transaction_scheduling_arb(),
+        json_compliant_transaction_scheduling_arb(),
         legal_target_entry_point_calls_arb(),
     )
         .prop_map(

@@ -5,7 +5,8 @@ use thiserror::Error;
 
 use casper_types::{OpcodeCosts, WasmConfig};
 use casper_wasm::elements::{
-    self, External, Instruction, Internal, MemorySection, Module, Section, TableType, Type,
+    self, External, Instruction, Internal, MemorySection, Module, Section, SignExtInstruction,
+    TableType, Type,
 };
 use casper_wasm_utils::{
     self,
@@ -382,7 +383,7 @@ fn ensure_valid_imports(module: &Module) -> Result<(), WasmValidationError> {
 ///
 /// In case the preprocessing rules can't be applied, an error is returned.
 /// Otherwise, this method returns a valid module ready to be executed safely on the host.
-pub(crate) fn preprocess(
+pub fn preprocess(
     wasm_config: WasmConfig,
     module_bytes: &[u8],
 ) -> Result<Module, PreprocessingError> {
@@ -475,11 +476,235 @@ pub fn get_module_from_entry_points(
     }
 }
 
+/// Returns the cost of executing a single instruction.
+///
+/// This is benchmarked on a reference hardware, and calculated based on the multiplies of the
+/// cheapest opcode (nop) in the given instruction.
+///
+/// For instance, nop will always have cycle cost of 1, and all other opcodes will have a multiple
+/// of that.
+///
+/// The number of cycles for each instruction correlates, but not directly, to the reference x86_64
+/// CPU cycles it takes to execute the instruction as the interpreter does extra work to invoke an
+/// instruction.
+pub fn cycles_for_instruction(instruction: &Instruction) -> u32 {
+    match instruction {
+        // The following instructions signal the beginning of a block, loop, or if construct. They
+        // don't have any static cost. Validated in benchmarks.
+        Instruction::Loop(_) => 1,
+        Instruction::Block(_) => 1,
+        Instruction::Else => 1,
+        Instruction::End => 1,
+
+        Instruction::Unreachable => 1,
+        Instruction::Nop => 1,
+
+        Instruction::If(_) => 3,
+
+        // These instructions are resuming execution from previously saved location (produced by
+        // loop or block).
+        Instruction::Br(_) => 1,
+        Instruction::BrIf(_) => 3,
+        Instruction::BrTable(_) => 5,
+
+        Instruction::Return => 1,
+
+        // Call opcodes are charged for each of the opcode individually. Validated in benchmarks.
+        Instruction::Call(_) => 22,
+        Instruction::CallIndirect(_, _) => 27,
+
+        Instruction::Drop => 1,
+
+        // Select opcode is validated in benchmarks.
+        Instruction::Select => 11,
+
+        Instruction::GetLocal(_) | Instruction::SetLocal(_) | Instruction::TeeLocal(_) => 5,
+
+        Instruction::GetGlobal(_) => 7,
+        Instruction::SetGlobal(_) => 5,
+
+        Instruction::I64Load32S(_, _)
+        | Instruction::F32Load(_, _)
+        | Instruction::F64Load(_, _)
+        | Instruction::I32Load(_, _)
+        | Instruction::I64Load(_, _)
+        | Instruction::I32Load8S(_, _)
+        | Instruction::I64Load32U(_, _)
+        | Instruction::I64Load8U(_, _)
+        | Instruction::I64Load8S(_, _)
+        | Instruction::I32Load8U(_, _)
+        | Instruction::I64Load16U(_, _)
+        | Instruction::I32Load16U(_, _)
+        | Instruction::I64Load16S(_, _)
+        | Instruction::I32Load16S(_, _) => 8,
+
+        Instruction::I32Store(_, _)
+        | Instruction::I64Store(_, _)
+        | Instruction::F32Store(_, _)
+        | Instruction::F64Store(_, _)
+        | Instruction::I32Store8(_, _)
+        | Instruction::I32Store16(_, _)
+        | Instruction::I64Store8(_, _)
+        | Instruction::I64Store16(_, _)
+        | Instruction::I64Store32(_, _) => 4,
+
+        Instruction::CurrentMemory(_) => 5,
+        Instruction::GrowMemory(_) => 5,
+
+        Instruction::I32Const(_)
+        | Instruction::I64Const(_)
+        | Instruction::F32Const(_)
+        | Instruction::F64Const(_) => 5,
+
+        Instruction::I32Eqz
+        | Instruction::I32Eq
+        | Instruction::I32Ne
+        | Instruction::I32LtS
+        | Instruction::I32LtU
+        | Instruction::I32GtS
+        | Instruction::I32GtU
+        | Instruction::I32LeS
+        | Instruction::I32LeU
+        | Instruction::I32GeS
+        | Instruction::I32GeU
+        | Instruction::I64Eqz
+        | Instruction::I64Eq
+        | Instruction::I64Ne
+        | Instruction::I64LtS
+        | Instruction::I64LtU
+        | Instruction::I64GtS
+        | Instruction::I64GtU
+        | Instruction::I64LeS
+        | Instruction::I64LeU
+        | Instruction::I64GeS
+        | Instruction::I64GeU => 5,
+
+        Instruction::F32Eq
+        | Instruction::F32Ne
+        | Instruction::F32Lt
+        | Instruction::F32Gt
+        | Instruction::F32Le
+        | Instruction::F32Ge
+        | Instruction::F64Eq
+        | Instruction::F64Ne
+        | Instruction::F64Lt
+        | Instruction::F64Gt
+        | Instruction::F64Le
+        | Instruction::F64Ge => 5,
+
+        Instruction::I32Clz | Instruction::I32Ctz | Instruction::I32Popcnt => 5,
+
+        Instruction::I32Add | Instruction::I32Sub => 5,
+
+        Instruction::I32Mul => 5,
+
+        Instruction::I32DivS
+        | Instruction::I32DivU
+        | Instruction::I32RemS
+        | Instruction::I32RemU => 5,
+
+        Instruction::I32And
+        | Instruction::I32Or
+        | Instruction::I32Xor
+        | Instruction::I32Shl
+        | Instruction::I32ShrS
+        | Instruction::I32ShrU
+        | Instruction::I32Rotl
+        | Instruction::I32Rotr
+        | Instruction::I64Clz
+        | Instruction::I64Ctz
+        | Instruction::I64Popcnt => 5,
+
+        Instruction::I64Add | Instruction::I64Sub => 5,
+        Instruction::I64Mul => 5,
+
+        Instruction::I64DivS
+        | Instruction::I64DivU
+        | Instruction::I64RemS
+        | Instruction::I64RemU => 5,
+
+        Instruction::I64And
+        | Instruction::I64Or
+        | Instruction::I64Xor
+        | Instruction::I64Shl
+        | Instruction::I64ShrS
+        | Instruction::I64ShrU
+        | Instruction::I64Rotl
+        | Instruction::I64Rotr => 5,
+
+        Instruction::F32Abs
+        | Instruction::F32Neg
+        | Instruction::F32Ceil
+        | Instruction::F32Floor
+        | Instruction::F32Trunc
+        | Instruction::F32Nearest
+        | Instruction::F32Sqrt
+        | Instruction::F32Add
+        | Instruction::F32Sub
+        | Instruction::F32Mul
+        | Instruction::F32Div
+        | Instruction::F32Min
+        | Instruction::F32Max
+        | Instruction::F32Copysign
+        | Instruction::F64Abs
+        | Instruction::F64Neg
+        | Instruction::F64Ceil
+        | Instruction::F64Floor
+        | Instruction::F64Trunc
+        | Instruction::F64Nearest
+        | Instruction::F64Sqrt
+        | Instruction::F64Add
+        | Instruction::F64Sub
+        | Instruction::F64Mul
+        | Instruction::F64Div
+        | Instruction::F64Min
+        | Instruction::F64Max
+        | Instruction::F64Copysign => 5,
+
+        Instruction::I32WrapI64 | Instruction::I64ExtendSI32 | Instruction::I64ExtendUI32 => 5,
+
+        Instruction::F32ConvertSI32
+        | Instruction::F32ConvertUI32
+        | Instruction::F32ConvertSI64
+        | Instruction::F32ConvertUI64
+        | Instruction::F32DemoteF64
+        | Instruction::F64ConvertSI32
+        | Instruction::F64ConvertUI32
+        | Instruction::F64ConvertSI64
+        | Instruction::F64ConvertUI64
+        | Instruction::F64PromoteF32 => 5,
+
+        // Unsupported reinterpretation operators for floats.
+        Instruction::I32ReinterpretF32
+        | Instruction::I64ReinterpretF64
+        | Instruction::F32ReinterpretI32
+        | Instruction::F64ReinterpretI64 => 5,
+
+        Instruction::SignExt(SignExtInstruction::I32Extend8S)
+        | Instruction::SignExt(SignExtInstruction::I32Extend16S)
+        | Instruction::SignExt(SignExtInstruction::I64Extend8S)
+        | Instruction::SignExt(SignExtInstruction::I64Extend16S)
+        | Instruction::SignExt(SignExtInstruction::I64Extend32S) => 5,
+
+        Instruction::I32TruncUF32 | Instruction::I64TruncSF32 => 40,
+
+        Instruction::I32TruncSF32 | Instruction::I64TruncUF32 => 42,
+
+        Instruction::I32TruncSF64
+        | Instruction::I32TruncUF64
+        | Instruction::I64TruncUF64
+        | Instruction::I64TruncSF64 => 195,
+    }
+}
+
 struct RuledOpcodeCosts(OpcodeCosts);
 
-impl Rules for RuledOpcodeCosts {
-    fn instruction_cost(&self, instruction: &Instruction) -> Option<u32> {
+impl RuledOpcodeCosts {
+    /// Returns the cost multiplier of executing a single instruction.
+    fn instruction_cost_multiplier(&self, instruction: &Instruction) -> Option<u32> {
         let costs = self.0;
+
+        // Obtain the gas cost multiplier for the instruction.
         match instruction {
             Instruction::Unreachable => Some(costs.unreachable),
             Instruction::Nop => Some(costs.nop),
@@ -685,6 +910,19 @@ impl Rules for RuledOpcodeCosts {
 
             Instruction::SignExt(_) => Some(costs.sign),
         }
+    }
+}
+
+impl Rules for RuledOpcodeCosts {
+    fn instruction_cost(&self, instruction: &Instruction) -> Option<u32> {
+        // The number of cycles for each instruction correlates, but not directly, to the reference
+        // x86_64 CPU cycles.
+        let cycles = cycles_for_instruction(instruction);
+
+        // The cost of executing an instruction is the number of cycles times the cost of a nop.
+        let multiplier = self.instruction_cost_multiplier(instruction)?;
+
+        cycles.checked_mul(multiplier)
     }
 
     fn memory_grow_cost(&self) -> Option<MemoryGrowCost> {

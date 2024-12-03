@@ -30,8 +30,8 @@ use casper_types::{
     CLValue, CLValueDictionary, ChainspecRawBytes, Contract, ContractWasm, ContractWasmHash,
     DictionaryAddr, Digest, EntityAddr, EntityKind, EntityVersions, GlobalStateIdentifier, Key,
     KeyTag, NextUpgrade, Package, PackageAddr, PackageHash, Peers, ProtocolVersion, PublicKey,
-    Rewards, SecretKey, SignedBlock, StoredValue, Transaction, TransactionRuntime,
-    TransactionV1Builder, Transfer, URef, U512,
+    Rewards, SecretKey, SignedBlock, StoredValue, Transaction, TransactionRuntime, Transfer, URef,
+    U512,
 };
 use futures::{SinkExt, StreamExt};
 use rand::Rng;
@@ -43,7 +43,7 @@ use crate::{
     testing::{
         self, filter_reactor::FilterReactor, network::TestingNetwork, ConditionCheckReactor,
     },
-    types::NodeId,
+    types::{transaction::transaction_v1_builder::TransactionV1Builder, NodeId},
 };
 
 use super::{InitialStakes, TestFixture, ERA_ONE};
@@ -268,7 +268,7 @@ fn test_effects(rng: &mut TestRng) -> TestEffects {
     effects.push(TransformV2::new(
         Key::Hash(post_migration_contract_package_hash.value()),
         TransformKindV2::Write(StoredValue::CLValue(
-            CLValue::from_t((Key::Package(package_addr), package_access_key))
+            CLValue::from_t((Key::SmartContract(package_addr), package_access_key))
                 .expect("should create CLValue"),
         )),
     ));
@@ -298,8 +298,8 @@ fn test_effects(rng: &mut TestRng) -> TestEffects {
     ));
 
     effects.push(TransformV2::new(
-        Key::Package(package_addr),
-        TransformKindV2::Write(StoredValue::Package(Package::new(
+        Key::SmartContract(package_addr),
+        TransformKindV2::Write(StoredValue::SmartContract(Package::new(
             EntityVersions::default(),
             Default::default(),
             Default::default(),

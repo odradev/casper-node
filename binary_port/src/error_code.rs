@@ -289,6 +289,24 @@ pub enum ErrorCode {
     /// Invalid transaction runtime.
     #[error("invalid transaction runtime")]
     InvalidTransactionRuntime = 90,
+    /// Key in transfer request malformed
+    #[error("malformed transfer record key")]
+    TransferRecordMalformedKey = 91,
+    /// Malformed information request
+    #[error("malformed information request")]
+    MalformedInformationRequest = 92,
+    /// Malformed binary version
+    #[error("malformed version bytes in header of binary request")]
+    MalformedBinaryVersion = 93,
+    /// Malformed binary protocolVersion
+    #[error("malformed protocol version")]
+    MalformedProtocolVersion = 94,
+    /// Malformed header
+    #[error("malformed header of binary request")]
+    MalformedBinaryRequestHeader = 95,
+    /// Malformed binary request
+    #[error("malformed binary request")]
+    MalformedBinaryRequest = 96,
 }
 
 impl TryFrom<u16> for ErrorCode {
@@ -387,6 +405,12 @@ impl TryFrom<u16> for ErrorCode {
             88 => Ok(ErrorCode::RequestThrottled),
             89 => Ok(ErrorCode::ExpectedNamedArguments),
             90 => Ok(ErrorCode::InvalidTransactionRuntime),
+            91 => Ok(ErrorCode::TransferRecordMalformedKey),
+            92 => Ok(ErrorCode::MalformedInformationRequest),
+            93 => Ok(ErrorCode::MalformedBinaryVersion),
+            94 => Ok(ErrorCode::MalformedProtocolVersion),
+            95 => Ok(ErrorCode::MalformedBinaryRequestHeader),
+            96 => Ok(ErrorCode::MalformedBinaryRequest),
             _ => Err(UnknownErrorCode),
         }
     }
