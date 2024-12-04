@@ -18,6 +18,7 @@ pub const BLOCK_REWARD: u64 = 1_000_000_000_000;
 
 /// Named constant for `amount`.
 pub const ARG_AMOUNT: &str = "amount";
+pub const ARG_AMOUNT_2: &str = "amount2";
 /// Named constant for `delegation_rate`.
 pub const ARG_DELEGATION_RATE: &str = "delegation_rate";
 /// Named constant for `public_key`.

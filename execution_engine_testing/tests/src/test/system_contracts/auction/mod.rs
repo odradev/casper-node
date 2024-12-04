@@ -5,8 +5,7 @@ use casper_engine_test_support::{
 use casper_types::{
     runtime_args,
     system::auction::{
-        BidAddr, BidKind, BidsExt, DelegationRate, DelegatorKind, EraInfo, ValidatorBid,
-        ARG_AMOUNT, ARG_NEW_VALIDATOR, ARG_VALIDATOR,
+        BidAddr, BidKind, BidsExt, DelegationRate, DelegatorKind, EraInfo, ValidatorBid, ARG_AMOUNT, ARG_AMOUNT_2, ARG_NEW_VALIDATOR, ARG_VALIDATOR
     },
     GenesisAccount, GenesisValidator, Key, Motes, PublicKey, SecretKey, StoredValue, U512,
 };
@@ -159,7 +158,7 @@ fn should_support_contract_staking() {
                 &entry_point_name,
                 runtime_args! {
                     ARG_ACTION => stake,
-                    ARG_AMOUNT => delegate_amount,
+                    ARG_AMOUNT_2 => delegate_amount,
                     ARG_VALIDATOR => validator_pk.clone(),
                 },
             )
@@ -167,6 +166,8 @@ fn should_support_contract_staking() {
         )
         .commit()
         .expect_success();
+
+    panic!("never gets here");
 
     let post_delegation_balance = builder.get_purse_balance(contract_purse);
     assert_eq!(

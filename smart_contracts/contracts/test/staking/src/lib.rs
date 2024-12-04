@@ -18,7 +18,7 @@ use casper_types::{
     api_error,
     bytesrepr::{self, ToBytes},
     runtime_args,
-    system::auction,
+    system::auction::{self, ARG_AMOUNT_2},
     ApiError, Key, PublicKey, URef, U512,
 };
 
@@ -104,7 +104,8 @@ fn stake() {
         Some(validator_public_key) => validator_public_key,
         None => revert(ApiError::User(StakingError::MissingValidator as u16)),
     };
-    let amount: U512 = runtime::get_named_arg(ARG_AMOUNT);
+    let amount: U512 = runtime::get_named_arg(ARG_AMOUNT_2);
+
     let contract_hash = system::get_auction();
     let args = runtime_args! {
         auction::ARG_DELEGATOR_PURSE => staking_purse,
